@@ -1,12 +1,13 @@
 import type { ElectronAPI } from "@electron-toolkit/preload";
+import type { AudioMetadata } from "types";
 
 type API = {
-  showDialog: () => void;
+	showDialog: () => AudioMetadata[];
 };
 
 declare global {
-  interface Window {
-    electron: ElectronAPI;
-    api: API;
-  }
+	interface Window {
+		electron: ElectronAPI;
+		api: API;
+	}
 }
