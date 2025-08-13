@@ -8,7 +8,21 @@
 		"./types.ts"
 	],
 	"compilerOptions": {
+		"target": "es2022",
+		"module": "esnext",
+		"strict": true,
 		"composite": true,
+		"noImplicitAny": true,
+		"strictNullChecks": true,
+		"noUncheckedIndexedAccess": true,
+		"useUnknownInCatchVariables": true,
+		"allowJs": false,
+		"checkJs": false,
+		"declaration": true,
+		"declarationMap": true,
+		"skipLibCheck": true,
+		"noEmitOnError": true,
+		"forceConsistentCasingInFileNames": true,
 		"jsx": "react-jsx",
 		"baseUrl": ".",
 		"paths": {
