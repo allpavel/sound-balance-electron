@@ -1,11 +1,11 @@
 import { AppShell, Button } from "@mantine/core";
+import TableComponent from "@renderer/components/Table/Table";
 import { IconUpload } from "@tabler/icons-react";
 import { useState } from "react";
-import type { AudioCommonMetadata } from "types";
-import TableComponent from "./components/Table/Table";
+import type { Metadata } from "types";
 
 function App(): React.JSX.Element {
-	const [files, setFiles] = useState<AudioCommonMetadata[]>([]);
+	const [files, setFiles] = useState<Metadata[]>([]);
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();
