@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import type { IAudioMetadata } from "music-metadata";
+import { type IAudioMetadata, parseFile } from "music-metadata";
 import icon from "../../resources/icon.png?asset";
 import { getMetadata } from "./lib/getMetadata";
 
@@ -11,7 +11,10 @@ const showDialog = async () => {
 		title: "Select files",
 		filters: [{ name: "Music", extensions: ["mp3"] }],
 	});
-	const result: IAudioMetadata[] = await getMetadata(paths.filePaths);
+	const result: IAudioMetadata[] = await getMetadata(
+		paths.filePaths,
+		parseFile,
+	);
 	return result;
 };
 
