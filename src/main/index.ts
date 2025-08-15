@@ -4,6 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { type IAudioMetadata, parseFile } from "music-metadata";
 import { v4 as uuidv4 } from "uuid";
 import icon from "../../resources/icon.png?asset";
+import type { AudioCommonMetadata } from "../../types";
 
 const showDialog = async () => {
 	const paths = await dialog.showOpenDialog({
@@ -14,8 +15,13 @@ const showDialog = async () => {
 	const fileData: IAudioMetadata[] = await Promise.all(
 		paths.filePaths.map((path) => parseFile(path)),
 	);
-	const result = fileData.map((file) => ({ ...file, id: uuidv4() }));
-	console.log(result);
+	const result: AudioCommonMetadata[] = fileData.map((file) => ({
+		album: file.common.album ?? "",
+		artist: file.common.artist ?? "",
+		title: file.common.title ?? "",
+		year: file.common.year ?? 0,
+		id: uuidv4(),
+	}));
 	return result;
 };
 
@@ -43,8 +49,8 @@ function createWindow(): void {
 
 	// HMR for renderer base on electron-vite cli.
 	// Load the remote URL for development or the local html file for production.
-	if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-		mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+	if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+		mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
 	} else {
 		mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
 	}
@@ -59,9 +65,6 @@ app.whenReady().then(() => {
 	app.on("browser-window-created", (_, window) => {
 		optimizer.watchWindowShortcuts(window);
 	});
-
-	// IPC test
-	// ipcMain.on("ping", () => console.log("pong"));
 
 	ipcMain.handle("showDialog", showDialog);
 

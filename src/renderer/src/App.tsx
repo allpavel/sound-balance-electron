@@ -1,9 +1,11 @@
 import { AppShell, Button } from "@mantine/core";
+import { IconUpload } from "@tabler/icons-react";
 import { useState } from "react";
-import type { AudioMetadata } from "types";
+import type { AudioCommonMetadata } from "types";
+import TableComponent from "./components/Table/Table";
 
 function App(): React.JSX.Element {
-	const [files, setFiles] = useState<AudioMetadata[]>([]);
+	const [files, setFiles] = useState<AudioCommonMetadata[]>([]);
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();
@@ -16,12 +18,14 @@ function App(): React.JSX.Element {
 			header={{ height: 60 }}
 			navbar={{ breakpoint: "sm", width: 150 }}
 		>
-			<AppShell.Header>Menu</AppShell.Header>
+			<AppShell.Header p={"sm"}>
+				<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
+					Open
+				</Button>
+			</AppShell.Header>
 			<AppShell.Navbar>Collections</AppShell.Navbar>
 			<AppShell.Main>
-				<Button onClick={loadFiles}>Open</Button>
-				{files.length > 0 &&
-					files.map((file) => <p key={file.id}>{file.common.artist}</p>)}
+				<TableComponent files={files} />
 			</AppShell.Main>
 		</AppShell>
 	);
