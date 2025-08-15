@@ -1,19 +1,32 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": [
-    "src/renderer/src/env.d.ts",
-    "src/renderer/src/**/*",
-    "src/renderer/src/**/*.tsx",
-    "src/preload/*.d.ts"
-  ],
-  "compilerOptions": {
-    "composite": true,
-    "jsx": "react-jsx",
-    "baseUrl": ".",
-    "paths": {
-      "@renderer/*": [
-        "src/renderer/src/*"
-      ]
-    }
-  }
+	"extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+	"include": [
+		"src/renderer/src/env.d.ts",
+		"src/renderer/src/**/*",
+		"src/renderer/src/**/*.tsx",
+		"src/preload/*.d.ts",
+		"./types.ts"
+	],
+	"compilerOptions": {
+		"target": "es2022",
+		"module": "esnext",
+		"strict": true,
+		"composite": true,
+		"noImplicitAny": true,
+		"strictNullChecks": true,
+		"noUncheckedIndexedAccess": true,
+		"useUnknownInCatchVariables": true,
+		"allowJs": false,
+		"checkJs": false,
+		"declaration": true,
+		"declarationMap": true,
+		"skipLibCheck": true,
+		"noEmitOnError": true,
+		"forceConsistentCasingInFileNames": true,
+		"jsx": "react-jsx",
+		"baseUrl": ".",
+		"paths": {
+			"@renderer/*": ["src/renderer/src/*"]
+		}
+	}
 }

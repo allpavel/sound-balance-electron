@@ -1,0 +1,111 @@
+import { Button, Checkbox, Table } from "@mantine/core";
+import { IconCaretRight } from "@tabler/icons-react";
+import {
+	flexRender,
+	getCoreRowModel,
+	type Table as ITable,
+	type Row,
+	type RowSelectionState,
+	useReactTable,
+} from "@tanstack/react-table";
+import { useState } from "react";
+import type { AudioCommonMetadata } from "types";
+
+const columns = [
+	{
+		id: "select",
+		header: ({ table }: { table: ITable<AudioCommonMetadata> }) => (
+			<Checkbox
+				type="checkbox"
+				checked={table.getIsAllRowsSelected()}
+				onChange={table.getToggleAllPageRowsSelectedHandler()}
+			/>
+		),
+		cell: ({ row }: { row: Row<AudioCommonMetadata> }) => (
+			<Checkbox
+				type="checkbox"
+				checked={row.getIsSelected()}
+				onChange={row.getToggleSelectedHandler()}
+			/>
+		),
+	},
+	{
+		header: "Artist",
+		accessorKey: "artist",
+	},
+	{
+		header: "Title",
+		accessorKey: "title",
+	},
+	{
+		header: "Album",
+		accessorKey: "album",
+	},
+	{
+		header: "Year",
+		accessorKey: "year",
+	},
+	{
+		id: "info",
+		header: "Info",
+		cell: () => <Button rightSection={<IconCaretRight />}>Details</Button>,
+	},
+];
+
+export default function TableComponent({
+	files,
+}: {
+	files: AudioCommonMetadata[];
+}) {
+	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
+	const [selectedUser, setSelecterUser] = useState<number>();
+	const [modalOpened, setModalOpened] = useState(false);
+
+	const table = useReactTable<AudioCommonMetadata>({
+		data: files,
+		columns,
+		state: {
+			rowSelection: selectedRows,
+		},
+		getCoreRowModel: getCoreRowModel(),
+		onRowSelectionChange: setSelectedRows,
+		getRowId: (row) => row.id.toString(),
+	});
+
+	return (
+		<Table highlightOnHover withColumnBorders>
+			<Table.Thead>
+				{table.getHeaderGroups().map((group) => (
+					<Table.Tr key={group.id}>
+						{group.headers.map((header) => (
+							<Table.Th key={header.id}>
+								{flexRender(
+									header.column.columnDef.header,
+									header.getContext(),
+								)}
+							</Table.Th>
+						))}
+					</Table.Tr>
+				))}
+			</Table.Thead>
+			<Table.Tbody>
+				{table.getRowModel().rows.map((row) => (
+					<Table.Tr
+						key={row.id}
+						bg={
+							Object.keys(selectedRows).includes(row.id)
+								? "var(--mantine-color-blue-light)"
+								: undefined
+						}
+					>
+						{row.getVisibleCells().map((cell) => (
+							<Table.Td key={cell.id}>
+								{flexRender(cell.column.columnDef.cell, cell.getContext())}
+							</Table.Td>
+						))}
+					</Table.Tr>
+				))}
+			</Table.Tbody>
+		</Table>
+	);
+}
