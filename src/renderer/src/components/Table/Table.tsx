@@ -1,4 +1,5 @@
-import { Checkbox, Table } from "@mantine/core";
+import { Button, Checkbox, Table } from "@mantine/core";
+import { IconCaretRight } from "@tabler/icons-react";
 import {
 	flexRender,
 	getCoreRowModel,
@@ -27,7 +28,6 @@ const columns = [
 				onChange={row.getToggleSelectedHandler()}
 			/>
 		),
-		size: 40,
 	},
 	{
 		header: "Artist",
@@ -44,6 +44,11 @@ const columns = [
 	{
 		header: "Year",
 		accessorKey: "year",
+	},
+	{
+		id: "info",
+		header: "Info",
+		cell: () => <Button rightSection={<IconCaretRight />}>Details</Button>,
 	},
 ];
 
