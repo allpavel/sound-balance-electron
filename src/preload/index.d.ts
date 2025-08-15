@@ -1,8 +1,8 @@
 import type { ElectronAPI } from "@electron-toolkit/preload";
-import type { AudioCommonMetadata } from "types";
+import type { IAudioMetadata } from "music-metadata";
 
 type API = {
-	showDialog: () => AudioCommonMetadata[];
+	showDialog: () => Promise<IAudioMetadata[]>;
 };
 
 declare global {
