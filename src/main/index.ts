@@ -2,9 +2,8 @@ import { join } from "node:path";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { type IAudioMetadata, parseFile } from "music-metadata";
-import { v4 as uuidv4 } from "uuid";
 import icon from "../../resources/icon.png?asset";
-import type { AudioCommonMetadata } from "../../types";
+import { getMetadata } from "./lib/getMetadata";
 
 const showDialog = async () => {
 	const paths = await dialog.showOpenDialog({
@@ -12,16 +11,10 @@ const showDialog = async () => {
 		title: "Select files",
 		filters: [{ name: "Music", extensions: ["mp3"] }],
 	});
-	const fileData: IAudioMetadata[] = await Promise.all(
-		paths.filePaths.map((path) => parseFile(path)),
+	const result: IAudioMetadata[] = await getMetadata(
+		paths.filePaths,
+		parseFile,
 	);
-	const result: AudioCommonMetadata[] = fileData.map((file) => ({
-		album: file.common.album ?? "",
-		artist: file.common.artist ?? "",
-		title: file.common.title ?? "",
-		year: file.common.year ?? 0,
-		id: uuidv4(),
-	}));
 	return result;
 };
 
