@@ -8,55 +8,67 @@ import {
 	type RowSelectionState,
 	useReactTable,
 } from "@tanstack/react-table";
-import type { IAudioMetadata } from "music-metadata";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Metadata } from "types";
-
-const columns = [
-	{
-		id: "select",
-		header: ({ table }: { table: ITable<Metadata> }) => (
-			<Checkbox
-				type="checkbox"
-				checked={table.getIsAllRowsSelected()}
-				onChange={table.getToggleAllPageRowsSelectedHandler()}
-			/>
-		),
-		cell: ({ row }: { row: Row<Metadata> }) => (
-			<Checkbox
-				type="checkbox"
-				checked={row.getIsSelected()}
-				onChange={row.getToggleSelectedHandler()}
-			/>
-		),
-	},
-	{
-		header: "Artist",
-		accessorKey: "artist",
-	},
-	{
-		header: "Title",
-		accessorKey: "title",
-	},
-	{
-		header: "Album",
-		accessorKey: "album",
-	},
-	{
-		header: "Year",
-		accessorKey: "year",
-	},
-	{
-		id: "info",
-		header: "Info",
-		cell: () => <Button rightSection={<IconCaretRight />}>Details</Button>,
-	},
-];
 
 export default function TableComponent({ files }: { files: Metadata[] }) {
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
-	const [selectedUser, setSelecterUser] = useState<number>();
-	const [modalOpened, setModalOpened] = useState(false);
+	const [_selectedUser, setSelecterUser] = useState<string>();
+	const [_modalOpened, setModalOpened] = useState(false);
+
+	const columns = useMemo(
+		() => [
+			{
+				id: "select",
+				header: ({ table }: { table: ITable<Metadata> }) => (
+					<Checkbox
+						type="checkbox"
+						checked={table.getIsAllRowsSelected()}
+						onChange={table.getToggleAllPageRowsSelectedHandler()}
+					/>
+				),
+				cell: ({ row }: { row: Row<Metadata> }) => (
+					<Checkbox
+						type="checkbox"
+						checked={row.getIsSelected()}
+						onChange={row.getToggleSelectedHandler()}
+					/>
+				),
+			},
+			{
+				header: "Artist",
+				accessorKey: "artist",
+			},
+			{
+				header: "Title",
+				accessorKey: "title",
+			},
+			{
+				header: "Album",
+				accessorKey: "album",
+			},
+			{
+				header: "Year",
+				accessorKey: "year",
+			},
+			{
+				id: "info",
+				header: "Info",
+				cell: ({ row }: { row: Row<Metadata> }) => (
+					<Button
+						rightSection={<IconCaretRight />}
+						onClick={() => {
+							setSelecterUser(row.original.id);
+							setModalOpened(true);
+						}}
+					>
+						Details
+					</Button>
+				),
+			},
+		],
+		[],
+	);
 
 	const table = useReactTable<Metadata>({
 		data: files,
