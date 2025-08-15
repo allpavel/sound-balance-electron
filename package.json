@@ -25,7 +25,8 @@
 		"@mantine/hooks": "^8.2.4",
 		"@tabler/icons-react": "^3.34.1",
 		"@tanstack/react-table": "^8.21.3",
-		"music-metadata": "^11.7.3"
+		"music-metadata": "^11.7.3",
+		"uuid": "^11.1.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.1.3",

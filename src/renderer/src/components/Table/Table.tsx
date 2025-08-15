@@ -8,20 +8,21 @@ import {
 	type RowSelectionState,
 	useReactTable,
 } from "@tanstack/react-table";
+import type { IAudioMetadata } from "music-metadata";
 import { useState } from "react";
-import type { AudioCommonMetadata } from "types";
+import type { Metadata } from "types";
 
 const columns = [
 	{
 		id: "select",
-		header: ({ table }: { table: ITable<AudioCommonMetadata> }) => (
+		header: ({ table }: { table: ITable<Metadata> }) => (
 			<Checkbox
 				type="checkbox"
 				checked={table.getIsAllRowsSelected()}
 				onChange={table.getToggleAllPageRowsSelectedHandler()}
 			/>
 		),
-		cell: ({ row }: { row: Row<AudioCommonMetadata> }) => (
+		cell: ({ row }: { row: Row<Metadata> }) => (
 			<Checkbox
 				type="checkbox"
 				checked={row.getIsSelected()}
@@ -52,16 +53,12 @@ const columns = [
 	},
 ];
 
-export default function TableComponent({
-	files,
-}: {
-	files: AudioCommonMetadata[];
-}) {
+export default function TableComponent({ files }: { files: Metadata[] }) {
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
 	const [selectedUser, setSelecterUser] = useState<number>();
 	const [modalOpened, setModalOpened] = useState(false);
 
-	const table = useReactTable<AudioCommonMetadata>({
+	const table = useReactTable<Metadata>({
 		data: files,
 		columns,
 		state: {
