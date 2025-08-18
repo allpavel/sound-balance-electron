@@ -38,19 +38,19 @@ export default function TableComponent({ files }: { files: Metadata[] }) {
 			},
 			{
 				header: "Artist",
-				accessorKey: "artist",
+				accessorKey: "common.artist",
 			},
 			{
 				header: "Title",
-				accessorKey: "title",
+				accessorKey: "common.title",
 			},
 			{
 				header: "Album",
-				accessorKey: "album",
+				accessorKey: "common.album",
 			},
 			{
 				header: "Year",
-				accessorKey: "year",
+				accessorKey: "common.year",
 			},
 			{
 				id: "info",
