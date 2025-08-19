@@ -1,13 +1,22 @@
 import { Modal } from "@mantine/core";
-import type { InfoModalProps } from "types";
+import type { RootState } from "@renderer/store/store";
+import { selectTrackById } from "@renderer/store/tracksSlice";
+import { useSelector } from "react-redux";
+
+export type InfoModalProps = {
+	trackId: string;
+	isOpen: boolean;
+	onClose: () => void;
+};
 
 export default function InfoModal({
 	trackId,
-	data,
 	isOpen,
 	onClose,
 }: InfoModalProps) {
-	const trackData = data.find((item) => item.id === trackId);
+	const trackData = useSelector((state: RootState) =>
+		selectTrackById(state.tracks, trackId),
+	);
 
 	if (!trackData) return null;
 
@@ -20,8 +29,7 @@ export default function InfoModal({
 			padding={"xl"}
 			overlayProps={{ blur: 3 }}
 		>
-			This is a content for track: {trackData.common.artist} -{" "}
-			{trackData.common.album}.
+			{trackData.common.artist}
 		</Modal>
 	);
 }

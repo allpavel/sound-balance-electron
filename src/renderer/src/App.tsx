@@ -1,15 +1,15 @@
 import { AppShell, Button } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
 import { IconUpload } from "@tabler/icons-react";
-import { useState } from "react";
-import type { Metadata } from "types";
+import { useDispatch } from "react-redux";
+import { loadTracks } from "./store/tracksSlice";
 
 function App(): React.JSX.Element {
-	const [files, setFiles] = useState<Metadata[]>([]);
+	const dispatch = useDispatch();
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();
-		setFiles(result);
+		dispatch(loadTracks(result));
 	};
 
 	return (
@@ -25,7 +25,7 @@ function App(): React.JSX.Element {
 			</AppShell.Header>
 			<AppShell.Navbar>Collections</AppShell.Navbar>
 			<AppShell.Main>
-				<TableComponent files={files} />
+				<TableComponent />
 			</AppShell.Main>
 		</AppShell>
 	);

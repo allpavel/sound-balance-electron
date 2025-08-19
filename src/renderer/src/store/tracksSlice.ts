@@ -1,6 +1,5 @@
 import { createEntityAdapter, createSlice } from "@reduxjs/toolkit";
 import type { Metadata } from "types";
-import type { RootState } from "./store";
 
 export const tracksAdapter = createEntityAdapter<Metadata>({
 	sortComparer: (a: Metadata, b: Metadata) => a.id.localeCompare(b.id),
