@@ -15,6 +15,9 @@
 		"rules": {
 			"suspicious": {
 				"noConsole": "error"
+			},
+			"correctness": {
+				"noUnusedImports": "error"
 			}
 		}
 	}
