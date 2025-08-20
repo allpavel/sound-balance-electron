@@ -124,6 +124,13 @@ export default function TableComponent() {
 						</Table.Tr>
 					))}
 				</Table.Tbody>
+				<Table.Tfoot>
+					<Table.Tr>
+						<Table.Td colSpan={2}>
+							Selected: {Object.entries(selectedRows).length} of {files.length}
+						</Table.Td>
+					</Table.Tr>
+				</Table.Tfoot>
 			</Table>
 			<InfoModal
 				trackId={selectedTrack}
