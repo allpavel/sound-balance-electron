@@ -9,8 +9,9 @@ export const processMetadata = async (
 	try {
 		const data = await parser(filePath);
 		const id = uuid();
+		const fileName = filePath.split("/").at(-1);
 		const processedData = processAlbumCover(data);
-		return { ...processedData, id };
+		return { ...processedData, file: fileName, id };
 	} catch (e) {
 		throw new Error(
 			`Metadata parsing failed for ${filePath}: ${e instanceof Error ? e.message : "Unknown error"}`,
