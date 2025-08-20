@@ -23,9 +23,11 @@
 		"@electron-toolkit/utils": "^4.0.0",
 		"@mantine/core": "^8.2.4",
 		"@mantine/hooks": "^8.2.4",
+		"@reduxjs/toolkit": "^2.8.2",
 		"@tabler/icons-react": "^3.34.1",
 		"@tanstack/react-table": "^8.21.3",
 		"music-metadata": "^11.7.3",
+		"react-redux": "^9.2.0",
 		"uuid": "^11.1.0"
 	},
 	"devDependencies": {

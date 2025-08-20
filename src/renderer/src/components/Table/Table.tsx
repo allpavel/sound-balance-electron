@@ -1,4 +1,6 @@
 import { Button, Checkbox, Table } from "@mantine/core";
+import type { RootState } from "@renderer/store/store";
+import { selectAllTracks } from "@renderer/store/tracksSlice";
 import { IconCaretRight } from "@tabler/icons-react";
 import {
 	flexRender,
@@ -9,12 +11,18 @@ import {
 	useReactTable,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import type { Metadata } from "types";
+import InfoModal from "../InfoModal/InfoModal";
 
-export default function TableComponent({ files }: { files: Metadata[] }) {
+export default function TableComponent() {
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
-	const [_selectedUser, setSelecterUser] = useState<string>();
-	const [_modalOpened, setModalOpened] = useState(false);
+	const [selectedTrack, setSelectedTrack] = useState<string>("");
+	const [modalOpened, setModalOpened] = useState(false);
+
+	const files = useSelector((state: RootState) =>
+		selectAllTracks(state.tracks),
+	);
 
 	const columns = useMemo(
 		() => [
@@ -37,19 +45,19 @@ export default function TableComponent({ files }: { files: Metadata[] }) {
 			},
 			{
 				header: "Artist",
-				accessorKey: "artist",
+				accessorKey: "common.artist",
 			},
 			{
 				header: "Title",
-				accessorKey: "title",
+				accessorKey: "common.title",
 			},
 			{
 				header: "Album",
-				accessorKey: "album",
+				accessorKey: "common.album",
 			},
 			{
 				header: "Year",
-				accessorKey: "year",
+				accessorKey: "common.year",
 			},
 			{
 				id: "info",
@@ -58,7 +66,7 @@ export default function TableComponent({ files }: { files: Metadata[] }) {
 					<Button
 						rightSection={<IconCaretRight />}
 						onClick={() => {
-							setSelecterUser(row.original.id);
+							setSelectedTrack(row.original.id);
 							setModalOpened(true);
 						}}
 					>
@@ -82,39 +90,46 @@ export default function TableComponent({ files }: { files: Metadata[] }) {
 	});
 
 	return (
-		<Table highlightOnHover withColumnBorders>
-			<Table.Thead>
-				{table.getHeaderGroups().map((group) => (
-					<Table.Tr key={group.id}>
-						{group.headers.map((header) => (
-							<Table.Th key={header.id}>
-								{flexRender(
-									header.column.columnDef.header,
-									header.getContext(),
-								)}
-							</Table.Th>
-						))}
-					</Table.Tr>
-				))}
-			</Table.Thead>
-			<Table.Tbody>
-				{table.getRowModel().rows.map((row) => (
-					<Table.Tr
-						key={row.id}
-						bg={
-							Object.keys(selectedRows).includes(row.id)
-								? "var(--mantine-color-blue-light)"
-								: undefined
-						}
-					>
-						{row.getVisibleCells().map((cell) => (
-							<Table.Td key={cell.id}>
-								{flexRender(cell.column.columnDef.cell, cell.getContext())}
-							</Table.Td>
-						))}
-					</Table.Tr>
-				))}
-			</Table.Tbody>
-		</Table>
+		<>
+			<Table highlightOnHover withColumnBorders>
+				<Table.Thead>
+					{table.getHeaderGroups().map((group) => (
+						<Table.Tr key={group.id}>
+							{group.headers.map((header) => (
+								<Table.Th key={header.id}>
+									{flexRender(
+										header.column.columnDef.header,
+										header.getContext(),
+									)}
+								</Table.Th>
+							))}
+						</Table.Tr>
+					))}
+				</Table.Thead>
+				<Table.Tbody>
+					{table.getRowModel().rows.map((row) => (
+						<Table.Tr
+							key={row.id}
+							bg={
+								Object.keys(selectedRows).includes(row.id)
+									? "var(--mantine-color-blue-light)"
+									: undefined
+							}
+						>
+							{row.getVisibleCells().map((cell) => (
+								<Table.Td key={cell.id}>
+									{flexRender(cell.column.columnDef.cell, cell.getContext())}
+								</Table.Td>
+							))}
+						</Table.Tr>
+					))}
+				</Table.Tbody>
+			</Table>
+			<InfoModal
+				trackId={selectedTrack}
+				isOpen={modalOpened}
+				onClose={() => setModalOpened(false)}
+			/>
+		</>
 	);
 }
