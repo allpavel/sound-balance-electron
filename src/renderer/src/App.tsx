@@ -1,7 +1,8 @@
 import { AppShell, Button, Flex } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
-import { IconSettings, IconUpload } from "@tabler/icons-react";
+import { IconUpload } from "@tabler/icons-react";
 import { useDispatch } from "react-redux";
+import Settings from "./components/Settings/Settings";
 import { loadTracks } from "./store/tracksSlice";
 
 function App(): React.JSX.Element {
@@ -23,7 +24,7 @@ function App(): React.JSX.Element {
 					<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
 						Open
 					</Button>
-					<Button leftSection={<IconSettings size={14} />}>Settings</Button>
+					<Settings />
 				</Flex>
 			</AppShell.Header>
 			<AppShell.Navbar>Collections</AppShell.Navbar>
