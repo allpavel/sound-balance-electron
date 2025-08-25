@@ -1,12 +1,12 @@
 import { AppShell, Button, Flex } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
 import { IconUpload } from "@tabler/icons-react";
-import { useDispatch } from "react-redux";
 import Settings from "./components/Settings/Settings";
-import { loadTracks } from "./store/tracksSlice";
+import { useAppDispatch } from "./hooks/useAppDispatch";
+import { loadTracks } from "./store/slices/tracksSlice";
 
 function App(): React.JSX.Element {
-	const dispatch = useDispatch();
+	const dispatch = useAppDispatch();
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();

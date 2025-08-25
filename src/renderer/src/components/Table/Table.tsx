@@ -1,6 +1,6 @@
 import { Button, Checkbox, Table } from "@mantine/core";
-import type { RootState } from "@renderer/store/store";
-import { selectAllTracks } from "@renderer/store/tracksSlice";
+import { useAppSelector } from "@renderer/hooks/useAppSelector";
+import { selectAllTracks } from "@renderer/store/slices/tracksSlice";
 import { IconCaretRight } from "@tabler/icons-react";
 import {
 	flexRender,
@@ -11,7 +11,6 @@ import {
 	useReactTable,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
-import { useSelector } from "react-redux";
 import type { Metadata } from "types";
 import InfoModal from "../InfoModal/InfoModal";
 
@@ -20,9 +19,7 @@ export default function TableComponent() {
 	const [selectedTrack, setSelectedTrack] = useState<string>("");
 	const [modalOpened, setModalOpened] = useState(false);
 
-	const files = useSelector((state: RootState) =>
-		selectAllTracks(state.tracks),
-	);
+	const files = useAppSelector((state) => selectAllTracks(state.tracks));
 
 	const columns = useMemo(
 		() => [

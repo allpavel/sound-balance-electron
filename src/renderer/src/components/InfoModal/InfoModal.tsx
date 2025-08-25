@@ -1,7 +1,6 @@
 import { Image, Modal, Table } from "@mantine/core";
-import type { RootState } from "@renderer/store/store";
-import { selectTrackById } from "@renderer/store/tracksSlice";
-import { useSelector } from "react-redux";
+import { useAppSelector } from "@renderer/hooks/useAppSelector";
+import { selectTrackById } from "@renderer/store/slices/tracksSlice";
 
 export type InfoModalProps = {
 	trackId: string;
@@ -14,7 +13,7 @@ export default function InfoModal({
 	isOpen,
 	onClose,
 }: InfoModalProps) {
-	const trackData = useSelector((state: RootState) =>
+	const trackData = useAppSelector((state) =>
 		selectTrackById(state.tracks, trackId),
 	);
 	if (!trackData) return null;
