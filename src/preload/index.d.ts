@@ -3,6 +3,7 @@ import type { Metadata } from "types";
 
 type API = {
 	showDialog: () => Promise<Metadata[]>;
+	getOutputDirectoryPath: () => Promise<Electron.OpenDialogReturnValue>;
 };
 
 declare global {
