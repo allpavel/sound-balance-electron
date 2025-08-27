@@ -1,11 +1,12 @@
-import { AppShell, Button } from "@mantine/core";
+import { AppShell, Button, Flex } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
 import { IconUpload } from "@tabler/icons-react";
-import { useDispatch } from "react-redux";
-import { loadTracks } from "./store/tracksSlice";
+import Settings from "./components/Settings/Settings";
+import { useAppDispatch } from "./hooks/useAppDispatch";
+import { loadTracks } from "./store/slices/tracksSlice";
 
 function App(): React.JSX.Element {
-	const dispatch = useDispatch();
+	const dispatch = useAppDispatch();
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();
@@ -19,9 +20,12 @@ function App(): React.JSX.Element {
 			navbar={{ breakpoint: "sm", width: 150 }}
 		>
 			<AppShell.Header p={"sm"}>
-				<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
-					Open
-				</Button>
+				<Flex gap={"md"}>
+					<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
+						Open
+					</Button>
+					<Settings />
+				</Flex>
 			</AppShell.Header>
 			<AppShell.Navbar>Collections</AppShell.Navbar>
 			<AppShell.Main>

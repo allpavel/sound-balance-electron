@@ -16,6 +16,14 @@ const showDialog = async () => {
 	return result;
 };
 
+const getOutputDirectoryPath = async () => {
+	const outputDirectoryPath = await dialog.showOpenDialog({
+		title: "Select directory",
+		properties: ["openDirectory"],
+	});
+	return outputDirectoryPath;
+};
+
 function createWindow(): void {
 	const mainWindow = new BrowserWindow({
 		width: 900,
@@ -58,6 +66,7 @@ app.whenReady().then(() => {
 	});
 
 	ipcMain.handle("showDialog", showDialog);
+	ipcMain.handle("getOutputDirectoryPath", getOutputDirectoryPath);
 
 	createWindow();
 
