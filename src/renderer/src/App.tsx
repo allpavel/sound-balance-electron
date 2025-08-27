@@ -1,6 +1,6 @@
-import { AppShell, Button, Flex } from "@mantine/core";
+import { AppShell, Button, Group } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
-import { IconUpload } from "@tabler/icons-react";
+import { IconPlayerPlayFilled, IconUpload } from "@tabler/icons-react";
 import Settings from "./components/Settings/Settings";
 import { useAppDispatch } from "./hooks/useAppDispatch";
 import { loadTracks } from "./store/slices/tracksSlice";
@@ -20,12 +20,15 @@ function App(): React.JSX.Element {
 			navbar={{ breakpoint: "sm", width: 150 }}
 		>
 			<AppShell.Header p={"sm"}>
-				<Flex gap={"md"}>
-					<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
-						Open
-					</Button>
-					<Settings />
-				</Flex>
+				<Group justify="space-between">
+					<Group gap={"md"}>
+						<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
+							Open
+						</Button>
+						<Settings />
+					</Group>
+					<Button leftSection={<IconPlayerPlayFilled size={14} />}>Run</Button>
+				</Group>
 			</AppShell.Header>
 			<AppShell.Navbar>Collections</AppShell.Navbar>
 			<AppShell.Main>
