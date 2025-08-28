@@ -1,5 +1,12 @@
 import { Button, Checkbox, Table } from "@mantine/core";
+import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
+import {
+	addSelectedTrack,
+	removeAllSelectedTracks,
+	removeSelectedTrack,
+	setAllSelectedTracks,
+} from "@renderer/store/slices/selectedTracksSlice";
 import { selectAllTracks } from "@renderer/store/slices/tracksSlice";
 import { IconCaretRight } from "@tabler/icons-react";
 import {
@@ -18,6 +25,7 @@ export default function TableComponent() {
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
 	const [selectedTrack, setSelectedTrack] = useState<string>("");
 	const [modalOpened, setModalOpened] = useState(false);
+	const dispatch = useAppDispatch();
 
 	const files = useAppSelector((state) => selectAllTracks(state.tracks));
 
@@ -29,14 +37,32 @@ export default function TableComponent() {
 					<Checkbox
 						type="checkbox"
 						checked={table.getIsAllRowsSelected()}
-						onChange={table.getToggleAllPageRowsSelectedHandler()}
+						onChange={(e) => {
+							if (e.target.checked) {
+								dispatch(
+									setAllSelectedTracks(
+										table.getRowModel().rows.map((item) => item.original),
+									),
+								);
+							} else {
+								dispatch(removeAllSelectedTracks());
+							}
+							table.getToggleAllRowsSelectedHandler()(e);
+						}}
 					/>
 				),
 				cell: ({ row }: { row: Row<Metadata> }) => (
 					<Checkbox
 						type="checkbox"
 						checked={row.getIsSelected()}
-						onChange={row.getToggleSelectedHandler()}
+						onChange={(e) => {
+							if (e.target.checked) {
+								dispatch(addSelectedTrack(row.original));
+							} else {
+								dispatch(removeSelectedTrack(row.original.id));
+							}
+							row.getToggleSelectedHandler()(e);
+						}}
 					/>
 				),
 			},
@@ -72,7 +98,7 @@ export default function TableComponent() {
 				),
 			},
 		],
-		[],
+		[dispatch],
 	);
 
 	const table = useReactTable<Metadata>({
@@ -83,7 +109,7 @@ export default function TableComponent() {
 		},
 		getCoreRowModel: getCoreRowModel(),
 		onRowSelectionChange: setSelectedRows,
-		getRowId: (row) => row.id.toString(),
+		getRowId: (row) => row.id,
 	});
 
 	return (
