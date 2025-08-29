@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer } from "electron";
 const api = {
 	showDialog: () => ipcRenderer.invoke("showDialog"),
 	getOutputDirectoryPath: () => ipcRenderer.invoke("getOutputDirectoryPath"),
+	startProcessing: (data) => ipcRenderer.invoke("startProcessing", data),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

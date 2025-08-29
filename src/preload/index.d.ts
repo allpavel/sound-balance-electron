@@ -1,9 +1,10 @@
 import type { ElectronAPI } from "@electron-toolkit/preload";
-import type { Metadata } from "types";
+import type { Data, Metadata } from "types";
 
 type API = {
 	showDialog: () => Promise<Metadata[]>;
 	getOutputDirectoryPath: () => Promise<Electron.OpenDialogReturnValue>;
+	startProcessing: (data: Data) => Data;
 };
 
 declare global {

@@ -626,3 +626,8 @@ export type Settings = {
 	/** Mark attached stream as album art (-disposition:v:0 attached_pic) */
 	isAlbumArt?: boolean;
 };
+
+export type Data = {
+	tracks: Metadata[];
+	settings: GeneralSettings;
+};

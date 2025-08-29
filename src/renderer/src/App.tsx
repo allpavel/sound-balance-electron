@@ -1,16 +1,27 @@
 import { AppShell, Button, Group } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
 import { IconPlayerPlayFilled, IconUpload } from "@tabler/icons-react";
+import type { Data } from "types";
 import Settings from "./components/Settings/Settings";
 import { useAppDispatch } from "./hooks/useAppDispatch";
+import { useAppSelector } from "./hooks/useAppSelector";
+import { getAllSelectedTracks } from "./store/slices/selectedTracksSlice";
 import { loadTracks } from "./store/slices/tracksSlice";
 
 function App(): React.JSX.Element {
 	const dispatch = useAppDispatch();
+	const selectedTracks = useAppSelector((state) => state.selectedTracks);
+	const settings = useAppSelector((state) => state.settings);
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();
 		dispatch(loadTracks(result));
+	};
+
+	const sendData = () => {
+		const tracks = getAllSelectedTracks(selectedTracks);
+		const data: Data = { tracks, settings };
+		return window.api.startProcessing(data);
 	};
 
 	return (
@@ -27,7 +38,12 @@ function App(): React.JSX.Element {
 						</Button>
 						<Settings />
 					</Group>
-					<Button leftSection={<IconPlayerPlayFilled size={14} />}>Run</Button>
+					<Button
+						leftSection={<IconPlayerPlayFilled size={14} />}
+						onClick={sendData}
+					>
+						Run
+					</Button>
 				</Group>
 			</AppShell.Header>
 			<AppShell.Navbar>Collections</AppShell.Navbar>
