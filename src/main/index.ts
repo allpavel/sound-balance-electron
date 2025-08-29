@@ -3,8 +3,9 @@ import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { parseFile } from "music-metadata";
 import icon from "../../resources/icon.png?asset";
-import type { Metadata } from "../../types";
+import type { Data, Metadata } from "../../types";
 import { getMetadata } from "./lib/getMetadata";
+import processData from "./lib/processData";
 
 const showDialog = async () => {
 	const paths = await dialog.showOpenDialog({
@@ -23,6 +24,8 @@ const getOutputDirectoryPath = async () => {
 	});
 	return outputDirectoryPath;
 };
+
+const startProcessing = async (_, data: Data) => processData(data);
 
 function createWindow(): void {
 	const mainWindow = new BrowserWindow({
@@ -67,6 +70,7 @@ app.whenReady().then(() => {
 
 	ipcMain.handle("showDialog", showDialog);
 	ipcMain.handle("getOutputDirectoryPath", getOutputDirectoryPath);
+	ipcMain.handle("startProcessing", startProcessing);
 
 	createWindow();
 
