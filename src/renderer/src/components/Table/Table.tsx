@@ -1,4 +1,4 @@
-import { Button, Checkbox, Table } from "@mantine/core";
+import { Button, Checkbox, Group, Table } from "@mantine/core";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import {
@@ -8,13 +8,16 @@ import {
 	setAllSelectedTracks,
 } from "@renderer/store/slices/selectedTracksSlice";
 import { selectAllTracks } from "@renderer/store/slices/tracksSlice";
+import { getSortingIcon } from "@renderer/utils/getSortingIcons";
 import { IconCaretRight } from "@tabler/icons-react";
 import {
 	flexRender,
 	getCoreRowModel,
+	getSortedRowModel,
 	type Table as ITable,
 	type Row,
 	type RowSelectionState,
+	type SortingState,
 	useReactTable,
 	type VisibilityState,
 } from "@tanstack/react-table";
@@ -27,9 +30,8 @@ export default function TableComponent() {
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
 	const [selectedTrack, setSelectedTrack] = useState<string>("");
 	const [modalOpened, setModalOpened] = useState(false);
-	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
-		artist: false,
-	});
+	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+	const [sorting, setSorting] = useState<SortingState>([]);
 	const dispatch = useAppDispatch();
 
 	const files = useAppSelector((state) => selectAllTracks(state.tracks));
@@ -70,26 +72,31 @@ export default function TableComponent() {
 						}}
 					/>
 				),
+				enableSorting: false,
 			},
 			{
 				id: "artist",
 				header: "Artist",
 				accessorKey: "common.artist",
+				enableSorting: true,
 			},
 			{
 				id: "header",
 				header: "Title",
 				accessorKey: "common.title",
+				enableSorting: true,
 			},
 			{
 				id: "album",
 				header: "Album",
 				accessorKey: "common.album",
+				enableSorting: true,
 			},
 			{
 				id: "year",
 				header: "Year",
 				accessorKey: "common.year",
+				enableSorting: true,
 			},
 			{
 				id: "info",
@@ -105,6 +112,7 @@ export default function TableComponent() {
 						Details
 					</Button>
 				),
+				enableSorting: false,
 			},
 		],
 		[dispatch],
@@ -116,9 +124,12 @@ export default function TableComponent() {
 		state: {
 			rowSelection: selectedRows,
 			columnVisibility,
+			sorting,
 		},
 		getCoreRowModel: getCoreRowModel(),
+		getSortedRowModel: getSortedRowModel(),
 		onRowSelectionChange: setSelectedRows,
+		onSortingChange: setSorting,
 		onColumnVisibilityChange: setColumnVisibility,
 		getRowId: (row) => row.id,
 	});
@@ -144,11 +155,17 @@ export default function TableComponent() {
 					{table.getHeaderGroups().map((group) => (
 						<Table.Tr key={group.id}>
 							{group.headers.map((header) => (
-								<Table.Th key={header.id}>
-									{flexRender(
-										header.column.columnDef.header,
-										header.getContext(),
-									)}
+								<Table.Th
+									key={header.id}
+									onClick={header.column.getToggleSortingHandler()}
+								>
+									<Group gap={"xs"}>
+										{flexRender(
+											header.column.columnDef.header,
+											header.getContext(),
+										)}
+										{getSortingIcon(header.column)}
+									</Group>
 								</Table.Th>
 							))}
 						</Table.Tr>
