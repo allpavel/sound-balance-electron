@@ -16,15 +16,20 @@ import {
 	type Row,
 	type RowSelectionState,
 	useReactTable,
+	type VisibilityState,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import type { Metadata } from "types";
+import ColumnSelect from "../ColumnSelect/ColumnSelect";
 import InfoModal from "../InfoModal/InfoModal";
 
 export default function TableComponent() {
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
 	const [selectedTrack, setSelectedTrack] = useState<string>("");
 	const [modalOpened, setModalOpened] = useState(false);
+	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+		artist: false,
+	});
 	const dispatch = useAppDispatch();
 
 	const files = useAppSelector((state) => selectAllTracks(state.tracks));
@@ -67,18 +72,22 @@ export default function TableComponent() {
 				),
 			},
 			{
+				id: "artist",
 				header: "Artist",
 				accessorKey: "common.artist",
 			},
 			{
+				id: "header",
 				header: "Title",
 				accessorKey: "common.title",
 			},
 			{
+				id: "album",
 				header: "Album",
 				accessorKey: "common.album",
 			},
 			{
+				id: "year",
 				header: "Year",
 				accessorKey: "common.year",
 			},
@@ -101,19 +110,35 @@ export default function TableComponent() {
 		[dispatch],
 	);
 
-	const table = useReactTable<Metadata>({
+	const table = useReactTable({
 		data: files,
 		columns,
 		state: {
 			rowSelection: selectedRows,
+			columnVisibility,
 		},
 		getCoreRowModel: getCoreRowModel(),
 		onRowSelectionChange: setSelectedRows,
+		onColumnVisibilityChange: setColumnVisibility,
 		getRowId: (row) => row.id,
 	});
 
+	const selectedColumns = useMemo(() => {
+		return columns
+			.filter((column) => column.id !== "select" && column.id !== "info")
+			.map((column) => ({
+				id: column.id,
+				header: typeof column.header === "string" ? column.header : column.id,
+			}));
+	}, [columns]);
+
 	return (
 		<>
+			<ColumnSelect
+				allColumns={selectedColumns}
+				columnVisibility={columnVisibility}
+				onColumnVisibilityChange={setColumnVisibility}
+			/>
 			<Table highlightOnHover withColumnBorders>
 				<Table.Thead>
 					{table.getHeaderGroups().map((group) => (
