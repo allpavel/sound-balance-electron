@@ -86,7 +86,6 @@ export default function ColumnSelect({
 				<PillsInput
 					pointer
 					onClick={() => combobox.toggleDropdown()}
-					mb={"lg"}
 					maw={"50%"}
 					label="Select columns:"
 				>
