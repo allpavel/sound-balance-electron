@@ -1,4 +1,4 @@
-import { Button, Checkbox, Group, Table, TextInput } from "@mantine/core";
+import { Button, Checkbox, Flex, Group, Table, TextInput } from "@mantine/core";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import {
@@ -13,6 +13,9 @@ import { IconCaretRight, IconSearch } from "@tabler/icons-react";
 import {
 	flexRender,
 	getCoreRowModel,
+	getFacetedMinMaxValues,
+	getFacetedRowModel,
+	getFacetedUniqueValues,
 	getFilteredRowModel,
 	getSortedRowModel,
 	type Table as ITable,
@@ -25,6 +28,7 @@ import {
 import { type ChangeEvent, useMemo, useState } from "react";
 import type { Metadata } from "types";
 import ColumnSelect from "../ColumnSelect/ColumnSelect";
+import FilterSelect from "../FilterSelect/FilterSelect";
 import InfoModal from "../InfoModal/InfoModal";
 
 export default function TableComponent() {
@@ -82,28 +86,27 @@ export default function TableComponent() {
 				header: "Artist",
 				accessorKey: "common.artist",
 				enableSorting: true,
-				enableColumnFilter: true,
+				enableFacetedFilter: true,
 			},
 			{
 				id: "header",
 				header: "Title",
 				accessorKey: "common.title",
 				enableSorting: true,
-				enableColumnFilter: true,
 			},
 			{
 				id: "album",
 				header: "Album",
 				accessorKey: "common.album",
 				enableSorting: true,
-				enableColumnFilter: true,
+				enableFacetedFilter: true,
 			},
 			{
 				id: "year",
 				header: "Year",
 				accessorKey: "common.year",
 				enableSorting: true,
-				enableColumnFilter: true,
+				enableFacetedFilter: true,
 			},
 			{
 				id: "info",
@@ -138,6 +141,9 @@ export default function TableComponent() {
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getFilteredRowModel: getFilteredRowModel(),
+		getFacetedRowModel: getFacetedRowModel(),
+		getFacetedUniqueValues: getFacetedUniqueValues(),
+		getFacetedMinMaxValues: getFacetedMinMaxValues(),
 		onRowSelectionChange: setSelectedRows,
 		onSortingChange: setSorting,
 		onColumnVisibilityChange: setColumnVisibility,
@@ -158,6 +164,10 @@ export default function TableComponent() {
 		setGlobalFilter(e.target.value);
 	};
 
+	const isFiltersActive = table
+		.getAllColumns()
+		.some((column) => !!column.getFilterValue());
+
 	return (
 		<>
 			<Group grow mb={"lg"}>
@@ -174,21 +184,30 @@ export default function TableComponent() {
 					onChange={handleGlobalFilterChange}
 				/>
 			</Group>
+			{isFiltersActive && (
+				<Button mb={"lg"} onClick={() => table.resetColumnFilters()}>
+					Clear filters
+				</Button>
+			)}
 			<Table highlightOnHover withColumnBorders>
 				<Table.Thead>
 					{table.getHeaderGroups().map((group) => (
 						<Table.Tr key={group.id}>
 							{group.headers.map((header) => (
-								<Table.Th
-									key={header.id}
-									onClick={header.column.getToggleSortingHandler()}
-								>
+								<Table.Th key={header.id}>
 									<Group gap={"xs"}>
 										{flexRender(
 											header.column.columnDef.header,
 											header.getContext(),
 										)}
-										{getSortingIcon(header.column)}
+										<Flex onClick={header.column.getToggleSortingHandler()}>
+											{getSortingIcon(header.column)}
+										</Flex>
+										{header.column.getCanFilter() && (
+											<Flex>
+												<FilterSelect column={header.column} />
+											</Flex>
+										)}
 									</Group>
 								</Table.Th>
 							))}
@@ -196,7 +215,7 @@ export default function TableComponent() {
 					))}
 				</Table.Thead>
 				<Table.Tbody>
-					{table.getRowModel().rows.length === 0 ? (
+					{table.getRowModel().rows.length === 0 && files.length > 0 ? (
 						<Table.Tr>
 							<Table.Td
 								colSpan={table.getAllColumns().length}
@@ -216,7 +235,7 @@ export default function TableComponent() {
 								}
 							>
 								{row.getVisibleCells().map((cell) => (
-									<Table.Td key={cell.id}>
+									<Table.Td key={cell.id} miw={150}>
 										{flexRender(cell.column.columnDef.cell, cell.getContext())}
 									</Table.Td>
 								))}
