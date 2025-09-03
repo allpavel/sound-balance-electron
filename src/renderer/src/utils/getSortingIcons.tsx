@@ -1,3 +1,4 @@
+import { ActionIcon } from "@mantine/core";
 import {
 	IconArrowsSort,
 	IconSortAscending,
@@ -11,11 +12,36 @@ export function getSortingIcon(column: Column<Metadata>) {
 		return null;
 	}
 	const dir = column.getIsSorted();
+	const header = column.columnDef.header;
 	if (dir === "asc") {
-		return <IconSortAscending size={16} style={{ cursor: "pointer" }} />;
+		return (
+			<ActionIcon
+				variant="subtle"
+				color="dark"
+				aria-label={`Sort ${header} in ascending order`}
+			>
+				<IconSortAscending size={16} />
+			</ActionIcon>
+		);
 	} else if (dir === "desc") {
-		return <IconSortDescending size={16} style={{ cursor: "pointer" }} />;
+		return (
+			<ActionIcon
+				variant="subtle"
+				color="dark"
+				aria-label={`Sort ${header} in descending order`}
+			>
+				<IconSortDescending size={16} />
+			</ActionIcon>
+		);
 	} else {
-		return <IconArrowsSort size={16} style={{ cursor: "pointer" }} />;
+		return (
+			<ActionIcon
+				variant="subtle"
+				color="dark"
+				aria-label={`Default ${header} Sorting`}
+			>
+				<IconArrowsSort size={16} />
+			</ActionIcon>
+		);
 	}
 }
