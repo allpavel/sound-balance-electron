@@ -12,7 +12,6 @@ export default function FilterSelect({
 	values: ReturnType<typeof column.getFacetedUniqueValues>;
 }) {
 	const filterValue = column.getFilterValue()?.toString();
-	// const uniqueValues = column.getFacetedUniqueValues();
 
 	const sortedUniqueValues = useMemo(() => {
 		return Array.from(values.keys()).sort();
