@@ -13,7 +13,6 @@ import { IconCaretRight, IconSearch } from "@tabler/icons-react";
 import {
 	flexRender,
 	getCoreRowModel,
-	getFacetedMinMaxValues,
 	getFacetedRowModel,
 	getFacetedUniqueValues,
 	getFilteredRowModel,
@@ -143,7 +142,6 @@ export default function TableComponent() {
 		getFilteredRowModel: getFilteredRowModel(),
 		getFacetedRowModel: getFacetedRowModel(),
 		getFacetedUniqueValues: getFacetedUniqueValues(),
-		getFacetedMinMaxValues: getFacetedMinMaxValues(),
 		onRowSelectionChange: setSelectedRows,
 		onSortingChange: setSorting,
 		onColumnVisibilityChange: setColumnVisibility,
@@ -163,6 +161,16 @@ export default function TableComponent() {
 	const handleGlobalFilterChange = (e: ChangeEvent<HTMLInputElement>) => {
 		setGlobalFilter(e.target.value);
 	};
+
+	const columnUniqueValues = useMemo(() => {
+		const uniqueValues: Record<string, Map<string, number>> = {};
+		table.getAllLeafColumns().forEach((column) => {
+			if (column.getCanFilter()) {
+				uniqueValues[column.id] = column.getFacetedUniqueValues();
+			}
+		});
+		return uniqueValues;
+	}, [table]);
 
 	const isFiltersActive = table
 		.getAllColumns()
@@ -205,7 +213,12 @@ export default function TableComponent() {
 										</Flex>
 										{header.column.getCanFilter() && (
 											<Flex>
-												<FilterSelect column={header.column} />
+												<FilterSelect
+													column={header.column}
+													values={
+														columnUniqueValues[header.column.id] ?? new Map()
+													}
+												/>
 											</Flex>
 										)}
 									</Group>

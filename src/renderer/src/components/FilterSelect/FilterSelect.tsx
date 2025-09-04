@@ -6,15 +6,17 @@ import type { Metadata } from "types";
 
 export default function FilterSelect({
 	column,
+	values,
 }: {
 	column: Column<Metadata, unknown>;
+	values: ReturnType<typeof column.getFacetedUniqueValues>;
 }) {
 	const filterValue = column.getFilterValue()?.toString();
-	const uniqueValues = column.getFacetedUniqueValues();
+	// const uniqueValues = column.getFacetedUniqueValues();
 
 	const sortedUniqueValues = useMemo(() => {
-		return Array.from(uniqueValues.keys()).toSorted();
-	}, [uniqueValues]);
+		return Array.from(values.keys()).sort();
+	}, [values]);
 
 	const handleChange = (value: string | null) => {
 		column.setFilterValue(value);
