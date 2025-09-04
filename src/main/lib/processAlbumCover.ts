@@ -1,16 +1,22 @@
 import type { IAudioMetadata } from "music-metadata";
 import type { NativeValue } from "../../../types";
 
-export const processAlbumCover = (metadata: IAudioMetadata) => {
-	const id3v23 = metadata.native?.["ID3v2.3"] || metadata.native?.["ID3v2.4"];
-	if (!id3v23) return metadata;
+export const processAlbumCover = (data: IAudioMetadata) => {
+	const id3Tags = data.native?.["ID3v2.3"] || data.native?.["ID3v2.4"] || null;
+	if (!id3Tags) return data;
 
-	const apicFrame = id3v23.find((item) => item.id === "APIC");
-	if (!apicFrame?.value) return metadata;
+	const apicFrame = id3Tags.find((item) => item.id === "APIC");
+	if (!apicFrame?.value) return data;
 
-	const apicValue = apicFrame.value as NativeValue;
+	const metadata = structuredClone(data);
+	const nativeData =
+		metadata.native?.["ID3v2.3"] || metadata.native?.["ID3v2.4"];
+
+	const apicValue = nativeData.find((item) => item.id === "APIC")
+		?.value as NativeValue;
 	if (apicValue.data instanceof Uint8Array) {
-		apicValue.data = btoa(String.fromCharCode(...apicValue.data));
+		const base64 = Buffer.from(apicValue.data).toString("base64");
+		apicValue.data = base64;
 	}
 
 	return metadata;
