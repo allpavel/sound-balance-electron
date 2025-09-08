@@ -11,6 +11,7 @@ import { selectAllTracks } from "@renderer/store/slices/tracksSlice";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
 import { IconCaretRight, IconSearch } from "@tabler/icons-react";
 import {
+	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
 	getFacetedRowModel,
@@ -37,11 +38,11 @@ export default function TableComponent() {
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [globalFilter, setGlobalFilter] = useState("");
-	const dispatch = useAppDispatch();
 
+	const dispatch = useAppDispatch();
 	const files = useAppSelector((state) => selectAllTracks(state.tracks));
 
-	const columns = useMemo(
+	const columns = useMemo<ColumnDef<Metadata>[]>(
 		() => [
 			{
 				id: "select",
@@ -103,7 +104,7 @@ export default function TableComponent() {
 			{
 				id: "year",
 				header: "Year",
-				accessorKey: "common.year",
+				accessorFn: (row) => row.common.year?.toString(),
 				enableSorting: true,
 				enableFacetedFilter: true,
 			},
@@ -152,9 +153,12 @@ export default function TableComponent() {
 	const selectedColumns = useMemo(() => {
 		return columns
 			.filter((column) => column.id !== "select" && column.id !== "info")
-			.map((column) => ({
-				id: column.id,
-				header: typeof column.header === "string" ? column.header : column.id,
+			.map((column, index) => ({
+				id: column.id ?? `column-${index}`,
+				header:
+					typeof column.header === "string"
+						? column.header
+						: (column.id ?? `column-${index}`),
 			}));
 	}, [columns]);
 
@@ -162,15 +166,12 @@ export default function TableComponent() {
 		setGlobalFilter(e.target.value);
 	};
 
-	const columnUniqueValues = useMemo(() => {
-		const uniqueValues: Record<string, Map<string, number>> = {};
-		table.getAllLeafColumns().forEach((column) => {
-			if (column.getCanFilter()) {
-				uniqueValues[column.id] = column.getFacetedUniqueValues();
-			}
-		});
-		return uniqueValues;
-	}, [table]);
+	const uniqueValues: Record<string, Map<string, number>> = {};
+	table.getAllLeafColumns().forEach((column) => {
+		if (column.getCanFilter()) {
+			uniqueValues[column.id] = column.getFacetedUniqueValues();
+		}
+	});
 
 	const isFiltersActive = table
 		.getAllColumns()
@@ -215,9 +216,7 @@ export default function TableComponent() {
 											<Flex>
 												<FilterSelect
 													column={header.column}
-													values={
-														columnUniqueValues[header.column.id] ?? new Map()
-													}
+													values={uniqueValues[header.column.id] ?? new Map()}
 												/>
 											</Flex>
 										)}
