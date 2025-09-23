@@ -1,6 +1,10 @@
 import type { IAudioMetadata } from "music-metadata";
 
-export type Metadata = IAudioMetadata & { id: string; file: string };
+export type Metadata = IAudioMetadata & {
+	id: string;
+	file: string;
+	filePath: string;
+};
 
 export type NativeValue = {
 	data: Uint8Array | string;
@@ -431,26 +435,27 @@ type AudioMetadata = {
 
 export type GeneralSettings = {
 	// ===== GLOBAL OPTIONS =====
-	/** Overwrite output files without prompt (-y) */
-	outputDirectoryPath: string;
-	/** Overwrite output files without prompt (-y) */
-	overwrite: boolean;
-	/** Fail if output file exists (-n) */
-	noOverwrite: boolean;
-	/** Set stats update interval in seconds (-stats_period) */
-	statsPeriod: number;
-
+	global: {
+		/** Output directory path */
+		outputDirectoryPath: string;
+		/** Overwrite output files without prompt (-y) */
+		overwrite: boolean;
+		/** Fail if output file exists (-n) */
+		noOverwrite: boolean;
+		/** Set stats update interval in seconds (-stats_period) */
+		statsPeriod: number;
+		/** Recast media type when needed (-recast_media) */
+		recastMedia: boolean;
+	};
 	// ===== AUDIO ENCODING =====
-	/** Audio codec (e.g., 'libmp3lame', 'flac', 'copy') (-c:a) */
-	audioCodec: string;
-	/** Audio quality (VBR scale, 0-9 for MP3) (-q:a) */
-	audioQuality: string | number;
-
-	// ===== AUDIO PROCESSING =====
-	/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
-	audioFilter: string;
-	/** Recast media type when needed (-recast_media) */
-	recastMedia: boolean;
+	audio: {
+		/** Audio codec (e.g., 'libmp3lame', 'flac', 'copy') (-c:a) */
+		audioCodec: string;
+		/** Audio quality (VBR scale, 0-9 for MP3) (-q:a) */
+		audioQuality: string;
+		/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
+		audioFilter: string;
+	};
 };
 
 export type TrackSettings = {
