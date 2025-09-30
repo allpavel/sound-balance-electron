@@ -6,6 +6,9 @@ const api = {
 	showDialog: () => ipcRenderer.invoke("showDialog"),
 	getOutputDirectoryPath: () => ipcRenderer.invoke("getOutputDirectoryPath"),
 	startProcessing: (data) => ipcRenderer.invoke("startProcessing", data),
+	stopProcessing: () => ipcRenderer.invoke("stopProcessing"),
+	responseOnStart: (cb) =>
+		ipcRenderer.on("response-on-start", (_, result) => cb(result)),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
