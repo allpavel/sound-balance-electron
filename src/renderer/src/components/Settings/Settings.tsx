@@ -20,7 +20,7 @@ export default function Settings() {
 	const [opened, { open, close }] = useDisclosure(false);
 	const settings = useAppSelector((state) => state.settings);
 	const initialValues = {
-		audio: settings.audio,
+		audio: { ...settings.audio },
 		global: {
 			...settings.global,
 			overwrite: settings.global.overwrite ? "yes" : "no",
@@ -71,7 +71,7 @@ export default function Settings() {
 									{...form.getInputProps("global.outputDirectoryPath")}
 								/>
 								<Radio.Group
-									label="Overwrite output files"
+									label="Overwrite output files without asking:"
 									key={form.key("global.overwrite")}
 									{...form.getInputProps("global.overwrite")}
 								>
@@ -81,7 +81,7 @@ export default function Settings() {
 									</Group>
 								</Radio.Group>
 								<Radio.Group
-									label="Fail if output file exists"
+									label="Fail if output file exists:"
 									key={form.key("global.noOverwrite")}
 									{...form.getInputProps("global.noOverwrite")}
 								>
@@ -155,7 +155,7 @@ export default function Settings() {
 										</optgroup>
 										<hr />
 										<optgroup label="Windows Media Audio 2">
-											<option value="wmav1">wmav2</option>
+											<option value="wmav2">wmav2</option>
 										</optgroup>
 									</NativeSelect>
 									<NativeSelect
