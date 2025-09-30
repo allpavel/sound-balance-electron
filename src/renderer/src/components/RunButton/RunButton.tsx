@@ -2,11 +2,17 @@ import { Button, Flex, Modal, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { getAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
-import { IconAlertHexagon, IconPlayerPlayFilled } from "@tabler/icons-react";
+import {
+	IconAlertHexagon,
+	IconPlayerPlayFilled,
+	IconPlayerStop,
+} from "@tabler/icons-react";
+import { useState } from "react";
 import type { Data } from "types";
 
 export default function RunButton() {
 	const [opened, { open, close }] = useDisclosure();
+	const [isRunning, setIsRunning] = useState(false);
 	const selectedTracks = useAppSelector((state) => state.selectedTracks);
 	const settings = useAppSelector((state) => state.settings);
 
@@ -15,9 +21,19 @@ export default function RunButton() {
 			open();
 			return;
 		} else {
+			setIsRunning(true);
 			const tracks = getAllSelectedTracks(selectedTracks);
 			const data: Data = { tracks, settings };
 			return window.api.startProcessing(data);
+		}
+	};
+
+	const handleButtonClick = () => {
+		if (isRunning) {
+			setIsRunning(false);
+			window.api.stopProcessing();
+		} else {
+			sendData();
 		}
 	};
 
@@ -39,12 +55,21 @@ export default function RunButton() {
 					processing.
 				</Text>
 			</Modal>
-			<Button
-				leftSection={<IconPlayerPlayFilled size={14} />}
-				onClick={sendData}
-			>
-				Run
-			</Button>
+			{isRunning ? (
+				<Button
+					leftSection={<IconPlayerStop size={14} />}
+					onClick={handleButtonClick}
+				>
+					Stop
+				</Button>
+			) : (
+				<Button
+					leftSection={<IconPlayerPlayFilled size={14} />}
+					onClick={handleButtonClick}
+				>
+					Run
+				</Button>
+			)}
 		</>
 	);
 }
