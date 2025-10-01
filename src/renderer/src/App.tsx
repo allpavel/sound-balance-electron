@@ -1,6 +1,7 @@
 import { AppShell, Button, Group } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
 import { IconUpload } from "@tabler/icons-react";
+import DeleteButton from "./components/DeleteButton/DeleteButton";
 import RunButton from "./components/RunButton/RunButton";
 import Settings from "./components/Settings/Settings";
 import { useAppDispatch } from "./hooks/useAppDispatch";
@@ -27,6 +28,7 @@ function App(): React.JSX.Element {
 							Add
 						</Button>
 						<Settings />
+						<DeleteButton />
 					</Group>
 					<RunButton />
 				</Group>
