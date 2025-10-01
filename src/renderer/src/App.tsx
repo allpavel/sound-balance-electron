@@ -1,20 +1,11 @@
-import { AppShell, Button, Group } from "@mantine/core";
+import { AppShell, Group } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
-import { IconUpload } from "@tabler/icons-react";
+import AddButton from "./components/AddButton/AddButton";
 import DeleteButton from "./components/DeleteButton/DeleteButton";
 import RunButton from "./components/RunButton/RunButton";
 import Settings from "./components/Settings/Settings";
-import { useAppDispatch } from "./hooks/useAppDispatch";
-import { addTracks } from "./store/slices/tracksSlice";
 
 function App(): React.JSX.Element {
-	const dispatch = useAppDispatch();
-
-	const loadFiles = async () => {
-		const result = await window.api.showDialog();
-		dispatch(addTracks(result));
-	};
-
 	return (
 		<AppShell
 			padding="md"
@@ -24,9 +15,7 @@ function App(): React.JSX.Element {
 			<AppShell.Header p={"sm"}>
 				<Group justify="space-between">
 					<Group gap={"md"}>
-						<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
-							Add
-						</Button>
+						<AddButton />
 						<Settings />
 						<DeleteButton />
 					</Group>
