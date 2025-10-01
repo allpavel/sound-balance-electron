@@ -4,14 +4,14 @@ import { IconUpload } from "@tabler/icons-react";
 import RunButton from "./components/RunButton/RunButton";
 import Settings from "./components/Settings/Settings";
 import { useAppDispatch } from "./hooks/useAppDispatch";
-import { loadTracks } from "./store/slices/tracksSlice";
+import { addTracks } from "./store/slices/tracksSlice";
 
 function App(): React.JSX.Element {
 	const dispatch = useAppDispatch();
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();
-		dispatch(loadTracks(result));
+		dispatch(addTracks(result));
 	};
 
 	return (
@@ -24,7 +24,7 @@ function App(): React.JSX.Element {
 				<Group justify="space-between">
 					<Group gap={"md"}>
 						<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
-							Open
+							Add
 						</Button>
 						<Settings />
 					</Group>

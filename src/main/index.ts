@@ -135,18 +135,19 @@ const startProcessing = async (_, data: Data) => {
 				});
 			}
 
-			await new Promise((resolve, reject) => {
-				ffmpeg.on("close", (code) => {
-					if (code === 0) {
-						resolve(null);
-					} else {
-						reject(new Error(`FFmpeg process exited with code ${code}`));
-					}
-				});
+			ffmpeg.on("close", (code) => {
+				if (code === 0) {
+					// biome-ignore lint: temp console
+					console.log("close with 0");
+				} else {
+					// biome-ignore lint: temp console
+					console.log("close from signal");
+				}
+			});
 
-				ffmpeg.on("error", (error) => {
-					reject(error);
-				});
+			ffmpeg.on("error", (error) => {
+				// biome-ignore lint: temp console
+				console.error(error);
 			});
 		} catch (error) {
 			// biome-ignore lint: temp console
