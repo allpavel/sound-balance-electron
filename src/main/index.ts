@@ -15,6 +15,27 @@ let ffmpeg: ChildProcessWithoutNullStreams;
 
 let mainWindow: BrowserWindow;
 
+const IPC_CHANNELS = {
+	PROCESSING_FINISHED: "processing-finished",
+	PROCESSING_ERROR: "processing-error",
+	PROCESSING_PROGRESS: "processing-progress",
+} as const;
+
+const MAIN_ERROR = {
+	VALIDATION_ERROR: "VALIDATION_ERROR",
+	DIRECTORY_VALIDATION_ERROR: "DIRECTORY_VALIDATION_ERROR",
+	DIRECTORY_ACCESS_ERROR: "DIRECTORY_ACCESS_ERROR",
+	INVALID_TRACK_ERROR: "INVALID_TRACK_ERROR",
+	FFMPEG_PROCESS_ERROR: "FFMPEG_PROCESS_ERROR",
+} as const;
+
+const PROCESSING_PROGRESS = {
+	PROCESSING_STARTED: "PROCESSING_STARTED",
+	TRACK_STARTED: "TRACK_STARTED",
+	TRACK_COMPLETED: "TRACK_COMPLETED",
+	PROCESSING_FINISHED: "PROCESSING_FINISHED",
+} as const;
+
 const showDialog = async () => {
 	const paths = await dialog.showOpenDialog({
 		properties: ["multiSelections"],
@@ -49,22 +70,41 @@ const startProcessing = async (_, data: Data) => {
 		},
 	};
 
+	if (!data || !data.tracks || !Array.isArray(data.tracks)) {
+		const message = "Invalid data: tracks array is missing or invalid";
+		mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+			type: MAIN_ERROR.VALIDATION_ERROR,
+			message,
+			timeStamp: new Date().toISOString(),
+		});
+		throw new Error(message);
+	}
+
 	async function isDirectory(dirPath: string) {
 		if (typeof dirPath !== "string") {
-			throw new Error(
-				`Expected string for output directory path, but got: ${typeof dirPath}`,
-			);
+			const message = `Expected string for output directory path, but got: ${typeof dirPath}`;
+			mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+				type: MAIN_ERROR.DIRECTORY_VALIDATION_ERROR,
+				message,
+				timeStamp: new Date().toISOString(),
+			});
+			throw new Error(message);
 		}
 
-		const normalizePath = path.resolve(dirPath);
+		const normalizedPath = path.resolve(dirPath);
 
 		try {
-			const stats = await fs.stat(normalizePath);
+			const stats = await fs.stat(normalizedPath);
 			return stats.isDirectory();
 		} catch (error) {
-			throw new Error(
-				error instanceof Error ? error.message : "Unexpected error",
-			);
+			const message =
+				error instanceof Error ? error.message : "Unexpected error";
+			mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+				type: MAIN_ERROR.DIRECTORY_ACCESS_ERROR,
+				message,
+				timeStamp: new Date().toISOString(),
+			});
+			throw new Error(message);
 		}
 	}
 
@@ -97,14 +137,33 @@ const startProcessing = async (_, data: Data) => {
 		}
 		return result;
 	};
+
 	const dirPath = data.settings.global.outputDirectoryPath;
 
 	const resDir = await isDirectory(dirPath);
 	if (!resDir) {
-		throw new Error("Directory validation failed");
+		const message = "Directory validation failed - path is not a directory";
+		mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+			type: MAIN_ERROR.DIRECTORY_VALIDATION_ERROR,
+			message,
+			timeStamp: new Date().toISOString(),
+		});
+		throw new Error(message);
 	}
 	const globalSettings = getGlobalSettings(data.settings.global);
 	canRunning = true;
+
+	let successfulTracks = 0;
+	let failedTracks = 0;
+
+	mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
+		type: PROCESSING_PROGRESS.PROCESSING_STARTED,
+		total: data.tracks.length,
+		processed: 0,
+		successful: 0,
+		failed: 0,
+		timestamp: new Date().toISOString(),
+	});
 
 	for (
 		let currentIndex = 0;
@@ -114,9 +173,19 @@ const startProcessing = async (_, data: Data) => {
 		const current = data.tracks[currentIndex];
 
 		if (!current || !current.filePath) {
+			failedTracks++;
+			mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+				type: MAIN_ERROR.INVALID_TRACK_ERROR,
+				total: data.tracks.length,
+				processed: currentIndex,
+				successful: successfulTracks,
+				failed: failedTracks,
+				timestamp: new Date().toISOString(),
+			});
 			continue;
 		}
 		const inputFile = current.filePath;
+
 		const trackSettings = getTrackSettings(data.settings.audio);
 		const args = [
 			...globalSettings,
@@ -133,27 +202,87 @@ const startProcessing = async (_, data: Data) => {
 					stdio: ["pipe", "pipe", "pipe"],
 					shell: true,
 				});
+				mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
+					type: PROCESSING_PROGRESS.TRACK_STARTED,
+					total: data.tracks.length,
+					current: current.file,
+					processed: currentIndex,
+					successful: successfulTracks,
+					failed: failedTracks,
+					timestamp: new Date().toISOString(),
+				});
 			}
 
-			ffmpeg.on("close", (code) => {
-				if (code === 0) {
-					// biome-ignore lint: temp console
-					console.log("close with 0");
-				} else {
-					// biome-ignore lint: temp console
-					console.log("close from signal");
-				}
-			});
+			await new Promise((resolve, reject) => {
+				ffmpeg.on("close", (code) => {
+					if (code === 0) {
+						successfulTracks++;
+						mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
+							type: PROCESSING_PROGRESS.TRACK_COMPLETED,
+							total: data.tracks.length,
+							current: current.file,
+							processed: currentIndex,
+							successful: successfulTracks,
+							failed: failedTracks,
+							timestamp: new Date().toISOString(),
+						});
+						resolve(null);
+					} else {
+						failedTracks++;
+						const message = `FFmpeg process exited with code ${code} for file: ${current.file}`;
+						mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+							type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
+							message,
+							total: data.tracks.length,
+							processed: currentIndex,
+							successful: successfulTracks,
+							failed: failedTracks,
+							timestamp: new Date().toISOString(),
+						});
+						reject(new Error(message));
+					}
+				});
 
-			ffmpeg.on("error", (error) => {
-				// biome-ignore lint: temp console
-				console.error(error);
+				ffmpeg.on("error", (error) => {
+					failedTracks++;
+					const message = `Failed to spawn FFmpeg process: ${error.message}`;
+					mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+						type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
+						message,
+						total: data.tracks.length,
+						processed: currentIndex,
+						successful: successfulTracks,
+						failed: failedTracks,
+						timestamp: new Date().toISOString(),
+					});
+					reject(error);
+				});
 			});
 		} catch (error) {
-			// biome-ignore lint: temp console
-			console.error(error);
+			failedTracks++;
+			const message =
+				error instanceof Error ? error.message : "Unexpected error";
+			mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+				type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
+				message,
+				total: data.tracks.length,
+				processed: currentIndex,
+				successful: successfulTracks,
+				failed: failedTracks,
+				timestamp: new Date().toISOString(),
+			});
+			throw new Error(message);
 		}
 	}
+
+	mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_FINISHED, {
+		type: PROCESSING_PROGRESS.PROCESSING_FINISHED,
+		total: data.tracks.length,
+		processed: data.tracks.length,
+		successful: successfulTracks,
+		failed: failedTracks,
+		timestamp: new Date().toISOString(),
+	});
 	canRunning = false;
 	return data;
 };
