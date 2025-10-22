@@ -6,17 +6,21 @@ import {
 	IconAlertHexagon,
 	IconPlayerPlayFilled,
 	IconPlayerStop,
+	IconTrophy,
 } from "@tabler/icons-react";
 import { useState } from "react";
-import type { Data } from "types";
+import type { Data, ProcessingStats } from "types";
 
 export default function RunButton() {
 	const [opened, { open, close }] = useDisclosure();
+	const [showResults, { open: openResults, close: closeResults }] =
+		useDisclosure(false);
 	const [isRunning, setIsRunning] = useState(false);
+	const [processingResult, setProcessingResult] = useState<ProcessingStats>();
 	const selectedTracks = useAppSelector((state) => state.selectedTracks);
 	const settings = useAppSelector((state) => state.settings);
 
-	const sendData = () => {
+	const sendData = async () => {
 		if (!settings.global.outputDirectoryPath) {
 			open();
 			return;
@@ -24,7 +28,10 @@ export default function RunButton() {
 			setIsRunning(true);
 			const tracks = getAllSelectedTracks(selectedTracks);
 			const data: Data = { tracks, settings };
-			return window.api.startProcessing(data);
+			const res = await window.api.startProcessing(data);
+			setProcessingResult(res);
+			setIsRunning(false);
+			openResults();
 		}
 	};
 
@@ -69,6 +76,21 @@ export default function RunButton() {
 				>
 					Run
 				</Button>
+			)}
+			{processingResult && (
+				<Modal
+					opened={showResults}
+					onClose={closeResults}
+					centered
+					title={
+						<Flex gap={"xs"}>
+							<IconTrophy color="blue" />
+							<Text>Results:</Text>
+						</Flex>
+					}
+				>
+					<Text>Total Files: {processingResult.totalFiles}</Text>
+				</Modal>
 			)}
 		</>
 	);

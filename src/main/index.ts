@@ -6,7 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
 import icon from "../../resources/icon.png?asset";
-import type { Data, Metadata } from "../../types";
+import type { Data, Metadata, ProcessingStats } from "../../types";
 import { optionsMapper } from "./lib/ffmpeg/optionsMapper";
 import { getMetadata } from "./lib/getMetadata";
 
@@ -29,12 +29,12 @@ const MAIN_ERROR = {
 	FFMPEG_PROCESS_ERROR: "FFMPEG_PROCESS_ERROR",
 } as const;
 
-const PROCESSING_PROGRESS = {
-	PROCESSING_STARTED: "PROCESSING_STARTED",
-	TRACK_STARTED: "TRACK_STARTED",
-	TRACK_COMPLETED: "TRACK_COMPLETED",
-	PROCESSING_FINISHED: "PROCESSING_FINISHED",
-} as const;
+// const PROCESSING_PROGRESS = {
+// 	PROCESSING_STARTED: "PROCESSING_STARTED",
+// 	TRACK_STARTED: "TRACK_STARTED",
+// 	TRACK_COMPLETED: "TRACK_COMPLETED",
+// 	PROCESSING_FINISHED: "PROCESSING_FINISHED",
+// } as const;
 
 const showDialog = async () => {
 	const paths = await dialog.showOpenDialog({
@@ -153,17 +153,9 @@ const startProcessing = async (_, data: Data) => {
 	const globalSettings = getGlobalSettings(data.settings.global);
 	canRunning = true;
 
-	let successfulTracks = 0;
-	let failedTracks = 0;
-
-	mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
-		type: PROCESSING_PROGRESS.PROCESSING_STARTED,
-		total: data.tracks.length,
-		processed: 0,
-		successful: 0,
-		failed: 0,
-		timestamp: new Date().toISOString(),
-	});
+	let successCount = 0;
+	let errorCount = 0;
+	const errorFiles: string[] = [];
 
 	for (
 		let currentIndex = 0;
@@ -172,16 +164,22 @@ const startProcessing = async (_, data: Data) => {
 	) {
 		const current = data.tracks[currentIndex];
 
+		// mainWindow.webContents.send(
+		// 	PROCESSING_PROGRESS.PROCESSING_STARTED,
+		// 	`Started processing: ${current.file}`,
+		// );
+
 		if (!current || !current.filePath) {
-			failedTracks++;
-			mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
-				type: MAIN_ERROR.INVALID_TRACK_ERROR,
-				total: data.tracks.length,
-				processed: currentIndex,
-				successful: successfulTracks,
-				failed: failedTracks,
-				timestamp: new Date().toISOString(),
-			});
+			errorCount++;
+			errorFiles.push(data.tracks[currentIndex].file);
+			// mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+			// 	type: MAIN_ERROR.INVALID_TRACK_ERROR,
+			// 	total: data.tracks.length,
+			// 	processed: currentIndex,
+			// 	successful: successCount,
+			// 	failed: errorCount,
+			// 	timestamp: new Date().toISOString(),
+			// });
 			continue;
 		}
 		const inputFile = current.filePath;
@@ -202,89 +200,98 @@ const startProcessing = async (_, data: Data) => {
 					stdio: ["pipe", "pipe", "pipe"],
 					shell: true,
 				});
-				mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
-					type: PROCESSING_PROGRESS.TRACK_STARTED,
-					total: data.tracks.length,
-					current: current.file,
-					processed: currentIndex,
-					successful: successfulTracks,
-					failed: failedTracks,
-					timestamp: new Date().toISOString(),
-				});
+				// mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
+				// 	type: PROCESSING_PROGRESS.TRACK_STARTED,
+				// 	total: data.tracks.length,
+				// 	current: current.file,
+				// 	processed: currentIndex,
+				// 	successful: successfulTracks,
+				// 	failed: failedTracks,
+				// 	timestamp: new Date().toISOString(),
+				// });
 			}
 
 			await new Promise((resolve, reject) => {
 				ffmpeg.on("close", (code) => {
 					if (code === 0) {
-						successfulTracks++;
-						mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
-							type: PROCESSING_PROGRESS.TRACK_COMPLETED,
-							total: data.tracks.length,
-							current: current.file,
-							processed: currentIndex,
-							successful: successfulTracks,
-							failed: failedTracks,
-							timestamp: new Date().toISOString(),
-						});
+						successCount++;
+						// mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_PROGRESS, {
+						// 	type: PROCESSING_PROGRESS.TRACK_COMPLETED,
+						// 	total: data.tracks.length,
+						// 	current: current.file,
+						// 	processed: currentIndex,
+						// 	successful: successfulTracks,
+						// 	failed: failedTracks,
+						// 	timestamp: new Date().toISOString(),
+						// });
 						resolve(null);
 					} else {
-						failedTracks++;
+						errorCount++;
+						errorFiles.push(current.file);
 						const message = `FFmpeg process exited with code ${code} for file: ${current.file}`;
-						mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
-							type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
-							message,
-							total: data.tracks.length,
-							processed: currentIndex,
-							successful: successfulTracks,
-							failed: failedTracks,
-							timestamp: new Date().toISOString(),
-						});
+						// mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+						// 	type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
+						// 	message,
+						// 	total: data.tracks.length,
+						// 	processed: currentIndex,
+						// 	successful: successfulTracks,
+						// 	failed: failedTracks,
+						// 	timestamp: new Date().toISOString(),
+						// });
 						reject(new Error(message));
 					}
 				});
 
 				ffmpeg.on("error", (error) => {
-					failedTracks++;
-					const message = `Failed to spawn FFmpeg process: ${error.message}`;
-					mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
-						type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
-						message,
-						total: data.tracks.length,
-						processed: currentIndex,
-						successful: successfulTracks,
-						failed: failedTracks,
-						timestamp: new Date().toISOString(),
-					});
+					errorCount++;
+					errorFiles.push(current.file);
+					// const message = `Failed to spawn FFmpeg process: ${error.message}`;
+					// mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+					// 	type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
+					// 	message,
+					// 	total: data.tracks.length,
+					// 	processed: currentIndex,
+					// 	successful: successfulTracks,
+					// 	failed: failedTracks,
+					// 	timestamp: new Date().toISOString(),
+					// });
 					reject(error);
 				});
 			});
 		} catch (error) {
-			failedTracks++;
+			errorCount++;
+			errorFiles.push(current.file);
 			const message =
 				error instanceof Error ? error.message : "Unexpected error";
-			mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
-				type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
-				message,
-				total: data.tracks.length,
-				processed: currentIndex,
-				successful: successfulTracks,
-				failed: failedTracks,
-				timestamp: new Date().toISOString(),
-			});
+			// mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_ERROR, {
+			// 	type: MAIN_ERROR.FFMPEG_PROCESS_ERROR,
+			// 	message,
+			// 	total: data.tracks.length,
+			// 	processed: currentIndex,
+			// 	successful: successfulTracks,
+			// 	failed: failedTracks,
+			// 	timestamp: new Date().toISOString(),
+			// });
 			throw new Error(message);
 		}
 	}
 
-	mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_FINISHED, {
-		type: PROCESSING_PROGRESS.PROCESSING_FINISHED,
-		total: data.tracks.length,
-		processed: data.tracks.length,
-		successful: successfulTracks,
-		failed: failedTracks,
-		timestamp: new Date().toISOString(),
-	});
+	// mainWindow.webContents.send(IPC_CHANNELS.PROCESSING_FINISHED, {
+	// 	type: PROCESSING_PROGRESS.PROCESSING_FINISHED,
+	// 	total: data.tracks.length,
+	// 	processed: data.tracks.length,
+	// 	successful: successfulTracks,
+	// 	failed: failedTracks,
+	// 	timestamp: new Date().toISOString(),
+	// });
 	canRunning = false;
-	return data;
+	const processingStats: ProcessingStats = {
+		errorCount,
+		successCount,
+		totalFiles: data.tracks.length,
+		errorFiles,
+	};
+	return processingStats;
 };
 
 const stopProcessing = async () => {

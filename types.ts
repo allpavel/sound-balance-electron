@@ -636,3 +636,10 @@ export type Data = {
 	tracks: Metadata[];
 	settings: GeneralSettings;
 };
+
+export type ProcessingStats = {
+	totalFiles: number;
+	successCount: number;
+	errorCount: number;
+	errorFiles: string[];
+};

@@ -1,5 +1,5 @@
 import { electronAPI } from "@electron-toolkit/preload";
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 
 // Custom APIs for renderer
 const api = {
@@ -9,6 +9,12 @@ const api = {
 	stopProcessing: () => ipcRenderer.invoke("stopProcessing"),
 	responseOnStart: (cb) =>
 		ipcRenderer.on("response-on-start", (_, result) => cb(result)),
+	startProcessingReply: (cb) => {
+		const subscription = (_event: IpcRendererEvent, message: string) =>
+			cb(message);
+		ipcRenderer.on("PROCESSING_STARTED", subscription);
+		return () => ipcRenderer.removeListener("PROCESSING_STARTED", subscription);
+	},
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
