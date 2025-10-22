@@ -289,8 +289,10 @@ const startProcessing = async (_, data: Data) => {
 		errorCount,
 		successCount,
 		totalFiles: data.tracks.length,
-		errorFiles,
 	};
+	if (errorFiles.length > 0) {
+		processingStats.errorFiles = errorFiles;
+	}
 	return processingStats;
 };
 

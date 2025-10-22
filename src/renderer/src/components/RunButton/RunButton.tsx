@@ -1,4 +1,4 @@
-import { Button, Flex, Modal, Text } from "@mantine/core";
+import { Button, Flex, Group, List, Modal, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { getAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
@@ -62,21 +62,26 @@ export default function RunButton() {
 					processing.
 				</Text>
 			</Modal>
-			{isRunning ? (
-				<Button
-					leftSection={<IconPlayerStop size={14} />}
-					onClick={handleButtonClick}
-				>
-					Stop
+			<Group>
+				<Button onClick={openResults} disabled={!processingResult}>
+					Results
 				</Button>
-			) : (
-				<Button
-					leftSection={<IconPlayerPlayFilled size={14} />}
-					onClick={handleButtonClick}
-				>
-					Run
-				</Button>
-			)}
+				{isRunning ? (
+					<Button
+						leftSection={<IconPlayerStop size={14} />}
+						onClick={handleButtonClick}
+					>
+						Stop
+					</Button>
+				) : (
+					<Button
+						leftSection={<IconPlayerPlayFilled size={14} />}
+						onClick={handleButtonClick}
+					>
+						Run
+					</Button>
+				)}
+			</Group>
 			{processingResult && (
 				<Modal
 					opened={showResults}
@@ -90,6 +95,18 @@ export default function RunButton() {
 					}
 				>
 					<Text>Total Files: {processingResult.totalFiles}</Text>
+					<Text>Successfully processed: {processingResult.successCount}</Text>
+					<Text>Failed with error: {processingResult.errorCount}</Text>
+					{processingResult.errorFiles ? (
+						<Stack>
+							<Text>List of failed files:</Text>
+							<List>
+								{processingResult.errorFiles.map((file) => (
+									<List.Item key={file}>{file}</List.Item>
+								))}
+							</List>
+						</Stack>
+					) : null}
 				</Modal>
 			)}
 		</>

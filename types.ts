@@ -641,5 +641,5 @@ export type ProcessingStats = {
 	totalFiles: number;
 	successCount: number;
 	errorCount: number;
-	errorFiles: string[];
+	errorFiles?: string[];
 };
