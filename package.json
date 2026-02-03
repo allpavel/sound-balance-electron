@@ -25,7 +25,7 @@
 		"@mantine/form": "^8.2.7",
 		"@mantine/hooks": "^8.2.4",
 		"@reduxjs/toolkit": "^2.8.2",
-		"@tabler/icons-react": "^3.34.1",
+		"@tabler/icons-react": "^3.36.1",
 		"@tanstack/react-table": "^8.21.3",
 		"ffmpeg-static": "^5.2.0",
 		"music-metadata": "^11.7.3",
