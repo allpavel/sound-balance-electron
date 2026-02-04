@@ -2,8 +2,8 @@ import { AppShell, Group } from "@mantine/core";
 import TableComponent from "@renderer/components/Table/Table";
 import AddButton from "./components/AddButton/AddButton";
 import DeleteButton from "./components/DeleteButton/DeleteButton";
-import RunButton from "./components/RunButton/RunButton";
 import Settings from "./components/Settings/Settings";
+import StartProcessing from "./components/StartProcessing/StartProcessing";
 
 function App(): React.JSX.Element {
 	return (
@@ -19,7 +19,7 @@ function App(): React.JSX.Element {
 						<Settings />
 						<DeleteButton />
 					</Group>
-					<RunButton />
+					<StartProcessing />
 				</Group>
 			</AppShell.Header>
 			<AppShell.Navbar>Collections</AppShell.Navbar>
