@@ -1,14 +1,17 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import fs from "node:fs/promises";
 import path from "node:path";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
+import { INITIALSETTINGS } from "../../constants";
 import icon from "../../resources/icon.png?asset";
 import type { Data, Metadata } from "../../types";
 import { optionsMapper } from "./lib/ffmpeg/optionsMapper";
+import { getGlobalSettings } from "./lib/getGlobalSettings";
 import { getMetadata } from "./lib/getMetadata";
+import { getTrackSettings } from "./lib/getTrackSettings";
+import { isDirectory } from "./lib/isDirectory";
 
 let canRunning: boolean = false;
 let ffmpeg: ChildProcessWithoutNullStreams;
@@ -34,76 +37,17 @@ const getOutputDirectoryPath = async () => {
 };
 
 const startProcessing = async (_, data: Data) => {
-	const initialSettings = {
-		global: {
-			outputDirectoryPath: "",
-			overwrite: true,
-			noOverwrite: false,
-			statsPeriod: 0.5,
-			recastMedia: false,
-		},
-		audio: {
-			audioCodec: "copy",
-			audioQuality: "4",
-			audioFilter: "loudnorm",
-		},
-	};
-
-	async function isDirectory(dirPath: string) {
-		if (typeof dirPath !== "string") {
-			throw new Error(
-				`Expected string for output directory path, but got: ${typeof dirPath}`,
-			);
-		}
-
-		const normalizePath = path.resolve(dirPath);
-
-		try {
-			const stats = await fs.stat(normalizePath);
-			return stats.isDirectory();
-		} catch (error) {
-			throw new Error(
-				error instanceof Error ? error.message : "Unexpected error",
-			);
-		}
-	}
-
-	const getGlobalSettings = (settings: {
-		outputDirectoryPath: string;
-		overwrite: boolean;
-		noOverwrite: boolean;
-		statsPeriod: number;
-		recastMedia: boolean;
-	}) => {
-		const result: string[] = [];
-		for (const s in settings) {
-			if (settings[s] !== initialSettings.global[s]) {
-				result.push(optionsMapper(s));
-			}
-		}
-		return result;
-	};
-
-	const getTrackSettings = (settings: {
-		audioCodec: string;
-		audioQuality: string;
-		audioFilter: string;
-	}) => {
-		const result: string[] = [];
-		for (const s in settings) {
-			if (settings[s] !== initialSettings.audio[s]) {
-				result.push(`${optionsMapper(s)} ${settings[s]}`);
-			}
-		}
-		return result;
-	};
 	const dirPath = data.settings.global.outputDirectoryPath;
 
 	const resDir = await isDirectory(dirPath);
 	if (!resDir) {
-		throw new Error("Directory validation failed");
+		throw new Error("Output directory validation failed");
 	}
-	const globalSettings = getGlobalSettings(data.settings.global);
+	const globalSettings = getGlobalSettings(
+		INITIALSETTINGS,
+		data.settings.global,
+		optionsMapper,
+	);
 	canRunning = true;
 
 	for (
@@ -117,7 +61,11 @@ const startProcessing = async (_, data: Data) => {
 			continue;
 		}
 		const inputFile = current.filePath;
-		const trackSettings = getTrackSettings(data.settings.audio);
+		const trackSettings = getTrackSettings(
+			INITIALSETTINGS,
+			data.settings.audio,
+			optionsMapper,
+		);
 		const args = [
 			...globalSettings,
 			"-i",
