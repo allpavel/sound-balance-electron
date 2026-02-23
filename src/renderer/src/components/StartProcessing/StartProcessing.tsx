@@ -1,7 +1,7 @@
 import { useDisclosure } from "@mantine/hooks";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { getAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Data } from "types";
 import ErrorModal from "../ErrorModal/ErrorModal";
 import RunButton from "../RunButton/RunButton";
@@ -11,6 +11,23 @@ export default function StartProcessing() {
 	const [isRunning, setIsRunning] = useState(false);
 	const selectedTracks = useAppSelector((state) => state.selectedTracks);
 	const settings = useAppSelector((state) => state.settings);
+
+	// biome-ignore-start lint: temp console.log
+	useEffect(() => {
+		const unsubscribe = window.api.responseOnStart((msg) => console.log(msg));
+		return () => unsubscribe();
+	}, []);
+
+	useEffect(() => {
+		const unsubscribe = window.api.responseOnStop((msg) => console.log(msg));
+		return () => unsubscribe();
+	}, []);
+
+	useEffect(() => {
+		const unsubscribe = window.api.processingResult((msg) => console.log(msg));
+		return () => unsubscribe();
+	}, []);
+	// biome-ignore-end lint: temp console.log
 
 	const sendData = () => {
 		if (!settings.global.outputDirectoryPath) {

@@ -5,7 +5,10 @@ type API = {
 	showDialog: () => Promise<Metadata[]>;
 	getOutputDirectoryPath: () => Promise<Electron.OpenDialogReturnValue>;
 	startProcessing: (data: Data) => Data;
-	stopProcessing: () => Promise<boolean>;
+	stopProcessing: () => void;
+	responseOnStart: (cb: (msg: string) => void) => () => void;
+	responseOnStop: (cb: (msg: string) => void) => () => void;
+	processingResult: (cb: (msg: string) => void) => () => void;
 };
 
 declare global {

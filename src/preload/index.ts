@@ -7,8 +7,18 @@ const api = {
 	getOutputDirectoryPath: () => ipcRenderer.invoke("getOutputDirectoryPath"),
 	startProcessing: (data) => ipcRenderer.invoke("startProcessing", data),
 	stopProcessing: () => ipcRenderer.invoke("stopProcessing"),
-	responseOnStart: (cb) =>
-		ipcRenderer.on("response-on-start", (_, result) => cb(result)),
+	responseOnStart: (cb) => {
+		ipcRenderer.on("response-on-start", (_, msg) => cb(msg));
+		return () => ipcRenderer.removeAllListeners("response-on-start");
+	},
+	responseOnStop: (cb) => {
+		ipcRenderer.on("response-on-stop", (_, msg) => cb(msg));
+		return () => ipcRenderer.removeAllListeners("response-on-stop");
+	},
+	processingResult: (cb) => {
+		ipcRenderer.on("processing-result", (_, msg) => cb(msg));
+		return () => ipcRenderer.removeAllListeners("processing-result");
+	},
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
@@ -24,8 +34,8 @@ if (process.contextIsolated) {
 		);
 	}
 } else {
-	// @ts-ignore (define in dts)
+	// @ts-expect-error (define in dts)
 	window.electron = electronAPI;
-	// @ts-ignore (define in dts)
+	// @ts-expect-error (define in dts)
 	window.api = api;
 }

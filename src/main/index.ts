@@ -1,14 +1,18 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import fs from "node:fs/promises";
 import path from "node:path";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import type { IpcMainInvokeEvent } from "electron/main";
 import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
+import { INITIALSETTINGS } from "../../constants";
 import icon from "../../resources/icon.png?asset";
 import type { Data, Metadata } from "../../types";
 import { optionsMapper } from "./lib/ffmpeg/optionsMapper";
+import { getGlobalSettings } from "./lib/getGlobalSettings";
 import { getMetadata } from "./lib/getMetadata";
+import { getTrackSettings } from "./lib/getTrackSettings";
+import { isDirectory } from "./lib/isDirectory";
 
 let canRunning: boolean = false;
 let ffmpeg: ChildProcessWithoutNullStreams;
@@ -33,77 +37,18 @@ const getOutputDirectoryPath = async () => {
 	return outputDirectoryPath;
 };
 
-const startProcessing = async (_, data: Data) => {
-	const initialSettings = {
-		global: {
-			outputDirectoryPath: "",
-			overwrite: true,
-			noOverwrite: false,
-			statsPeriod: 0.5,
-			recastMedia: false,
-		},
-		audio: {
-			audioCodec: "copy",
-			audioQuality: "4",
-			audioFilter: "loudnorm",
-		},
-	};
-
-	async function isDirectory(dirPath: string) {
-		if (typeof dirPath !== "string") {
-			throw new Error(
-				`Expected string for output directory path, but got: ${typeof dirPath}`,
-			);
-		}
-
-		const normalizePath = path.resolve(dirPath);
-
-		try {
-			const stats = await fs.stat(normalizePath);
-			return stats.isDirectory();
-		} catch (error) {
-			throw new Error(
-				error instanceof Error ? error.message : "Unexpected error",
-			);
-		}
-	}
-
-	const getGlobalSettings = (settings: {
-		outputDirectoryPath: string;
-		overwrite: boolean;
-		noOverwrite: boolean;
-		statsPeriod: number;
-		recastMedia: boolean;
-	}) => {
-		const result: string[] = [];
-		for (const s in settings) {
-			if (settings[s] !== initialSettings.global[s]) {
-				result.push(optionsMapper(s));
-			}
-		}
-		return result;
-	};
-
-	const getTrackSettings = (settings: {
-		audioCodec: string;
-		audioQuality: string;
-		audioFilter: string;
-	}) => {
-		const result: string[] = [];
-		for (const s in settings) {
-			if (settings[s] !== initialSettings.audio[s]) {
-				result.push(`${optionsMapper(s)} ${settings[s]}`);
-			}
-		}
-		return result;
-	};
+const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 	const dirPath = data.settings.global.outputDirectoryPath;
 
 	const resDir = await isDirectory(dirPath);
 	if (!resDir) {
-		throw new Error("Directory validation failed");
+		throw new Error("Output directory validation failed");
 	}
-	const globalSettings = getGlobalSettings(data.settings.global);
+	const globalSettings = getGlobalSettings(
+		INITIALSETTINGS,
+		data.settings.global,
+		optionsMapper,
+	);
 	canRunning = true;
 
 	for (
@@ -117,7 +62,12 @@ const startProcessing = async (_, data: Data) => {
 			continue;
 		}
 		const inputFile = current.filePath;
-		const trackSettings = getTrackSettings(data.settings.audio);
+		event.sender.send("response-on-start", `Start: ${inputFile}`);
+		const trackSettings = getTrackSettings(
+			INITIALSETTINGS,
+			data.settings.audio,
+			optionsMapper,
+		);
 		const args = [
 			...globalSettings,
 			"-i",
@@ -135,19 +85,35 @@ const startProcessing = async (_, data: Data) => {
 				});
 			}
 
-			ffmpeg.on("close", (code) => {
+			ffmpeg.on("close", (code, signal) => {
 				if (code === 0) {
 					// biome-ignore lint: temp console
 					console.log("close with 0");
+					event.sender.send("processing-result", {
+						id: current.id,
+						success: true,
+					});
 				} else {
-					// biome-ignore lint: temp console
-					console.log("close from signal");
+					if (signal === "SIGINT") {
+						event.sender.send(
+							"response-on-stop",
+							"Processing was successfully stopped.",
+						);
+					} else {
+						// biome-ignore lint: temp console
+						console.log(`Close with signal: ${signal}`);
+					}
 				}
 			});
 
 			ffmpeg.on("error", (error) => {
 				// biome-ignore lint: temp console
 				console.error(error);
+				event.sender.send("processing-result", {
+					id: current.id,
+					error: true,
+					message: error.message,
+				});
 			});
 		} catch (error) {
 			// biome-ignore lint: temp console
@@ -158,9 +124,20 @@ const startProcessing = async (_, data: Data) => {
 	return data;
 };
 
-const stopProcessing = async () => {
+const stopProcessing = async (event: IpcMainInvokeEvent) => {
 	ffmpeg.kill("SIGINT");
 	canRunning = false;
+	if (ffmpeg.killed) {
+		event.sender.send(
+			"response-on-stop",
+			"Start to gracefully terminate the processing...",
+		);
+	} else {
+		event.sender.send(
+			"response-on-stop",
+			"Failed to start termination of the processing...",
+		);
+	}
 };
 
 function createWindow(): void {

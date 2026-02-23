@@ -636,3 +636,12 @@ export type Data = {
 	tracks: Metadata[];
 	settings: GeneralSettings;
 };
+
+export type OptionMapperKeys =
+	| "overwrite"
+	| "noOverwrite"
+	| "statsPeriod"
+	| "recastMedia"
+	| "audioCodec"
+	| "audioQuality"
+	| "audioFilter";
