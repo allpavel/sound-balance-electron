@@ -8,7 +8,10 @@ export const getGlobalSettings = (
 	const result: string[] = [];
 	for (const s in settings) {
 		const key = s as OptionMapperKeys;
-		if (settings[key] !== initialSettings.global[key]) {
+		if (
+			settings[key] !== initialSettings.global[key] &&
+			s !== "outputDirectoryPath"
+		) {
 			result.push(mapper(key));
 		}
 	}

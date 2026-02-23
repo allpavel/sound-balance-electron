@@ -2,6 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import path from "node:path";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import type { IpcMainInvokeEvent } from "electron/main";
 import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
 import { INITIALSETTINGS } from "../../constants";
@@ -36,7 +37,7 @@ const getOutputDirectoryPath = async () => {
 	return outputDirectoryPath;
 };
 
-const startProcessing = async (_, data: Data) => {
+const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 	const dirPath = data.settings.global.outputDirectoryPath;
 
 	const resDir = await isDirectory(dirPath);
@@ -61,6 +62,7 @@ const startProcessing = async (_, data: Data) => {
 			continue;
 		}
 		const inputFile = current.filePath;
+		event.sender.send("response-on-start", `Start: ${inputFile}`);
 		const trackSettings = getTrackSettings(
 			INITIALSETTINGS,
 			data.settings.audio,
@@ -83,19 +85,35 @@ const startProcessing = async (_, data: Data) => {
 				});
 			}
 
-			ffmpeg.on("close", (code) => {
+			ffmpeg.on("close", (code, signal) => {
 				if (code === 0) {
 					// biome-ignore lint: temp console
 					console.log("close with 0");
+					event.sender.send("processing-result", {
+						id: current.id,
+						success: true,
+					});
 				} else {
-					// biome-ignore lint: temp console
-					console.log("close from signal");
+					if (signal === "SIGINT") {
+						event.sender.send(
+							"response-on-stop",
+							"Processing was successfully stopped.",
+						);
+					} else {
+						// biome-ignore lint: temp console
+						console.log(`Close with signal: ${signal}`);
+					}
 				}
 			});
 
 			ffmpeg.on("error", (error) => {
 				// biome-ignore lint: temp console
 				console.error(error);
+				event.sender.send("processing-result", {
+					id: current.id,
+					error: true,
+					message: error.message,
+				});
 			});
 		} catch (error) {
 			// biome-ignore lint: temp console
@@ -106,9 +124,20 @@ const startProcessing = async (_, data: Data) => {
 	return data;
 };
 
-const stopProcessing = async () => {
+const stopProcessing = async (event: IpcMainInvokeEvent) => {
 	ffmpeg.kill("SIGINT");
 	canRunning = false;
+	if (ffmpeg.killed) {
+		event.sender.send(
+			"response-on-stop",
+			"Start to gracefully terminate the processing...",
+		);
+	} else {
+		event.sender.send(
+			"response-on-stop",
+			"Failed to start termination of the processing...",
+		);
+	}
 };
 
 function createWindow(): void {
