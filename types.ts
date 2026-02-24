@@ -4,6 +4,7 @@ export type Metadata = IAudioMetadata & {
 	id: string;
 	file: string;
 	filePath: string;
+	status: "pending" | "processing" | "completed" | "failed";
 };
 
 export type NativeValue = {
