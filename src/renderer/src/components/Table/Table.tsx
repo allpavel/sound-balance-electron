@@ -30,6 +30,7 @@ import type { Metadata } from "types";
 import ColumnSelect from "../ColumnSelect/ColumnSelect";
 import FilterSelect from "../FilterSelect/FilterSelect";
 import InfoModal from "../InfoModal/InfoModal";
+import StatusIcon from "../StatusIcon/StatusIcon";
 
 export default function TableComponent() {
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
@@ -124,6 +125,14 @@ export default function TableComponent() {
 				),
 				enableSorting: false,
 				enableColumnFilter: false,
+			},
+			{
+				id: "status",
+				header: "Status",
+				enableFacetedFilter: true,
+				cell: ({ row }: { row: Row<Metadata> }) => (
+					<StatusIcon status={row.original.status} />
+				),
 			},
 		],
 		[dispatch],
