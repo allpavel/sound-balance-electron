@@ -11,6 +11,7 @@ export const tracksSlice = createSlice({
 	reducers: {
 		addTracks: tracksAdapter.addMany,
 		removeTracks: tracksAdapter.removeMany,
+		updateTrack: tracksAdapter.updateOne,
 	},
 });
 
@@ -18,5 +19,5 @@ const selectors = tracksAdapter.getSelectors();
 export const { selectAll: selectAllTracks, selectById: selectTrackById } =
 	selectors;
 
-export const { addTracks, removeTracks } = tracksSlice.actions;
+export const { addTracks, removeTracks, updateTrack } = tracksSlice.actions;
 export default tracksSlice.reducer;
