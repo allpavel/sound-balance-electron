@@ -7,7 +7,7 @@ import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
 import { INITIALSETTINGS } from "../../constants";
 import icon from "../../resources/icon.png?asset";
-import type { Data, Metadata } from "../../types";
+import type { Data, Metadata, ProcessingStatus } from "../../types";
 import { optionsMapper } from "./lib/ffmpeg/optionsMapper";
 import { getGlobalSettings } from "./lib/getGlobalSettings";
 import { getMetadata } from "./lib/getMetadata";
@@ -62,7 +62,6 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 			continue;
 		}
 		const inputFile = current.filePath;
-		event.sender.send("response-on-start", `Start: ${inputFile}`);
 		const trackSettings = getTrackSettings(
 			INITIALSETTINGS,
 			data.settings.audio,
@@ -83,16 +82,22 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 					stdio: ["pipe", "pipe", "pipe"],
 					shell: true,
 				});
+				const result = {
+					id: current.id,
+					status: "processing",
+				} satisfies ProcessingStatus;
+				event.sender.send("processing-result", result);
 			}
 
 			ffmpeg.on("close", (code, signal) => {
 				if (code === 0) {
 					// biome-ignore lint: temp console
 					console.log("close with 0");
-					event.sender.send("processing-result", {
+					const result = {
 						id: current.id,
-						success: true,
-					});
+						status: "completed",
+					} satisfies ProcessingStatus;
+					event.sender.send("processing-result", result);
 				} else {
 					if (signal === "SIGINT") {
 						event.sender.send(
@@ -109,11 +114,12 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 			ffmpeg.on("error", (error) => {
 				// biome-ignore lint: temp console
 				console.error(error);
-				event.sender.send("processing-result", {
+				const result = {
 					id: current.id,
-					error: true,
+					status: "failed",
 					message: error.message,
-				});
+				} satisfies ProcessingStatus;
+				event.sender.send("processing-result", result);
 			});
 		} catch (error) {
 			// biome-ignore lint: temp console
