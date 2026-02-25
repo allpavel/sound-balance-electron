@@ -1,5 +1,5 @@
 import type { ElectronAPI } from "@electron-toolkit/preload";
-import type { Data, Metadata } from "types";
+import type { Data, Metadata, ProcessingStatus } from "types";
 
 type API = {
 	showDialog: () => Promise<Metadata[]>;
@@ -8,7 +8,7 @@ type API = {
 	stopProcessing: () => void;
 	responseOnStart: (cb: (msg: string) => void) => () => void;
 	responseOnStop: (cb: (msg: string) => void) => () => void;
-	processingResult: (cb: (msg: string) => void) => () => void;
+	processingResult: (cb: (msg: ProcessingStatus) => void) => () => void;
 };
 
 declare global {
