@@ -1,10 +1,12 @@
 import type { IAudioMetadata } from "music-metadata";
 
+type Status = "pending" | "processing" | "completed" | "failed";
+
 export type Metadata = IAudioMetadata & {
 	id: string;
 	file: string;
 	filePath: string;
-	status: "pending" | "processing" | "completed" | "failed";
+	status: Status;
 };
 
 export type NativeValue = {
@@ -646,3 +648,9 @@ export type OptionMapperKeys =
 	| "audioCodec"
 	| "audioQuality"
 	| "audioFilter";
+
+export type ProcessingStatus = {
+	id: string;
+	status: Status;
+	message?: string;
+};

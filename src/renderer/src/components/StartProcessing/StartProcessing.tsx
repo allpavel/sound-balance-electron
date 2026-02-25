@@ -1,8 +1,10 @@
 import { useDisclosure } from "@mantine/hooks";
+import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { getAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
+import { updateTrack } from "@renderer/store/slices/tracksSlice";
 import { useEffect, useState } from "react";
-import type { Data } from "types";
+import type { Data, ProcessingStatus } from "types";
 import ErrorModal from "../ErrorModal/ErrorModal";
 import RunButton from "../RunButton/RunButton";
 
@@ -11,23 +13,21 @@ export default function StartProcessing() {
 	const [isRunning, setIsRunning] = useState(false);
 	const selectedTracks = useAppSelector((state) => state.selectedTracks);
 	const settings = useAppSelector((state) => state.settings);
+	const dispatch = useAppDispatch();
 
 	// biome-ignore-start lint: temp console.log
-	useEffect(() => {
-		const unsubscribe = window.api.responseOnStart((msg) => console.log(msg));
-		return () => unsubscribe();
-	}, []);
-
 	useEffect(() => {
 		const unsubscribe = window.api.responseOnStop((msg) => console.log(msg));
 		return () => unsubscribe();
 	}, []);
+	// biome-ignore-end lint: temp console.log
 
 	useEffect(() => {
-		const unsubscribe = window.api.processingResult((msg) => console.log(msg));
+		const unsubscribe = window.api.processingResult((data: ProcessingStatus) =>
+			dispatch(updateTrack({ id: data.id, changes: { status: data.status } })),
+		);
 		return () => unsubscribe();
-	}, []);
-	// biome-ignore-end lint: temp console.log
+	}, [dispatch]);
 
 	const sendData = () => {
 		if (!settings.global.outputDirectoryPath) {

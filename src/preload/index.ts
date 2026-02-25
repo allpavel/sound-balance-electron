@@ -1,5 +1,6 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
+import type { ProcessingStatus } from "../../types";
 
 // Custom APIs for renderer
 const api = {
@@ -16,7 +17,7 @@ const api = {
 		return () => ipcRenderer.removeAllListeners("response-on-stop");
 	},
 	processingResult: (cb) => {
-		ipcRenderer.on("processing-result", (_, msg) => cb(msg));
+		ipcRenderer.on("processing-result", (_, msg: ProcessingStatus) => cb(msg));
 		return () => ipcRenderer.removeAllListeners("processing-result");
 	},
 };
