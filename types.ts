@@ -654,3 +654,15 @@ export type ProcessingStatus = {
 	status: Status;
 	message?: string;
 };
+
+export type Failed = {
+	id: string;
+	title: string;
+	reason: string;
+};
+
+export type ProcessingResult = {
+	total: number;
+	successful: number;
+	failed: Failed[];
+};

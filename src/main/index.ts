@@ -7,7 +7,13 @@ import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
 import { INITIALSETTINGS } from "../../constants";
 import icon from "../../resources/icon.png?asset";
-import type { Data, Metadata, ProcessingStatus } from "../../types";
+import type {
+	Data,
+	Failed,
+	Metadata,
+	ProcessingResult,
+	ProcessingStatus,
+} from "../../types";
 import { optionsMapper } from "./lib/ffmpeg/optionsMapper";
 import { getGlobalSettings } from "./lib/getGlobalSettings";
 import { getMetadata } from "./lib/getMetadata";
@@ -39,6 +45,8 @@ const getOutputDirectoryPath = async () => {
 
 const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 	const dirPath = data.settings.global.outputDirectoryPath;
+	let successful = 0;
+	const failed: Failed[] = [];
 
 	const resDir = await isDirectory(dirPath);
 	if (!resDir) {
@@ -98,6 +106,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 						status: "completed",
 					} satisfies ProcessingStatus;
 					event.sender.send("processing-result", result);
+					successful++;
 				} else {
 					if (signal === "SIGINT") {
 						event.sender.send(
@@ -120,6 +129,11 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 					message: error.message,
 				} satisfies ProcessingStatus;
 				event.sender.send("processing-result", result);
+				failed.push({
+					id: current.id,
+					reason: error.message,
+					title: current.file,
+				});
 			});
 		} catch (error) {
 			// biome-ignore lint: temp console
@@ -127,7 +141,14 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 		}
 	}
 	canRunning = false;
-	return data;
+
+	const result = {
+		successful,
+		failed,
+		total: data.tracks.length,
+	} satisfies ProcessingResult;
+
+	return result;
 };
 
 const stopProcessing = async (event: IpcMainInvokeEvent) => {
