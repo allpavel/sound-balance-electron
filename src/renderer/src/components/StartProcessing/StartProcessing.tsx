@@ -1,11 +1,14 @@
+import { Flex } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
+import { setResults } from "@renderer/store/slices/resultsSlice";
 import { getAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
 import { updateTrack } from "@renderer/store/slices/tracksSlice";
 import { useEffect, useState } from "react";
 import type { Data, ProcessingStatus } from "types";
 import ErrorModal from "../ErrorModal/ErrorModal";
+import ResultsModal from "../ResultsModal/ResultsModal";
 import RunButton from "../RunButton/RunButton";
 
 export default function StartProcessing() {
@@ -29,7 +32,7 @@ export default function StartProcessing() {
 		return () => unsubscribe();
 	}, [dispatch]);
 
-	const sendData = () => {
+	const sendData = async () => {
 		if (!settings.global.outputDirectoryPath) {
 			open();
 			return;
@@ -37,7 +40,8 @@ export default function StartProcessing() {
 			setIsRunning(true);
 			const tracks = getAllSelectedTracks(selectedTracks);
 			const data: Data = { tracks, settings };
-			return window.api.startProcessing(data);
+			const results = await window.api.startProcessing(data);
+			dispatch(setResults(results));
 		}
 	};
 
@@ -59,7 +63,13 @@ export default function StartProcessing() {
 				opened={opened}
 				centered
 			/>
-			<RunButton isRunning={isRunning} handleButtonClick={handleButtonClick} />
+			<Flex gap={"md"}>
+				<ResultsModal />
+				<RunButton
+					isRunning={isRunning}
+					handleButtonClick={handleButtonClick}
+				/>
+			</Flex>
 		</>
 	);
 }

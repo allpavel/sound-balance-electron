@@ -1,12 +1,12 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
-import type { ProcessingStatus } from "../../types";
+import type { Data, ProcessingStatus } from "../../types";
 
 // Custom APIs for renderer
 const api = {
 	showDialog: () => ipcRenderer.invoke("showDialog"),
 	getOutputDirectoryPath: () => ipcRenderer.invoke("getOutputDirectoryPath"),
-	startProcessing: (data) => ipcRenderer.invoke("startProcessing", data),
+	startProcessing: (data: Data) => ipcRenderer.invoke("startProcessing", data),
 	stopProcessing: () => ipcRenderer.invoke("stopProcessing"),
 	responseOnStart: (cb) => {
 		ipcRenderer.on("response-on-start", (_, msg) => cb(msg));
@@ -27,7 +27,6 @@ const api = {
 // just add to the DOM global.
 if (process.contextIsolated) {
 	try {
-		contextBridge.exposeInMainWorld("electron", electronAPI);
 		contextBridge.exposeInMainWorld("api", api);
 	} catch (error) {
 		throw new Error(

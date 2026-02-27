@@ -7,7 +7,13 @@ import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
 import { INITIALSETTINGS } from "../../constants";
 import icon from "../../resources/icon.png?asset";
-import type { Data, Metadata, ProcessingStatus } from "../../types";
+import type {
+	Data,
+	Failed,
+	Metadata,
+	ProcessingResult,
+	ProcessingStatus,
+} from "../../types";
 import { optionsMapper } from "./lib/ffmpeg/optionsMapper";
 import { getGlobalSettings } from "./lib/getGlobalSettings";
 import { getMetadata } from "./lib/getMetadata";
@@ -39,6 +45,8 @@ const getOutputDirectoryPath = async () => {
 
 const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 	const dirPath = data.settings.global.outputDirectoryPath;
+	let successful = 0;
+	const failed: Failed[] = [];
 
 	const resDir = await isDirectory(dirPath);
 	if (!resDir) {
@@ -61,73 +69,105 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 		if (!current || !current.filePath) {
 			continue;
 		}
-		const inputFile = current.filePath;
 		const trackSettings = getTrackSettings(
 			INITIALSETTINGS,
 			data.settings.audio,
 			optionsMapper,
 		);
-		const args = [
-			...globalSettings,
-			"-i",
-			`"${inputFile}"`,
-			...trackSettings,
-			`"${dirPath}/${current.file}"`,
-		];
 
 		try {
-			if (ffmpegPath) {
-				ffmpeg = spawn(ffmpegPath, args, {
-					windowsHide: true,
-					stdio: ["pipe", "pipe", "pipe"],
-					shell: true,
-				});
-				const result = {
-					id: current.id,
-					status: "processing",
-				} satisfies ProcessingStatus;
-				event.sender.send("processing-result", result);
-			}
+			await new Promise<void>((resolve, reject) => {
+				if (!ffmpegPath) {
+					reject(new Error("FFmpeg now found"));
+				}
 
-			ffmpeg.on("close", (code, signal) => {
-				if (code === 0) {
-					// biome-ignore lint: temp console
-					console.log("close with 0");
+				const inputFile = current.filePath;
+				const outputFile = path.join(dirPath, current.file);
+				const args = [
+					...globalSettings,
+					"-i",
+					inputFile,
+					...trackSettings,
+					outputFile,
+				];
+				if (ffmpegPath) {
+					ffmpeg = spawn(ffmpegPath, args, {
+						windowsHide: true,
+						stdio: ["pipe", "pipe", "pipe"],
+					});
 					const result = {
 						id: current.id,
-						status: "completed",
+						status: "processing",
 					} satisfies ProcessingStatus;
 					event.sender.send("processing-result", result);
-				} else {
-					if (signal === "SIGINT") {
-						event.sender.send(
-							"response-on-stop",
-							"Processing was successfully stopped.",
-						);
-					} else {
-						// biome-ignore lint: temp console
-						console.log(`Close with signal: ${signal}`);
-					}
 				}
-			});
 
-			ffmpeg.on("error", (error) => {
+				let resolved = false;
+				ffmpeg.once("close", (code, signal) => {
+					if (resolved) return;
+					resolved = true;
+					if (code === 0) {
+						// biome-ignore lint: temp console
+						console.log("close with 0");
+						const result = {
+							id: current.id,
+							status: "completed",
+						} satisfies ProcessingStatus;
+						event.sender.send("processing-result", result);
+						resolve();
+					} else {
+						if (signal === "SIGINT") {
+							event.sender.send(
+								"response-on-stop",
+								"Processing was successfully stopped.",
+							);
+						} else {
+							// biome-ignore lint: temp console
+							console.log(`Close with signal: ${signal}`);
+						}
+					}
+				});
+				ffmpeg.once("error", (error) => {
+					// biome-ignore lint: temp console
+					console.error(error);
+					if (resolved) return;
+					resolved = true;
+					const result = {
+						id: current.id,
+						status: "failed",
+						message: error.message,
+					} satisfies ProcessingStatus;
+					event.sender.send("processing-result", result);
+					reject();
+				});
+			});
+			successful++;
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				(error.message.includes("SIGINT") || error.message.includes("killed"))
+			) {
+				break;
+			} else {
+				failed.push({
+					id: current.id,
+					reason: error instanceof Error ? error.message : String(error),
+					title: current.file,
+				});
 				// biome-ignore lint: temp console
 				console.error(error);
-				const result = {
-					id: current.id,
-					status: "failed",
-					message: error.message,
-				} satisfies ProcessingStatus;
-				event.sender.send("processing-result", result);
-			});
-		} catch (error) {
-			// biome-ignore lint: temp console
-			console.error(error);
+			}
 		}
 	}
 	canRunning = false;
-	return data;
+
+	const result = {
+		successful,
+		failed,
+		total: data.tracks.length,
+	} satisfies ProcessingResult;
+
+	return result;
 };
 
 const stopProcessing = async (event: IpcMainInvokeEvent) => {
