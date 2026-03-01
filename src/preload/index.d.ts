@@ -1,5 +1,11 @@
 import type { ElectronAPI } from "@electron-toolkit/preload";
-import type { Data, Metadata, ProcessingResult, ProcessingStatus } from "types";
+import type {
+	Data,
+	Metadata,
+	ProcessingResult,
+	ProcessingStatus,
+	StoppingStatus,
+} from "types";
 
 type API = {
 	showDialog: () => Promise<Metadata[]>;
@@ -7,7 +13,7 @@ type API = {
 	startProcessing: (data: Data) => ProcessingResult;
 	stopProcessing: () => void;
 	responseOnStart: (cb: (msg: string) => void) => () => void;
-	responseOnStop: (cb: (msg: string) => void) => () => void;
+	responseOnStop: (cb: (msg: StoppingStatus) => void) => () => void;
 	processingResult: (cb: (msg: ProcessingStatus) => void) => () => void;
 };
 

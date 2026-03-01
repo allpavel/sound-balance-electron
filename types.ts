@@ -7,6 +7,7 @@ export type Metadata = IAudioMetadata & {
 	file: string;
 	filePath: string;
 	status: Status;
+	selected: boolean;
 };
 
 export type NativeValue = {
@@ -665,4 +666,8 @@ export type ProcessingResult = {
 	total: number;
 	successful: number;
 	failed: Failed[];
+};
+
+export type StoppingStatus = {
+	status: "waiting" | "stopped" | "failed";
 };

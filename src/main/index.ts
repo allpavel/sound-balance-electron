@@ -13,6 +13,7 @@ import type {
 	Metadata,
 	ProcessingResult,
 	ProcessingStatus,
+	StoppingStatus,
 } from "../../types";
 import { optionsMapper } from "./lib/ffmpeg/optionsMapper";
 import { getGlobalSettings } from "./lib/getGlobalSettings";
@@ -66,7 +67,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 	) {
 		const current = data.tracks[currentIndex];
 
-		if (!current || !current.filePath) {
+		if (!current || !current.filePath || current.status !== "pending") {
 			continue;
 		}
 		const trackSettings = getTrackSettings(
@@ -107,8 +108,6 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 					if (resolved) return;
 					resolved = true;
 					if (code === 0) {
-						// biome-ignore lint: temp console
-						console.log("close with 0");
 						const result = {
 							id: current.id,
 							status: "completed",
@@ -116,14 +115,29 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 						event.sender.send("processing-result", result);
 						resolve();
 					} else {
-						if (signal === "SIGINT") {
-							event.sender.send(
-								"response-on-stop",
-								"Processing was successfully stopped.",
-							);
+						if (code === 255) {
+							const result = {
+								id: current.id,
+								status: "completed",
+							} satisfies ProcessingStatus;
+							event.sender.send("processing-result", result);
+
+							const stoppingStatus: StoppingStatus = { status: "stopped" };
+							event.sender.send("response-on-stop", stoppingStatus);
+							resolve();
 						} else {
+							const result = {
+								id: current.id,
+								status: "failed",
+								message: "Failed to processed this file",
+							} satisfies ProcessingStatus;
 							// biome-ignore lint: temp console
 							console.log(`Close with signal: ${signal}`);
+							event.sender.send("processing-result", result);
+
+							const stoppingStatus: StoppingStatus = { status: "stopped" };
+							event.sender.send("response-on-stop", stoppingStatus);
+							resolve();
 						}
 					}
 				});
@@ -174,15 +188,9 @@ const stopProcessing = async (event: IpcMainInvokeEvent) => {
 	ffmpeg.kill("SIGINT");
 	canRunning = false;
 	if (ffmpeg.killed) {
-		event.sender.send(
-			"response-on-stop",
-			"Start to gracefully terminate the processing...",
-		);
+		event.sender.send("response-on-stop", { success: true });
 	} else {
-		event.sender.send(
-			"response-on-stop",
-			"Failed to start termination of the processing...",
-		);
+		event.sender.send("response-on-stop", { success: false });
 	}
 };
 
