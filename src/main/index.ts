@@ -48,6 +48,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 	const dirPath = data.settings.global.outputDirectoryPath;
 	let successful = 0;
 	const failed: Failed[] = [];
+	let total = 0;
 
 	const resDir = await isDirectory(dirPath);
 	if (!resDir) {
@@ -102,7 +103,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 					} satisfies ProcessingStatus;
 					event.sender.send("processing-result", result);
 				}
-
+				total++;
 				let resolved = false;
 				ffmpeg.once("close", (code, signal) => {
 					if (resolved) return;
@@ -178,7 +179,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 	const result = {
 		successful,
 		failed,
-		total: data.tracks.length,
+		total,
 	} satisfies ProcessingResult;
 
 	return result;
