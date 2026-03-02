@@ -1,4 +1,8 @@
-import { createEntityAdapter, createSlice } from "@reduxjs/toolkit";
+import {
+	createEntityAdapter,
+	createSelector,
+	createSlice,
+} from "@reduxjs/toolkit";
 import type { Metadata } from "types";
 
 export const tracksAdapter = createEntityAdapter<Metadata>({
@@ -12,6 +16,7 @@ export const tracksSlice = createSlice({
 		addTracks: tracksAdapter.addMany,
 		removeTracks: tracksAdapter.removeMany,
 		updateTrack: tracksAdapter.updateOne,
+		updateAllTracks: tracksAdapter.updateMany,
 	},
 });
 
@@ -19,5 +24,11 @@ const selectors = tracksAdapter.getSelectors();
 export const { selectAll: selectAllTracks, selectById: selectTrackById } =
 	selectors;
 
-export const { addTracks, removeTracks, updateTrack } = tracksSlice.actions;
+export const selectAllSelectedTracks = createSelector(
+	[selectAllTracks],
+	(tracks) => tracks.filter((track) => track.selected),
+);
+
+export const { addTracks, removeTracks, updateTrack, updateAllTracks } =
+	tracksSlice.actions;
 export default tracksSlice.reducer;
