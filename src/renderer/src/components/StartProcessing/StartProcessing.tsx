@@ -3,8 +3,10 @@ import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setResults } from "@renderer/store/slices/resultsSlice";
-import { getAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
-import { updateTrack } from "@renderer/store/slices/tracksSlice";
+import {
+	selectAllSelectedTracks,
+	updateTrack,
+} from "@renderer/store/slices/tracksSlice";
 import { useEffect, useState } from "react";
 import type { Data, ProcessingStatus, StoppingStatus } from "types";
 import ErrorModal from "../ErrorModal/ErrorModal";
@@ -14,7 +16,9 @@ import RunButton from "../RunButton/RunButton";
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
 	const [isRunning, setIsRunning] = useState(false);
-	const selectedTracks = useAppSelector((state) => state.selectedTracks);
+	const tracks = useAppSelector((state) =>
+		selectAllSelectedTracks(state.tracks),
+	);
 	const settings = useAppSelector((state) => state.settings);
 	const dispatch = useAppDispatch();
 
@@ -40,7 +44,6 @@ export default function StartProcessing() {
 			return;
 		} else {
 			setIsRunning(true);
-			const tracks = getAllSelectedTracks(selectedTracks);
 			const data: Data = { tracks, settings };
 			const results = await window.api.startProcessing(data);
 			dispatch(setResults(results));

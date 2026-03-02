@@ -2,12 +2,10 @@ import { Button, Checkbox, Flex, Group, Table, TextInput } from "@mantine/core";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import {
-	addSelectedTrack,
-	removeAllSelectedTracks,
-	removeSelectedTrack,
-	setAllSelectedTracks,
-} from "@renderer/store/slices/selectedTracksSlice";
-import { selectAllTracks } from "@renderer/store/slices/tracksSlice";
+	selectAllTracks,
+	updateAllTracks,
+	updateTrack,
+} from "@renderer/store/slices/tracksSlice";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
 import { IconCaretRight, IconSearch } from "@tabler/icons-react";
 import {
@@ -54,12 +52,22 @@ export default function TableComponent() {
 						onChange={(e) => {
 							if (e.target.checked) {
 								dispatch(
-									setAllSelectedTracks(
-										table.getRowModel().rows.map((item) => item.original),
+									updateAllTracks(
+										table.getRowModel().rows.map((item) => ({
+											id: item.original.id,
+											changes: { selected: true },
+										})),
 									),
 								);
 							} else {
-								dispatch(removeAllSelectedTracks());
+								dispatch(
+									updateAllTracks(
+										table.getRowModel().rows.map((item) => ({
+											id: item.original.id,
+											changes: { selected: false },
+										})),
+									),
+								);
 							}
 							table.getToggleAllRowsSelectedHandler()(e);
 						}}
@@ -71,9 +79,19 @@ export default function TableComponent() {
 						checked={row.getIsSelected()}
 						onChange={(e) => {
 							if (e.target.checked) {
-								dispatch(addSelectedTrack(row.original));
+								dispatch(
+									updateTrack({
+										id: row.original.id,
+										changes: { selected: true },
+									}),
+								);
 							} else {
-								dispatch(removeSelectedTrack(row.original.id));
+								dispatch(
+									updateTrack({
+										id: row.original.id,
+										changes: { selected: false },
+									}),
+								);
 							}
 							row.getToggleSelectedHandler()(e);
 						}}
