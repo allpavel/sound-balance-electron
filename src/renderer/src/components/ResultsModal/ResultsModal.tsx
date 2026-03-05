@@ -1,7 +1,15 @@
-import { Button, Modal, Text } from "@mantine/core";
+import {
+	Accordion,
+	Button,
+	List,
+	ListItem,
+	Modal,
+	Stack,
+	Text,
+} from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 
 export default function ResultModal() {
 	const [opened, { open, close }] = useDisclosure();
@@ -16,9 +24,29 @@ export default function ResultModal() {
 	return (
 		<>
 			<Modal opened={opened} onClose={close} title="Results:" centered>
-				<Text>Total processed: {results.total}.</Text>
-				<Text>Successful: {results.successful}.</Text>
-				<Text>Failed: {results.failed.length}.</Text>
+				<Stack>
+					<Text>Total processed: {results.total}.</Text>
+					<Text>Successful: {results.successful}.</Text>
+					<Text>Failed: {results.failed.length}.</Text>
+				</Stack>
+				<Stack>
+					{results.failed.length > 0 && (
+						<Accordion chevronIconSize={23} transitionDuration={500}>
+							<Accordion.Item value={"List of failed files:"}>
+								<Accordion.Control>List of failed files:</Accordion.Control>
+								<Accordion.Panel>
+									<List type="ordered">
+										{results.failed.map((item) => (
+											<Fragment key={item.id}>
+												<ListItem>{item.title}</ListItem>
+											</Fragment>
+										))}
+									</List>
+								</Accordion.Panel>
+							</Accordion.Item>
+						</Accordion>
+					)}
+				</Stack>
 			</Modal>
 			<Button onClick={open}>Results</Button>
 		</>
