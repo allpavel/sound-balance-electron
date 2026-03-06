@@ -114,6 +114,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 							status: "completed",
 						} satisfies ProcessingStatus;
 						event.sender.send("processing-result", result);
+						successful++;
 						resolve();
 					} else {
 						if (code === 255) {
@@ -125,6 +126,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 
 							const stoppingStatus: StoppingStatus = { status: "stopped" };
 							event.sender.send("response-on-stop", stoppingStatus);
+							successful++;
 							resolve();
 						} else {
 							const result = {
@@ -132,9 +134,14 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 								status: "failed",
 								message: "Failed to processed this file",
 							} satisfies ProcessingStatus;
-							// biome-ignore lint: temp console
-							console.log(`Close with signal: ${signal}`);
 							event.sender.send("processing-result", result);
+
+							const failedData = {
+								id: current.id,
+								title: `${current.common.artist}${current.common.title ? ` ${current.common.title}` : ""}`,
+								reason: "Failed to processed this file",
+							} satisfies Failed;
+							failed.push(failedData);
 
 							const stoppingStatus: StoppingStatus = { status: "stopped" };
 							event.sender.send("response-on-stop", stoppingStatus);
@@ -153,10 +160,17 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 						message: error.message,
 					} satisfies ProcessingStatus;
 					event.sender.send("processing-result", result);
+
+					const failedData = {
+						id: current.id,
+						title: `${current.common.artist}${current.common.title ? ` ${current.common.title}` : ""}`,
+						reason: error.message,
+					} satisfies Failed;
+					failed.push(failedData);
+
 					reject();
 				});
 			});
-			successful++;
 		} catch (error) {
 			if (
 				error instanceof Error &&
