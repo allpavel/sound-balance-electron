@@ -4,7 +4,6 @@
 	"description": "An Electron application for sound normalizing",
 	"main": "./out/main/index.js",
 	"author": "Pavel Alloyarov",
-	"homepage": "https://electron-vite.org",
 	"scripts": {
 		"typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
 		"typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
@@ -15,8 +14,8 @@
 		"postinstall": "electron-builder install-app-deps",
 		"build:unpack": "npm run build && electron-builder --dir",
 		"build:win": "npm run build && electron-builder --win",
-		"build:mac": "electron-vite build && electron-builder --mac",
-		"build:linux": "electron-vite build && electron-builder --linux"
+		"build:mac": "npm run build && electron-builder --mac",
+		"build:linux": "npm run build && electron-builder --linux"
 	},
 	"dependencies": {
 		"@electron-toolkit/preload": "^3.0.2",
@@ -37,7 +36,7 @@
 		"@commitlint/cli": "^20.4.1",
 		"@commitlint/config-conventional": "^20.4.1",
 		"@electron-toolkit/tsconfig": "^2.0.0",
-		"@types/node": "^25.3.3",
+		"@types/node": "^24.0.0",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.1.6",
 		"@vitejs/plugin-react": "^5.1.4",
@@ -50,7 +49,6 @@
 		"postcss": "^8.5.8",
 		"postcss-preset-mantine": "^1.18.0",
 		"postcss-simple-vars": "^7.0.1",
-		"prettier": "^3.6.2",
 		"react": "^19.1.0",
 		"react-dom": "^19.1.0",
 		"typescript": "^5.9.3",
