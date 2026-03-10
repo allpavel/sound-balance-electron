@@ -12,10 +12,6 @@ export type ProcessManagerOptions = {
 export class ProcessManager extends EventEmitter {
 	private process: ChildProcessWithoutNullStreams | null = null;
 	private ffmpeg: string;
-	// biome-ignore-start lint/correctness/noUnusedPrivateClassMembers: captured in the following closure
-	private stderrData: string;
-	private resolved: boolean;
-	// biome-ignore-end lint/correctness/noUnusedPrivateClassMembers: captured the following closure
 
 	constructor() {
 		super();
@@ -25,11 +21,13 @@ export class ProcessManager extends EventEmitter {
 			);
 		}
 		this.ffmpeg = ffmpegPath;
-		this.stderrData = "";
-		this.resolved = false;
 	}
 
 	run(options: ProcessManagerOptions): Promise<void> {
+		let resolved = false;
+		let stderrData = "";
+		const MAX_STDERR_BUFFER = 1024 * 1024;
+
 		return new Promise((resolve, reject) => {
 			if (this.process) {
 				reject(new Error("FFmpeg process is already running"));
@@ -50,14 +48,21 @@ export class ProcessManager extends EventEmitter {
 					stdio: ["pipe", "pipe", "pipe"],
 				});
 			} catch (error) {
-				reject(new Error(`Failed to spawn FFmpeg: ${error}`));
+				reject(
+					new Error(
+						`Failed to spawn FFmpeg: ${error instanceof Error ? error.message : String(error)}`,
+					),
+				);
 			}
 
 			const stdoutHandler = (data: Buffer) =>
 				this.emit("stdout", data.toString());
 			const stderrHandler = (data: Buffer) => {
 				const chunk = data.toString();
-				this.stderrData += chunk;
+				stderrData += chunk;
+				if (stderrData.length > MAX_STDERR_BUFFER) {
+					stderrData = stderrData.slice(-MAX_STDERR_BUFFER / 2);
+				}
 				this.emit("stderr", chunk);
 			};
 
@@ -74,15 +79,15 @@ export class ProcessManager extends EventEmitter {
 			};
 
 			const onError = (err: Error) => {
-				if (this.resolved) return;
-				this.resolved = true;
+				if (resolved) return;
+				resolved = true;
 				cleanup();
 				reject(new Error(`FFmpeg process error: ${err.message}`));
 			};
 
 			const onClose = (code: number | null, signal: NodeJS.Signals) => {
-				if (this.resolved) return;
-				this.resolved = true;
+				if (resolved) return;
+				resolved = true;
 
 				if (code === 0) {
 					resolve();
@@ -93,9 +98,7 @@ export class ProcessManager extends EventEmitter {
 						new Error(`FFmpeg process was terminated by signal: ${signal}`),
 					);
 				} else {
-					reject(
-						new Error(`FFmpeg exited with code ${code}\n${this.stderrData}`),
-					);
+					reject(new Error(`FFmpeg exited with code ${code}\n${stderrData}`));
 				}
 			};
 
@@ -110,7 +113,7 @@ export class ProcessManager extends EventEmitter {
 		}
 	}
 
-	isRunnig(): boolean {
+	isRunning(): boolean {
 		return this.process !== null;
 	}
 }
