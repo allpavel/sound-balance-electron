@@ -21,7 +21,7 @@
 		"@electron-toolkit/preload": "^3.0.2",
 		"@electron-toolkit/utils": "^4.0.0",
 		"@mantine/core": "^8.3.15",
-		"@mantine/form": "^8.2.7",
+		"@mantine/form": "^8.3.16",
 		"@mantine/hooks": "^8.2.4",
 		"@reduxjs/toolkit": "^2.8.2",
 		"@tabler/icons-react": "^3.38.0",
