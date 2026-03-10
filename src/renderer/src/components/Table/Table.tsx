@@ -147,6 +147,7 @@ export default function TableComponent() {
 			{
 				id: "status",
 				header: "Status",
+				accessorKey: "status",
 				enableFacetedFilter: true,
 				cell: ({ row }: { row: Row<Metadata> }) => (
 					<StatusIcon status={row.original.status} />
