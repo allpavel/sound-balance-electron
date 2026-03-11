@@ -107,7 +107,7 @@ const startProcessing = async (event: IpcMainInvokeEvent, data: Data) => {
 				}
 				total++;
 				let resolved = false;
-				ffmpeg.once("close", (code, signal) => {
+				ffmpeg.once("close", (code) => {
 					if (resolved) return;
 					resolved = true;
 					if (code === 0) {
