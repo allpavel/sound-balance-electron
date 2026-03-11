@@ -15,11 +15,13 @@ import type {
 	StoppingStatus,
 } from "../../types";
 import { INITIALSETTINGS } from "./constants";
-import { getGlobalSettings } from "./lib/getGlobalSettings";
-import { getMetadata } from "./lib/getMetadata";
-import { getTrackSettings } from "./lib/getTrackSettings";
-import { isDirectory } from "./lib/isDirectory";
-import { optionsMapper } from "./lib/optionsMapper";
+import {
+	getGlobalSettings,
+	getTrackSettings,
+	optionsMapper,
+} from "./lib/ffmpeg";
+import { getMetadata } from "./lib/metadata";
+import { isDirectory } from "./lib/utils";
 
 let canRunning: boolean = false;
 let ffmpeg: ChildProcessWithoutNullStreams;

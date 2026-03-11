@@ -1,6 +1,6 @@
 import type { IAudioMetadata } from "music-metadata";
 import { v4 as uuid } from "uuid";
-import type { Metadata } from "../../../types";
+import type { Metadata } from "../../../../types";
 import { processAlbumCover } from "./processAlbumCover";
 
 export const processMetadata = async (
