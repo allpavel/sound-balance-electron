@@ -1,5 +1,5 @@
 import type { IAudioMetadata } from "music-metadata";
-import type { NativeValue } from "../../../../types";
+import type { NativeValue } from "@/types";
 
 export const processAlbumCover = (data: IAudioMetadata) => {
 	const id3Tags = data.native?.["ID3v2.3"] || data.native?.["ID3v2.4"] || null;
