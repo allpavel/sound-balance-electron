@@ -12,3 +12,8 @@ export const INITIALSETTINGS = {
 		audioFilter: "loudnorm",
 	},
 };
+
+export const IPC_CHANNELS = {
+	RESPONSE_ON_STOP: "response-on-stop",
+	PROCESSING_RESULT: "processing-result",
+} as const;

@@ -5,7 +5,6 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron/main";
 import ffmpegPath from "ffmpeg-static";
 import { parseFile } from "music-metadata";
-import { INITIALSETTINGS } from "../../constants";
 import icon from "../../resources/icon.png?asset";
 import type {
 	Data,
@@ -15,6 +14,7 @@ import type {
 	ProcessingStatus,
 	StoppingStatus,
 } from "../../types";
+import { INITIALSETTINGS } from "./constants";
 import { getGlobalSettings } from "./lib/getGlobalSettings";
 import { getMetadata } from "./lib/getMetadata";
 import { getTrackSettings } from "./lib/getTrackSettings";
