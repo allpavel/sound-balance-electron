@@ -13,7 +13,15 @@ export const INITIALSETTINGS = {
 	},
 };
 
-export const IPC_CHANNELS = {
+export const EVENT_CHANNELS = {
 	RESPONSE_ON_STOP: "response-on-stop",
+	RESPONSE_ON_START: "response-on-start",
 	PROCESSING_RESULT: "processing-result",
+} as const;
+
+export const INVOKE_CHANNELS = {
+	SHOW_DIALOG: "showDialog",
+	GET_OUTPUT_DIRECTORY: "getOutputDirectoryPath",
+	START_PROCESSING: "startProcessing",
+	STOP_PROCESSING: "stopProcessing",
 } as const;

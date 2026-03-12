@@ -1,30 +1,35 @@
 import { electronAPI } from "@electron-toolkit/preload";
+import { EVENT_CHANNELS, INVOKE_CHANNELS } from "@main/constants";
 import { contextBridge, ipcRenderer } from "electron";
-import type { Data, ProcessingStatus } from "../../types";
+import type { ProcessingStatus } from "@/types";
 
-// Custom APIs for renderer
 const api = {
-	showDialog: () => ipcRenderer.invoke("showDialog"),
-	getOutputDirectoryPath: () => ipcRenderer.invoke("getOutputDirectoryPath"),
-	startProcessing: (data: Data) => ipcRenderer.invoke("startProcessing", data),
-	stopProcessing: () => ipcRenderer.invoke("stopProcessing"),
+	showDialog: () => ipcRenderer.invoke(INVOKE_CHANNELS.SHOW_DIALOG),
+	getOutputDirectoryPath: () =>
+		ipcRenderer.invoke(INVOKE_CHANNELS.GET_OUTPUT_DIRECTORY),
+	startProcessing: (data) =>
+		ipcRenderer.invoke(INVOKE_CHANNELS.START_PROCESSING, data),
+	stopProcessing: () => ipcRenderer.invoke(INVOKE_CHANNELS.STOP_PROCESSING),
 	responseOnStart: (cb) => {
-		ipcRenderer.on("response-on-start", (_, msg) => cb(msg));
-		return () => ipcRenderer.removeAllListeners("response-on-start");
+		ipcRenderer.on(EVENT_CHANNELS.RESPONSE_ON_START, (_, msg) => cb(msg));
+		return () =>
+			ipcRenderer.removeAllListeners(EVENT_CHANNELS.RESPONSE_ON_START);
 	},
 	responseOnStop: (cb) => {
-		ipcRenderer.on("response-on-stop", (_, msg) => cb(msg));
-		return () => ipcRenderer.removeAllListeners("response-on-stop");
+		ipcRenderer.on(EVENT_CHANNELS.RESPONSE_ON_STOP, (_, msg) => cb(msg));
+		return () =>
+			ipcRenderer.removeAllListeners(EVENT_CHANNELS.RESPONSE_ON_STOP);
 	},
 	processingResult: (cb) => {
-		ipcRenderer.on("processing-result", (_, msg: ProcessingStatus) => cb(msg));
-		return () => ipcRenderer.removeAllListeners("processing-result");
+		ipcRenderer.on(
+			EVENT_CHANNELS.PROCESSING_RESULT,
+			(_, msg: ProcessingStatus) => cb(msg),
+		);
+		return () =>
+			ipcRenderer.removeAllListeners(EVENT_CHANNELS.PROCESSING_RESULT);
 	},
 };
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
 	try {
 		contextBridge.exposeInMainWorld("api", api);
