@@ -1,7 +1,7 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { EVENT_CHANNELS, INVOKE_CHANNELS } from "@main/constants";
 import { contextBridge, ipcRenderer } from "electron";
-import type { ProcessingStatus } from "@/types";
+import type { API, ProcessingStatus } from "@/types";
 
 const api = {
 	showDialog: () => ipcRenderer.invoke(INVOKE_CHANNELS.SHOW_DIALOG),
@@ -28,7 +28,7 @@ const api = {
 		return () =>
 			ipcRenderer.removeAllListeners(EVENT_CHANNELS.PROCESSING_RESULT);
 	},
-};
+} satisfies API;
 
 if (process.contextIsolated) {
 	try {
