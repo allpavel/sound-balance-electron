@@ -9,7 +9,7 @@ export const tracksAdapter = createEntityAdapter<Metadata>({
 	sortComparer: (a: Metadata, b: Metadata) => a.id.localeCompare(b.id),
 });
 
-export const tracksSlice = createSlice({
+const tracksSlice = createSlice({
 	name: "tracks",
 	initialState: tracksAdapter.getInitialState(),
 	reducers: {
@@ -21,8 +21,15 @@ export const tracksSlice = createSlice({
 });
 
 const selectors = tracksAdapter.getSelectors();
-export const { selectAll: selectAllTracks, selectById: selectTrackById } =
-	selectors;
+export const {
+	selectAll: selectAllTracks,
+	// selectById: selectTrackById
+} = selectors;
+
+export const selectTrackById: (
+	state: ReturnType<typeof tracksAdapter.getInitialState>,
+	id: string,
+) => Metadata | undefined = selectors.selectById;
 
 export const selectAllSelectedTracks = createSelector(
 	[selectAllTracks],
