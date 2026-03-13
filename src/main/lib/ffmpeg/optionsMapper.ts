@@ -1,4 +1,4 @@
-import type { OptionMapperKeys } from "../../../../types";
+import type { OptionMapperKeys } from "@/types";
 
 const MAPPING: Record<OptionMapperKeys, string> = {
 	overwrite: "-y",

@@ -1,5 +1,5 @@
+import { processMetadata } from "@main/lib/metadata/processMetadata";
 import type { IAudioMetadata } from "music-metadata";
-import { processMetadata } from "./processMetadata";
 
 export const getMetadata = async (
 	filePaths: string[],

@@ -1,7 +1,7 @@
+import { processAlbumCover } from "@main/lib/metadata/processAlbumCover";
 import type { IAudioMetadata } from "music-metadata";
 import { v4 as uuid } from "uuid";
-import type { Metadata } from "../../../types";
-import { processAlbumCover } from "./processAlbumCover";
+import type { Metadata } from "@/types";
 
 export const processMetadata = async (
 	filePath: string,

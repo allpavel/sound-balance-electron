@@ -2,6 +2,16 @@ import type { IAudioMetadata } from "music-metadata";
 
 type Status = "pending" | "processing" | "completed" | "failed";
 
+export type API = {
+	showDialog: () => Promise<Metadata[]>;
+	getOutputDirectoryPath: () => Promise<Electron.OpenDialogReturnValue>;
+	startProcessing: (data: Data) => Promise<ProcessingResult>;
+	stopProcessing: () => void;
+	responseOnStart: (cb: (msg: string) => void) => () => void;
+	responseOnStop: (cb: (msg: StoppingStatus) => void) => () => void;
+	processingResult: (cb: (msg: ProcessingStatus) => void) => () => void;
+};
+
 export type Metadata = IAudioMetadata & {
 	id: string;
 	file: string;

@@ -28,6 +28,7 @@
 		"@tanstack/react-table": "^8.21.3",
 		"ffmpeg-static": "^5.2.0",
 		"music-metadata": "^11.12.0",
+		"p-queue": "^9.1.0",
 		"react-redux": "^9.2.0",
 		"uuid": "^13.0.0"
 	},
@@ -52,7 +53,8 @@
 		"react": "^19.1.0",
 		"react-dom": "^19.1.0",
 		"typescript": "^5.9.3",
-		"vite": "^7.3.1"
+		"vite": "^7.3.1",
+		"vite-tsconfig-paths": "^6.1.1"
 	},
 	"config": {
 		"commitizen": {

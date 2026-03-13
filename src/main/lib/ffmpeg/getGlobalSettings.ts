@@ -1,4 +1,4 @@
-import type { GeneralSettings, OptionMapperKeys } from "../../../types";
+import type { GeneralSettings, OptionMapperKeys } from "@/types";
 
 export const getGlobalSettings = (
 	initialSettings: GeneralSettings,
