@@ -70,6 +70,24 @@ export default function Settings() {
 									key={form.key("global.outputDirectoryPath")}
 									{...form.getInputProps("global.outputDirectoryPath")}
 								/>
+								<Stack>
+									<NativeSelect
+										label="Number of processing threads:"
+										key={form.key("global.concurrency")}
+										{...form.getInputProps("global.concurrency")}
+									>
+										<option value="1">1</option>
+										<option value="2">2</option>
+										<option value="3">3</option>
+										<option value="4">4</option>
+										<option value="5">5</option>
+										<option value="6">6</option>
+										<option value="7">7</option>
+										<option value="8">8</option>
+										<option value="9">9</option>
+										<option value="10">10</option>
+									</NativeSelect>
+								</Stack>
 								<Radio.Group
 									label="Overwrite output files without asking:"
 									key={form.key("global.overwrite")}
@@ -80,6 +98,18 @@ export default function Settings() {
 										<Radio value="no" label="No" />
 									</Group>
 								</Radio.Group>
+								<Stack>
+									<Box>
+										<NativeSelect
+											label="Audio filter:"
+											key={form.key("audio.audioFilter")}
+											{...form.getInputProps("audio.audioFilter")}
+										>
+											<option value="loudnorm">loudnorm</option>
+											<option value="dynaudnorm">dynaudnorm</option>
+										</NativeSelect>
+									</Box>
+								</Stack>
 								<Radio.Group
 									label="Fail if output file exists:"
 									key={form.key("global.noOverwrite")}

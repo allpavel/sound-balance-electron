@@ -1,3 +1,5 @@
+import type { GeneralSettings } from "@/types";
+
 export const INITIALSETTINGS = {
 	global: {
 		outputDirectoryPath: "",
@@ -5,13 +7,14 @@ export const INITIALSETTINGS = {
 		noOverwrite: false,
 		statsPeriod: 0.5,
 		recastMedia: false,
+		concurrency: 1,
 	},
 	audio: {
 		audioCodec: "copy",
 		audioQuality: "4",
 		audioFilter: "loudnorm",
 	},
-};
+} satisfies GeneralSettings;
 
 export const EVENT_CHANNELS = {
 	RESPONSE_ON_STOP: "response-on-stop",

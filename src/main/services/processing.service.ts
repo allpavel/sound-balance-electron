@@ -29,7 +29,7 @@ export const startProcessing = async (
 	let total = 0;
 	abortController = new AbortController();
 	const { signal } = abortController;
-	const queue = new PQueue({ concurrency: 1 });
+	const queue = new PQueue({ concurrency: +data.settings.global.concurrency });
 
 	const globalSettings = getGlobalSettings(
 		INITIALSETTINGS,
