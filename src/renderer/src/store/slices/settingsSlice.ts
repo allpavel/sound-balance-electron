@@ -8,6 +8,7 @@ export const initialSettings: GeneralSettings = {
 		noOverwrite: false,
 		statsPeriod: 0.5,
 		recastMedia: false,
+		concurrency: 1,
 	},
 	audio: {
 		audioCodec: "copy",

@@ -460,6 +460,8 @@ export type GeneralSettings = {
 		statsPeriod: number;
 		/** Recast media type when needed (-recast_media) */
 		recastMedia: boolean;
+		/** Number of processing threads */
+		concurrency: number;
 	};
 	// ===== AUDIO ENCODING =====
 	audio: {
