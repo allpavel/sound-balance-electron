@@ -10,7 +10,8 @@ export const getGlobalSettings = (
 		const key = s as OptionMapperKeys;
 		if (
 			settings[key] !== initialSettings.global[key] &&
-			s !== "outputDirectoryPath"
+			s !== "outputDirectoryPath" &&
+			s !== "concurrency"
 		) {
 			result.push(mapper(key));
 		}
