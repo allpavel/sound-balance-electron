@@ -26,6 +26,8 @@
 		"@reduxjs/toolkit": "^2.8.2",
 		"@tabler/icons-react": "^3.40.0",
 		"@tanstack/react-table": "^8.21.3",
+		"dexie": "^4.3.0",
+		"dexie-react-hooks": "^4.2.0",
 		"ffmpeg-static": "^5.2.0",
 		"music-metadata": "^11.12.0",
 		"p-queue": "^9.1.0",
