@@ -1,6 +1,6 @@
 import { Button } from "@mantine/core";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
-import { addTracks } from "@renderer/store/slices/tracksSlice";
+import { addManyToDB } from "@renderer/store/slices/tracksSlice";
 import { IconUpload } from "@tabler/icons-react";
 
 export default function AddButton() {
@@ -8,7 +8,7 @@ export default function AddButton() {
 
 	const loadFiles = async () => {
 		const result = await window.api.showDialog();
-		dispatch(addTracks(result));
+		dispatch(addManyToDB(result));
 	};
 
 	return (
