@@ -5,6 +5,7 @@ import Settings from "@renderer/components/Settings/Settings";
 import StartProcessing from "@renderer/components/StartProcessing/StartProcessing";
 import TableComponent from "@renderer/components/Table/Table";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
+import { getSettings } from "@renderer/store/slices/settingsSlice";
 import { loadTracksFromDB } from "@renderer/store/slices/tracksSlice";
 import { useEffect } from "react";
 
@@ -13,6 +14,7 @@ function App(): React.JSX.Element {
 
 	useEffect(() => {
 		dispatch(loadTracksFromDB());
+		dispatch(getSettings());
 	}, [dispatch]);
 
 	return (
