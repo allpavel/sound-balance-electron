@@ -42,8 +42,8 @@ const settingsSlice = createSlice({
 	name: "settings",
 	initialState: { ...initialSettings, loading: false },
 	reducers: {
-		setSettings(state, action) {
-			state = action.payload;
+		setSettings(_, action) {
+			return { ...action.payload, loading: false };
 		},
 	},
 	extraReducers: (builder) => {
