@@ -3,8 +3,8 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import {
 	selectAllTracks,
-	updateAllTracks,
-	updateTrack,
+	updateInDB,
+	updateManyInDB,
 } from "@renderer/store/slices/tracksSlice";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
 import { IconCaretRight, IconSearch } from "@tabler/icons-react";
@@ -52,7 +52,7 @@ export default function TableComponent() {
 						onChange={(e) => {
 							if (e.target.checked) {
 								dispatch(
-									updateAllTracks(
+									updateManyInDB(
 										table.getRowModel().rows.map((item) => ({
 											id: item.original.id,
 											changes: { selected: true },
@@ -61,7 +61,7 @@ export default function TableComponent() {
 								);
 							} else {
 								dispatch(
-									updateAllTracks(
+									updateManyInDB(
 										table.getRowModel().rows.map((item) => ({
 											id: item.original.id,
 											changes: { selected: false },
@@ -80,14 +80,14 @@ export default function TableComponent() {
 						onChange={(e) => {
 							if (e.target.checked) {
 								dispatch(
-									updateTrack({
+									updateInDB({
 										id: row.original.id,
 										changes: { selected: true },
 									}),
 								);
 							} else {
 								dispatch(
-									updateTrack({
+									updateInDB({
 										id: row.original.id,
 										changes: { selected: false },
 									}),

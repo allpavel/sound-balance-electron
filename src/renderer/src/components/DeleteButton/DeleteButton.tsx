@@ -2,7 +2,7 @@ import { Button, useMantineTheme } from "@mantine/core";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import {
-	removeTracks,
+	removeManyFromDB,
 	selectAllSelectedTracks,
 } from "@renderer/store/slices/tracksSlice";
 import { IconTrash } from "@tabler/icons-react";
@@ -15,7 +15,7 @@ export default function DeleteButton() {
 	).map((track) => track.id);
 
 	const deleteSelectedTracks = () => {
-		dispatch(removeTracks(selectedTracks));
+		dispatch(removeManyFromDB(selectedTracks));
 	};
 
 	return (

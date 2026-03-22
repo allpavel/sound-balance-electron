@@ -18,7 +18,7 @@ export type Metadata = IAudioMetadata & {
 	filePath: string;
 	status: Status;
 	selected: boolean;
-	collectionsId: string[];
+	collectionIds: string[];
 };
 
 export type NativeValue = {
@@ -687,7 +687,6 @@ export type StoppingStatus = {
 
 export type CollectionType = {
 	id: string;
-	name: string;
-	active: boolean;
+	title: string;
 	trackIds: string[];
 };

@@ -2,6 +2,7 @@ import {
 	Box,
 	Button,
 	Group,
+	Loader,
 	Modal,
 	NativeSelect,
 	Radio,
@@ -13,26 +14,34 @@ import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import { setSettings } from "@renderer/store/slices/settingsSlice";
+import { saveSettings } from "@renderer/store/slices/settingsSlice";
 import { IconSettings, IconUpload } from "@tabler/icons-react";
+import { useEffect, useMemo } from "react";
 
 export default function Settings() {
 	const [opened, { open, close }] = useDisclosure(false);
 	const settings = useAppSelector((state) => state.settings);
-	const initialValues = {
-		audio: { ...settings.audio },
-		global: {
-			...settings.global,
-			overwrite: settings.global.overwrite ? "yes" : "no",
-			noOverwrite: settings.global.noOverwrite ? "yes" : "no",
-		},
-	};
+	const initialValues = useMemo(
+		() => ({
+			audio: { ...settings.audio },
+			global: {
+				...settings.global,
+				overwrite: settings.global.overwrite ? "yes" : "no",
+				noOverwrite: settings.global.noOverwrite ? "yes" : "no",
+			},
+		}),
+		[settings],
+	);
+
 	const dispatch = useAppDispatch();
 
 	const form = useForm({
-		mode: "uncontrolled",
 		initialValues,
 	});
+
+	useEffect(() => {
+		form.setValues(initialValues);
+	}, [form.setValues, initialValues]);
 
 	const getOutputDirectoryPath = async () => {
 		const dialog = await window.api.getOutputDirectoryPath();
@@ -42,21 +51,24 @@ export default function Settings() {
 		}
 	};
 
+	if (settings.loading) {
+		return <Loader color="blue" type="bars" />;
+	}
+
 	return (
 		<>
 			<Modal opened={opened} onClose={close} title="Settings">
 				<form
 					onSubmit={form.onSubmit((values) => {
-						dispatch(
-							setSettings({
-								audio: values.audio,
-								global: {
-									...values.global,
-									overwrite: values.global.overwrite === "yes",
-									noOverwrite: values.global.noOverwrite === "yes",
-								},
-							}),
-						);
+						const newValues = {
+							audio: { ...values.audio },
+							global: {
+								...values.global,
+								overwrite: values.global.overwrite === "yes",
+								noOverwrite: values.global.noOverwrite === "yes",
+							},
+						};
+						dispatch(saveSettings(newValues));
 						close();
 					})}
 				>
