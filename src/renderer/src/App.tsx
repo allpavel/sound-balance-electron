@@ -1,11 +1,22 @@
 import { AppShell, Group } from "@mantine/core";
+import AddButton from "@renderer/components/AddButton/AddButton";
+import DeleteButton from "@renderer/components/DeleteButton/DeleteButton";
+import Settings from "@renderer/components/Settings/Settings";
+import StartProcessing from "@renderer/components/StartProcessing/StartProcessing";
 import TableComponent from "@renderer/components/Table/Table";
-import AddButton from "./components/AddButton/AddButton";
-import DeleteButton from "./components/DeleteButton/DeleteButton";
-import Settings from "./components/Settings/Settings";
-import StartProcessing from "./components/StartProcessing/StartProcessing";
+import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
+import { getSettings } from "@renderer/store/slices/settingsSlice";
+import { loadTracksFromDB } from "@renderer/store/slices/tracksSlice";
+import { useEffect } from "react";
 
 function App(): React.JSX.Element {
+	const dispatch = useAppDispatch();
+
+	useEffect(() => {
+		dispatch(loadTracksFromDB());
+		dispatch(getSettings());
+	}, [dispatch]);
+
 	return (
 		<AppShell
 			padding="md"
@@ -22,7 +33,6 @@ function App(): React.JSX.Element {
 					<StartProcessing />
 				</Group>
 			</AppShell.Header>
-			<AppShell.Navbar>Collections</AppShell.Navbar>
 			<AppShell.Main>
 				<TableComponent />
 			</AppShell.Main>

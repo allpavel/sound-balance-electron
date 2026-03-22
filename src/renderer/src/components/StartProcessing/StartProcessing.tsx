@@ -1,17 +1,17 @@
 import { Flex } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import ErrorModal from "@renderer/components/ErrorModal/ErrorModal";
+import ResultsModal from "@renderer/components/ResultsModal/ResultsModal";
+import RunButton from "@renderer/components/RunButton/RunButton";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setResults } from "@renderer/store/slices/resultsSlice";
 import {
 	selectAllSelectedTracks,
-	updateTrack,
+	updateInDB,
 } from "@renderer/store/slices/tracksSlice";
 import { useEffect, useState } from "react";
 import type { Data, ProcessingStatus, StoppingStatus } from "types";
-import ErrorModal from "../ErrorModal/ErrorModal";
-import ResultsModal from "../ResultsModal/ResultsModal";
-import RunButton from "../RunButton/RunButton";
 
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
@@ -33,7 +33,7 @@ export default function StartProcessing() {
 
 	useEffect(() => {
 		const unsubscribe = window.api.processingResult((data: ProcessingStatus) =>
-			dispatch(updateTrack({ id: data.id, changes: { status: data.status } })),
+			dispatch(updateInDB({ id: data.id, changes: { status: data.status } })),
 		);
 		return () => unsubscribe();
 	}, [dispatch]);

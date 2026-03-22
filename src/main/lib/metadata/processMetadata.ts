@@ -14,6 +14,7 @@ export const processMetadata = async (
 		const status = "pending";
 		const processedData = processAlbumCover(data);
 		const selected = false;
+		const collectionIds = [];
 		return {
 			...processedData,
 			file: fileName ?? "",
@@ -21,6 +22,7 @@ export const processMetadata = async (
 			id,
 			status,
 			selected,
+			collectionIds,
 		} satisfies Metadata;
 	} catch (e) {
 		throw new Error(
