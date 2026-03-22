@@ -1,6 +1,6 @@
 import { createEntityAdapter, createSlice } from "@reduxjs/toolkit";
 import type { Metadata } from "types";
-import { removeTracks } from "./tracksSlice";
+// import { removeTracks } from "./tracksSlice";
 
 export const selectedTracksAdapter = createEntityAdapter<Metadata>({
 	sortComparer: (a: Metadata, b: Metadata) => a.id.localeCompare(b.id),
@@ -16,11 +16,11 @@ const selectedTracksSlice = createSlice({
 		removeSelectedTracks: selectedTracksAdapter.removeMany,
 		removeAllSelectedTracks: selectedTracksAdapter.removeAll,
 	},
-	extraReducers: (builder) => {
-		builder.addCase(removeTracks, (state, action) => {
-			selectedTracksAdapter.removeMany(state, action.payload);
-		});
-	},
+	// extraReducers: (builder) => {
+	// 	builder.addCase(removeTracks, (state, action) => {
+	// 		selectedTracksAdapter.removeMany(state, action.payload);
+	// 	});
+	// },
 });
 
 const selectors = selectedTracksAdapter.getSelectors();

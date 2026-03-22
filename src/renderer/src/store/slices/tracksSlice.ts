@@ -80,7 +80,7 @@ const tracksSlice = createSlice({
 			state.loading = false;
 		});
 		builder.addCase(loadTracksFromDB.rejected, (state) => {
-			state.loading = true;
+			state.loading = false;
 		});
 	},
 });
