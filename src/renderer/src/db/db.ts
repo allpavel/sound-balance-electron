@@ -1,9 +1,10 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { GeneralSettings, Metadata } from "@/types";
+import type { CollectionType, GeneralSettings, Metadata } from "@/types";
 
 const db = new Dexie("AudioDB") as Dexie & {
 	tracks: EntityTable<Metadata, "id">;
 	settings: EntityTable<{ id: string; settings: GeneralSettings }, "id">;
+	collections: EntityTable<CollectionType, "id">;
 };
 
 db.version(1).stores({
@@ -13,6 +14,12 @@ db.version(1).stores({
 db.version(2).stores({
 	tracks: "id, *collectionIds",
 	settings: "id",
+});
+
+db.version(3).stores({
+	tracks: "id, *collectionIds",
+	settings: "id",
+	collections: "++id",
 });
 
 export { db };
