@@ -8,7 +8,7 @@ export const collectionsRepository = {
 	async getCollectionById(id: number): Promise<CollectionType | undefined> {
 		return await db.collections.get(id);
 	},
-	async addCollection(collection: CollectionType): Promise<number> {
+	async addCollection(collection: Omit<CollectionType, "id">): Promise<number> {
 		return await db.collections.add(collection);
 	},
 	async updateCollection(id: number, changes: Partial<CollectionType>) {
