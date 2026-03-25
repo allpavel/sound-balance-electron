@@ -29,7 +29,8 @@ export const tracksRepository = {
 	async removeMany(): Promise<void> {
 		await db.transaction("rw", db.tracks, async () => {
 			const selectedTracksIds = await db.tracks
-				.filter((item) => item.selected)
+				.where("selected")
+				.equals(1)
 				.primaryKeys();
 			await db.tracks.bulkDelete(selectedTracksIds);
 		});

@@ -47,14 +47,14 @@ export default function TableComponent() {
 								updateManyTracks(
 									table.getRowModel().rows.map((item) => ({
 										id: item.original.id,
-										changes: { selected: true },
+										changes: { selected: 1 },
 									})),
 								);
 							} else {
 								updateManyTracks(
 									table.getRowModel().rows.map((item) => ({
 										id: item.original.id,
-										changes: { selected: false },
+										changes: { selected: 0 },
 									})),
 								);
 							}
@@ -70,12 +70,12 @@ export default function TableComponent() {
 							if (e.target.checked) {
 								updateTrack({
 									id: row.original.id,
-									changes: { selected: true },
+									changes: { selected: 1 },
 								});
 							} else {
 								updateTrack({
 									id: row.original.id,
-									changes: { selected: false },
+									changes: { selected: 0 },
 								});
 							}
 							row.getToggleSelectedHandler()(e);
