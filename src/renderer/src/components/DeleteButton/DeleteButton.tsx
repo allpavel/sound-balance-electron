@@ -1,28 +1,20 @@
 import { Button, useMantineTheme } from "@mantine/core";
-import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
-import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import {
-	removeManyFromDB,
-	selectAllSelectedTracks,
-} from "@renderer/store/slices/tracksSlice";
+import { useTracks } from "@renderer/hooks/useTracks";
 import { IconTrash } from "@tabler/icons-react";
 
 export default function DeleteButton() {
-	const dispatch = useAppDispatch();
 	const theme = useMantineTheme();
-	const selectedTracks = useAppSelector((state) =>
-		selectAllSelectedTracks(state.tracks),
-	).map((track) => track.id);
+	const { removeManyTracks } = useTracks();
 
 	const deleteSelectedTracks = () => {
-		dispatch(removeManyFromDB(selectedTracks));
+		removeManyTracks();
 	};
 
 	return (
 		<Button
 			leftSection={<IconTrash size={14} />}
 			color={theme.colors.red[8]}
-			disabled={selectedTracks.length === 0}
+			// disabled={selectedTracksIds.length === 0}
 			onClick={deleteSelectedTracks}
 		>
 			Delete
