@@ -25,7 +25,7 @@ export function useTracks() {
 	});
 
 	const removeManyMutation = useMutation({
-		mutationFn: (ids: string[]) => tracksRepository.removeMany(ids),
+		mutationFn: () => tracksRepository.removeMany(),
 	});
 
 	return {

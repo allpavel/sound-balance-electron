@@ -26,7 +26,12 @@ export const tracksRepository = {
 	async remove(id: string): Promise<void> {
 		await db.tracks.delete(id);
 	},
-	async removeMany(ids: string[]): Promise<void> {
-		await db.tracks.bulkDelete(ids);
+	async removeMany(): Promise<void> {
+		await db.transaction("rw", db.tracks, async () => {
+			const selectedTracksIds = await db.tracks
+				.filter((item) => item.selected)
+				.primaryKeys();
+			await db.tracks.bulkDelete(selectedTracksIds);
+		});
 	},
 };

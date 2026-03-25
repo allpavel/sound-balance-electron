@@ -1,11 +1,9 @@
 import { Button, Checkbox, Flex, Group, Table, TextInput } from "@mantine/core";
-import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
-import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import {
-	selectAllTracks,
-	updateInDB,
-	updateManyInDB,
-} from "@renderer/store/slices/tracksSlice";
+import ColumnSelect from "@renderer/components/ColumnSelect/ColumnSelect";
+import FilterSelect from "@renderer/components/FilterSelect/FilterSelect";
+import InfoModal from "@renderer/components/InfoModal/InfoModal";
+import StatusIcon from "@renderer/components/StatusIcon/StatusIcon";
+import { useTracks } from "@renderer/hooks/useTracks";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
 import { IconCaretRight, IconSearch } from "@tabler/icons-react";
 import {
@@ -25,21 +23,16 @@ import {
 } from "@tanstack/react-table";
 import { type ChangeEvent, useMemo, useState } from "react";
 import type { Metadata } from "types";
-import ColumnSelect from "../ColumnSelect/ColumnSelect";
-import FilterSelect from "../FilterSelect/FilterSelect";
-import InfoModal from "../InfoModal/InfoModal";
-import StatusIcon from "../StatusIcon/StatusIcon";
 
 export default function TableComponent() {
+	const { tracks: files, updateManyTracks, updateTrack } = useTracks();
+
 	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
 	const [selectedTrack, setSelectedTrack] = useState<string>("");
 	const [modalOpened, setModalOpened] = useState(false);
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [globalFilter, setGlobalFilter] = useState("");
-
-	const dispatch = useAppDispatch();
-	const files = useAppSelector((state) => selectAllTracks(state.tracks));
 
 	const columns = useMemo<ColumnDef<Metadata>[]>(
 		() => [
@@ -51,22 +44,18 @@ export default function TableComponent() {
 						checked={table.getIsAllRowsSelected()}
 						onChange={(e) => {
 							if (e.target.checked) {
-								dispatch(
-									updateManyInDB(
-										table.getRowModel().rows.map((item) => ({
-											id: item.original.id,
-											changes: { selected: true },
-										})),
-									),
+								updateManyTracks(
+									table.getRowModel().rows.map((item) => ({
+										id: item.original.id,
+										changes: { selected: true },
+									})),
 								);
 							} else {
-								dispatch(
-									updateManyInDB(
-										table.getRowModel().rows.map((item) => ({
-											id: item.original.id,
-											changes: { selected: false },
-										})),
-									),
+								updateManyTracks(
+									table.getRowModel().rows.map((item) => ({
+										id: item.original.id,
+										changes: { selected: false },
+									})),
 								);
 							}
 							table.getToggleAllRowsSelectedHandler()(e);
@@ -79,19 +68,15 @@ export default function TableComponent() {
 						checked={row.getIsSelected()}
 						onChange={(e) => {
 							if (e.target.checked) {
-								dispatch(
-									updateInDB({
-										id: row.original.id,
-										changes: { selected: true },
-									}),
-								);
+								updateTrack({
+									id: row.original.id,
+									changes: { selected: true },
+								});
 							} else {
-								dispatch(
-									updateInDB({
-										id: row.original.id,
-										changes: { selected: false },
-									}),
-								);
+								updateTrack({
+									id: row.original.id,
+									changes: { selected: false },
+								});
 							}
 							row.getToggleSelectedHandler()(e);
 						}}
@@ -154,7 +139,7 @@ export default function TableComponent() {
 				),
 			},
 		],
-		[dispatch],
+		[updateManyTracks, updateTrack],
 	);
 
 	const table = useReactTable({
