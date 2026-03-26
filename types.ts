@@ -17,7 +17,7 @@ export type Metadata = IAudioMetadata & {
 	file: string;
 	filePath: string;
 	status: Status;
-	selected: boolean;
+	selected: 0 | 1;
 	collectionIds: string[];
 };
 

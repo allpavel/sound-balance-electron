@@ -13,7 +13,7 @@ export const processMetadata = async (
 		const fileName = filePath.split("/").at(-1);
 		const status = "pending";
 		const processedData = processAlbumCover(data);
-		const selected = false;
+		const selected = 0;
 		const collectionIds = [];
 		return {
 			...processedData,
