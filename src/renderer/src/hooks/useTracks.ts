@@ -4,7 +4,11 @@ import { useLiveQuery } from "dexie-react-hooks";
 import type { Metadata } from "@/types";
 
 export function useTracks() {
-	const tracks = useLiveQuery(() => tracksRepository.getAll(), []);
+	const tracks = useLiveQuery(() => tracksRepository.getAll());
+	const selectedTracks = useLiveQuery(
+		() => tracksRepository.getSelectedTracks(),
+		[],
+	);
 
 	const addMutation = useMutation({
 		mutationFn: (tracks: Metadata[]) => tracksRepository.addMany(tracks),
@@ -30,7 +34,9 @@ export function useTracks() {
 
 	return {
 		tracks: tracks ?? [],
+		selectedTracks: selectedTracks ?? [],
 		isLoading: tracks === undefined,
+
 		addTracks: addMutation.mutate,
 		updateTrack: updateMutation.mutate,
 		updateManyTracks: updateManyMutation.mutate,

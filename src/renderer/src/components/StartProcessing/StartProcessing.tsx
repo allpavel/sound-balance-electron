@@ -5,20 +5,16 @@ import ResultsModal from "@renderer/components/ResultsModal/ResultsModal";
 import RunButton from "@renderer/components/RunButton/RunButton";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
+import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
-import {
-	selectAllSelectedTracks,
-	updateInDB,
-} from "@renderer/store/slices/tracksSlice";
+import { updateInDB } from "@renderer/store/slices/tracksSlice";
 import { useEffect, useState } from "react";
 import type { Data, ProcessingStatus, StoppingStatus } from "types";
 
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
 	const [isRunning, setIsRunning] = useState(false);
-	const tracks = useAppSelector((state) =>
-		selectAllSelectedTracks(state.tracks),
-	);
+	const { selectedTracks: tracks } = useTracks();
 	const settings = useAppSelector((state) => state.settings);
 	const dispatch = useAppDispatch();
 
