@@ -1,12 +1,12 @@
 import { configureStore } from "@reduxjs/toolkit";
 import resultsSlice from "@renderer/store/slices/resultsSlice";
-import settingsReducer from "@renderer/store/slices/settingsSlice";
-import tracksReducer from "@renderer/store/slices/tracksSlice";
+import selectedTracks from "@renderer/store/slices/selectedTracksSlice";
+import settingsSlice from "@renderer/store/slices/settingsSlice";
 
 export const store = configureStore({
 	reducer: {
-		tracks: tracksReducer,
-		settings: settingsReducer,
+		selectedTracks,
+		settings: settingsSlice,
 		results: resultsSlice,
 	},
 });
