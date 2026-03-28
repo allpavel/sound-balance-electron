@@ -3,7 +3,11 @@ import type { Metadata } from "@/types";
 
 export const tracksRepository = {
 	async getAll(): Promise<Metadata[]> {
-		return db.tracks.toArray();
+		return await db.tracks.toArray();
+	},
+	async getById(id: string) {
+		const tracks = await db.tracks.where("id").equals(id).toArray();
+		return tracks.length > 0 ? tracks[0] : undefined;
 	},
 	async addMany(
 		tracks: Metadata[],
@@ -25,6 +29,9 @@ export const tracksRepository = {
 	},
 	async remove(id: string): Promise<void> {
 		await db.tracks.delete(id);
+	},
+	async getSelectedTracks(): Promise<Metadata[]> {
+		return await db.tracks.where("selected").equals(1).toArray();
 	},
 	async removeMany(): Promise<void> {
 		await db.transaction("rw", db.tracks, async () => {
