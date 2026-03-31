@@ -28,4 +28,10 @@ db.version(4).stores({
 	collections: "++id",
 });
 
+db.version(5).stores({
+	tracks: "id, *collectionIds, selected",
+	settings: "id",
+	collections: "id",
+});
+
 export { db };
