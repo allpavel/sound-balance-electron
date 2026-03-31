@@ -686,6 +686,6 @@ export type StoppingStatus = {
 };
 
 export type CollectionType = {
-	id: number;
+	id: string;
 	title: string;
 };

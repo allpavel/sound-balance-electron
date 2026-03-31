@@ -1,3 +1,4 @@
+import { v7 as uuidV7 } from "uuid";
 import type { CollectionType } from "@/types";
 import { db } from "../db";
 
@@ -5,16 +6,20 @@ export const collectionsRepository = {
 	async getAllCollections(): Promise<CollectionType[]> {
 		return await db.collections.toArray();
 	},
-	async getCollectionById(id: number): Promise<CollectionType | undefined> {
+	async getCollectionById(id: string): Promise<CollectionType | undefined> {
 		return await db.collections.get(id);
 	},
-	async addCollection(collection: Omit<CollectionType, "id">): Promise<number> {
-		return await db.collections.add(collection);
+	async addCollection(collection: Omit<CollectionType, "id">): Promise<string> {
+		const newCollection: CollectionType = {
+			id: uuidV7(),
+			title: collection.title,
+		};
+		return await db.collections.add(newCollection);
 	},
-	async updateCollection(id: number, changes: Partial<CollectionType>) {
+	async updateCollection(id: string, changes: Partial<CollectionType>) {
 		return await db.collections.update(id, changes);
 	},
-	async deleteCollection(id: number): Promise<void> {
+	async deleteCollection(id: string): Promise<void> {
 		await db.transaction("readwrite", db.collections, db.tracks, async () => {
 			const trackIds = await db.tracks
 				.where("collectionIds")
