@@ -29,6 +29,7 @@ import type { Metadata } from "types";
 export default function TableComponent() {
 	const { tracks: files, updateManyTracks } = useTracks();
 	const selectedRows = useAppSelector((state) => state.selectedTracks);
+	const activeCollection = useAppSelector((state) => state.activeCollection);
 	const dispatch = useAppDispatch();
 
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -224,35 +225,40 @@ export default function TableComponent() {
 						</Table.Tr>
 					))}
 				</Table.Thead>
-				<Table.Tbody>
-					{table.getRowModel().rows.length === 0 && files.length > 0 ? (
-						<Table.Tr>
-							<Table.Td
-								colSpan={table.getAllColumns().length}
-								style={{ textAlign: "center" }}
-							>
-								No matching records found.
-							</Table.Td>
-						</Table.Tr>
-					) : (
-						table.getRowModel().rows.map((row) => (
-							<Table.Tr
-								key={row.id}
-								bg={
-									selectedRows[row.id]
-										? "var(--mantine-color-blue-light)"
-										: undefined
-								}
-							>
-								{row.getVisibleCells().map((cell) => (
-									<Table.Td key={cell.id} miw={150}>
-										{flexRender(cell.column.columnDef.cell, cell.getContext())}
-									</Table.Td>
-								))}
+				{activeCollection.id && (
+					<Table.Tbody>
+						{table.getRowModel().rows.length === 0 && files.length > 0 ? (
+							<Table.Tr>
+								<Table.Td
+									colSpan={table.getAllColumns().length}
+									style={{ textAlign: "center" }}
+								>
+									No matching records found.
+								</Table.Td>
 							</Table.Tr>
-						))
-					)}
-				</Table.Tbody>
+						) : (
+							table.getRowModel().rows.map((row) => (
+								<Table.Tr
+									key={row.id}
+									bg={
+										selectedRows[row.id]
+											? "var(--mantine-color-blue-light)"
+											: undefined
+									}
+								>
+									{row.getVisibleCells().map((cell) => (
+										<Table.Td key={cell.id} miw={150}>
+											{flexRender(
+												cell.column.columnDef.cell,
+												cell.getContext(),
+											)}
+										</Table.Td>
+									))}
+								</Table.Tr>
+							))
+						)}
+					</Table.Tbody>
+				)}
 				<Table.Tfoot>
 					<Table.Tr>
 						<Table.Td colSpan={2}>
