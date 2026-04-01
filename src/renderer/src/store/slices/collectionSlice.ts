@@ -1,13 +1,13 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 type ActiveCollection = {
-	id: string | null;
+	id: string;
 	title: string;
 };
 
 const initialState: ActiveCollection = {
-	id: null,
-	title: "",
+	id: "all",
+	title: "All",
 };
 
 const activeCollectionSlice = createSlice({
