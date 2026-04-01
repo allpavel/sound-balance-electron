@@ -52,7 +52,7 @@ const initialState: SelectedTracksState = {};
 export const loadSelectedTracks = createAsyncThunk(
 	"selectedTracks/load",
 	async (_, { dispatch }) => {
-		const tracks = await tracksRepository.getAll();
+		const tracks = await tracksRepository.getAll("all");
 		const res = tracks.reduce((acc: SelectedTracksState, item) => {
 			acc[item.id] = item.selected === 1;
 			return acc;
