@@ -34,4 +34,11 @@ db.version(5).stores({
 	collections: "id",
 });
 
+db.on("populate", (tx) => {
+	tx.table("collections").add({
+		id: "all",
+		title: "All",
+	});
+});
+
 export { db };
