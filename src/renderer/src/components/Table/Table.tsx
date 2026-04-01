@@ -1,4 +1,12 @@
-import { Button, Checkbox, Flex, Group, Table, TextInput } from "@mantine/core";
+import {
+	Button,
+	Checkbox,
+	Flex,
+	Group,
+	Loader,
+	Table,
+	TextInput,
+} from "@mantine/core";
 import ColumnSelect from "@renderer/components/ColumnSelect/ColumnSelect";
 import FilterSelect from "@renderer/components/FilterSelect/FilterSelect";
 import InfoModal from "@renderer/components/InfoModal/InfoModal";
@@ -27,10 +35,14 @@ import { type ChangeEvent, useMemo, useState } from "react";
 import type { Metadata } from "types";
 
 export default function TableComponent() {
-	const { tracks: files, updateManyTracks } = useTracks();
 	const selectedRows = useAppSelector((state) => state.selectedTracks);
 	const activeCollection = useAppSelector((state) => state.activeCollection);
 	const dispatch = useAppDispatch();
+	const {
+		tracks: files,
+		updateManyTracks,
+		isLoading,
+	} = useTracks(activeCollection.id);
 
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
@@ -225,40 +237,43 @@ export default function TableComponent() {
 						</Table.Tr>
 					))}
 				</Table.Thead>
-				{activeCollection.id && (
-					<Table.Tbody>
-						{table.getRowModel().rows.length === 0 && files.length > 0 ? (
-							<Table.Tr>
-								<Table.Td
-									colSpan={table.getAllColumns().length}
-									style={{ textAlign: "center" }}
-								>
-									No matching records found.
-								</Table.Td>
+				<Table.Tbody>
+					{isLoading ? (
+						<Table.Tr>
+							<Table.Td colSpan={columns.length}>
+								<Flex justify={"center"} my="lg">
+									<Loader type="bars" />
+								</Flex>
+							</Table.Td>
+						</Table.Tr>
+					) : table.getRowModel().rows.length === 0 && files.length > 0 ? (
+						<Table.Tr>
+							<Table.Td
+								colSpan={table.getAllColumns().length}
+								style={{ textAlign: "center" }}
+							>
+								No matching records found.
+							</Table.Td>
+						</Table.Tr>
+					) : (
+						table.getRowModel().rows.map((row) => (
+							<Table.Tr
+								key={row.id}
+								bg={
+									selectedRows[row.id]
+										? "var(--mantine-color-blue-light)"
+										: undefined
+								}
+							>
+								{row.getVisibleCells().map((cell) => (
+									<Table.Td key={cell.id} miw={150}>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</Table.Td>
+								))}
 							</Table.Tr>
-						) : (
-							table.getRowModel().rows.map((row) => (
-								<Table.Tr
-									key={row.id}
-									bg={
-										selectedRows[row.id]
-											? "var(--mantine-color-blue-light)"
-											: undefined
-									}
-								>
-									{row.getVisibleCells().map((cell) => (
-										<Table.Td key={cell.id} miw={150}>
-											{flexRender(
-												cell.column.columnDef.cell,
-												cell.getContext(),
-											)}
-										</Table.Td>
-									))}
-								</Table.Tr>
-							))
-						)}
-					</Table.Tbody>
-				)}
+						))
+					)}
+				</Table.Tbody>
 				<Table.Tfoot>
 					<Table.Tr>
 						<Table.Td colSpan={2}>

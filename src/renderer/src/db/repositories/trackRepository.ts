@@ -2,8 +2,8 @@ import { db } from "@renderer/db/db";
 import type { Metadata } from "@/types";
 
 export const tracksRepository = {
-	async getAll(): Promise<Metadata[]> {
-		return await db.tracks.toArray();
+	async getAll(id: string): Promise<Metadata[]> {
+		return await db.tracks.where("collectionIds").equals(id).toArray();
 	},
 	async getById(id: string) {
 		const tracks = await db.tracks.where("id").equals(id).toArray();

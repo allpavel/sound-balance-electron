@@ -3,8 +3,11 @@ import { useMutation } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Metadata } from "@/types";
 
-export function useTracks() {
-	const tracks = useLiveQuery(() => tracksRepository.getAll());
+export function useTracks(activeCollection = "all") {
+	const tracks = useLiveQuery(
+		() => tracksRepository.getAll(activeCollection),
+		[activeCollection],
+	);
 	const selectedTracks = useLiveQuery(
 		() => tracksRepository.getSelectedTracks(),
 		[],
