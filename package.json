@@ -25,6 +25,8 @@
 		"@mantine/hooks": "^9.0.0",
 		"@reduxjs/toolkit": "^2.8.2",
 		"@tabler/icons-react": "^3.41.1",
+		"@tanstack/react-query": "^5.95.2",
+		"@tanstack/react-router": "^1.168.8",
 		"@tanstack/react-table": "^8.21.3",
 		"dexie": "^4.4.2",
 		"dexie-react-hooks": "^4.4.0",
@@ -39,10 +41,11 @@
 		"@commitlint/cli": "^20.5.0",
 		"@commitlint/config-conventional": "^20.5.0",
 		"@electron-toolkit/tsconfig": "^2.0.0",
+		"@tanstack/router-plugin": "^1.167.9",
 		"@types/node": "^24.0.0",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.1.6",
-		"@vitejs/plugin-react": "^5.1.4",
+		"@vitejs/plugin-react": "^6.0.1",
 		"commitizen": "^4.3.1",
 		"cz-conventional-changelog": "^3.3.0",
 		"electron": "^40.6.1",
@@ -52,10 +55,14 @@
 		"postcss": "^8.5.8",
 		"postcss-preset-mantine": "^1.18.0",
 		"postcss-simple-vars": "^7.0.1",
-		"react": "^19.1.0",
-		"react-dom": "^19.1.0",
+		"react": "^19.2.4",
+		"react-dom": "^19.2.4",
 		"typescript": "^5.9.3",
-		"vite": "^7.3.1"
+		"vite": "^8.0.3"
+	},
+	"overrides": {
+		"vite": "$vite",
+		"@vitejs/plugin-react": "$@vitejs/plugin-react"
 	},
 	"config": {
 		"commitizen": {

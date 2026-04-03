@@ -1,11 +1,22 @@
-import { Button, Checkbox, Flex, Group, Table, TextInput } from "@mantine/core";
+import {
+	Button,
+	Checkbox,
+	Flex,
+	Group,
+	Loader,
+	Table,
+	TextInput,
+} from "@mantine/core";
 import ColumnSelect from "@renderer/components/ColumnSelect/ColumnSelect";
 import FilterSelect from "@renderer/components/FilterSelect/FilterSelect";
 import InfoModal from "@renderer/components/InfoModal/InfoModal";
 import StatusIcon from "@renderer/components/StatusIcon/StatusIcon";
+import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
+import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
+import { setAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
-import { IconCaretRight, IconSearch } from "@tabler/icons-react";
+import { IconSearch } from "@tabler/icons-react";
 import {
 	type ColumnDef,
 	flexRender,
@@ -16,7 +27,6 @@ import {
 	getSortedRowModel,
 	type Table as ITable,
 	type Row,
-	type RowSelectionState,
 	type SortingState,
 	useReactTable,
 	type VisibilityState,
@@ -25,11 +35,15 @@ import { type ChangeEvent, useMemo, useState } from "react";
 import type { Metadata } from "types";
 
 export default function TableComponent() {
-	const { tracks: files, updateManyTracks, updateTrack } = useTracks();
+	const selectedRows = useAppSelector((state) => state.selectedTracks);
+	const activeCollection = useAppSelector((state) => state.activeCollection);
+	const dispatch = useAppDispatch();
+	const {
+		tracks: files,
+		updateManyTracks,
+		isLoading,
+	} = useTracks(activeCollection.id);
 
-	const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
-	const [selectedTrack, setSelectedTrack] = useState<string>("");
-	const [modalOpened, setModalOpened] = useState(false);
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [globalFilter, setGlobalFilter] = useState("");
@@ -42,44 +56,14 @@ export default function TableComponent() {
 					<Checkbox
 						type="checkbox"
 						checked={table.getIsAllRowsSelected()}
-						onChange={(e) => {
-							if (e.target.checked) {
-								updateManyTracks(
-									table.getRowModel().rows.map((item) => ({
-										id: item.original.id,
-										changes: { selected: 1 },
-									})),
-								);
-							} else {
-								updateManyTracks(
-									table.getRowModel().rows.map((item) => ({
-										id: item.original.id,
-										changes: { selected: 0 },
-									})),
-								);
-							}
-							table.getToggleAllRowsSelectedHandler()(e);
-						}}
+						onChange={(e) => table.getToggleAllRowsSelectedHandler()(e)}
 					/>
 				),
 				cell: ({ row }: { row: Row<Metadata> }) => (
 					<Checkbox
 						type="checkbox"
 						checked={row.getIsSelected()}
-						onChange={(e) => {
-							if (e.target.checked) {
-								updateTrack({
-									id: row.original.id,
-									changes: { selected: 1 },
-								});
-							} else {
-								updateTrack({
-									id: row.original.id,
-									changes: { selected: 0 },
-								});
-							}
-							row.getToggleSelectedHandler()(e);
-						}}
+						onChange={(e) => row.getToggleSelectedHandler()(e)}
 					/>
 				),
 				enableSorting: false,
@@ -116,15 +100,7 @@ export default function TableComponent() {
 				id: "info",
 				header: "Info",
 				cell: ({ row }: { row: Row<Metadata> }) => (
-					<Button
-						rightSection={<IconCaretRight />}
-						onClick={() => {
-							setSelectedTrack(row.original.id);
-							setModalOpened(true);
-						}}
-					>
-						Details
-					</Button>
+					<InfoModal trackData={row.original} />
 				),
 				enableSorting: false,
 				enableColumnFilter: false,
@@ -139,7 +115,7 @@ export default function TableComponent() {
 				),
 			},
 		],
-		[updateManyTracks, updateTrack],
+		[],
 	);
 
 	const table = useReactTable({
@@ -156,7 +132,29 @@ export default function TableComponent() {
 		getFilteredRowModel: getFilteredRowModel(),
 		getFacetedRowModel: getFacetedRowModel(),
 		getFacetedUniqueValues: getFacetedUniqueValues(),
-		onRowSelectionChange: setSelectedRows,
+		onRowSelectionChange: (updater) => {
+			const newSelection =
+				typeof updater === "function" ? updater(selectedRows) : updater;
+			const changedRowIds = Object.keys(newSelection).filter(
+				(id) => newSelection[id] !== selectedRows[id],
+			);
+
+			Object.keys(selectedRows).forEach((id) => {
+				if (!(id in newSelection) && selectedRows[id] === true) {
+					changedRowIds.push(id);
+				}
+			});
+			dispatch(setAllSelectedTracks(newSelection));
+
+			if (changedRowIds.length > 0) {
+				updateManyTracks(
+					changedRowIds.map((id) => ({
+						id,
+						changes: { selected: newSelection[id] ? 1 : 0 },
+					})),
+				);
+			}
+		},
 		onSortingChange: setSorting,
 		onColumnVisibilityChange: setColumnVisibility,
 		onGlobalFilterChange: setGlobalFilter,
@@ -240,7 +238,15 @@ export default function TableComponent() {
 					))}
 				</Table.Thead>
 				<Table.Tbody>
-					{table.getRowModel().rows.length === 0 && files.length > 0 ? (
+					{isLoading ? (
+						<Table.Tr>
+							<Table.Td colSpan={columns.length}>
+								<Flex justify={"center"} my="lg">
+									<Loader type="bars" />
+								</Flex>
+							</Table.Td>
+						</Table.Tr>
+					) : table.getRowModel().rows.length === 0 && files.length > 0 ? (
 						<Table.Tr>
 							<Table.Td
 								colSpan={table.getAllColumns().length}
@@ -254,7 +260,7 @@ export default function TableComponent() {
 							<Table.Tr
 								key={row.id}
 								bg={
-									Object.keys(selectedRows).includes(row.id)
+									selectedRows[row.id]
 										? "var(--mantine-color-blue-light)"
 										: undefined
 								}
@@ -277,11 +283,6 @@ export default function TableComponent() {
 					</Table.Tr>
 				</Table.Tfoot>
 			</Table>
-			<InfoModal
-				trackId={selectedTrack}
-				isOpen={modalOpened}
-				onClose={() => setModalOpened(false)}
-			/>
 		</>
 	);
 }

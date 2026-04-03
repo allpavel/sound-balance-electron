@@ -57,7 +57,7 @@ export const updateManyInDB = createAsyncThunk(
 export const removeManyFromDB = createAsyncThunk(
 	TRACKS_DB_ACTIONS.removeManyFromDB,
 	async (ids: string[], { dispatch }) => {
-		await tracksRepository.removeMany(ids);
+		await tracksRepository.removeMany();
 		dispatch(tracksSlice.actions.removeTracks(ids));
 	},
 );

@@ -3,11 +3,24 @@ import { useMutation } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Metadata } from "@/types";
 
-export function useTracks() {
-	const tracks = useLiveQuery(() => tracksRepository.getAll(), []);
+export function useTracks(activeCollection = "all") {
+	const tracks = useLiveQuery(
+		() => tracksRepository.getAll(activeCollection),
+		[activeCollection],
+	);
+	const selectedTracks = useLiveQuery(
+		() => tracksRepository.getSelectedTracks(),
+		[],
+	);
 
 	const addMutation = useMutation({
-		mutationFn: (tracks: Metadata[]) => tracksRepository.addMany(tracks),
+		mutationFn: ({
+			tracks,
+			options,
+		}: {
+			tracks: Metadata[];
+			options: { allKeys?: boolean; targetCollectionId: string };
+		}) => tracksRepository.addMany(tracks, options),
 	});
 
 	const updateMutation = useMutation({
@@ -30,7 +43,9 @@ export function useTracks() {
 
 	return {
 		tracks: tracks ?? [],
+		selectedTracks: selectedTracks ?? [],
 		isLoading: tracks === undefined,
+
 		addTracks: addMutation.mutate,
 		updateTrack: updateMutation.mutate,
 		updateManyTracks: updateManyMutation.mutate,

@@ -688,5 +688,4 @@ export type StoppingStatus = {
 export type CollectionType = {
 	id: string;
 	title: string;
-	trackIds: string[];
 };
