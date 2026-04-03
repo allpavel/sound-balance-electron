@@ -14,7 +14,13 @@ export function useTracks(activeCollection = "all") {
 	);
 
 	const addMutation = useMutation({
-		mutationFn: (tracks: Metadata[]) => tracksRepository.addMany(tracks),
+		mutationFn: ({
+			tracks,
+			options,
+		}: {
+			tracks: Metadata[];
+			options: { allKeys?: boolean; targetCollectionId: string };
+		}) => tracksRepository.addMany(tracks, options),
 	});
 
 	const updateMutation = useMutation({
