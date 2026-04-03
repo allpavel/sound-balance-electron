@@ -11,9 +11,59 @@ export const tracksRepository = {
 	},
 	async addMany(
 		tracks: Metadata[],
-		allKeys = true,
+		{
+			allKeys = true,
+			targetCollectionId = "all",
+		}: { allKeys?: boolean; targetCollectionId: string },
 	): Promise<string | string[]> {
-		return await db.tracks.bulkPut(tracks, { allKeys });
+		const filePaths = tracks.map((track) => track.filePath);
+		const existingTracks = await db.tracks
+			.where("filePath")
+			.anyOf(filePaths)
+			.toArray();
+		const existingMap = new Map(
+			existingTracks.map((track) => [track.filePath, track]),
+		);
+
+		const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
+		const toAdd: Metadata[] = [];
+
+		for (const track of tracks) {
+			const existingTrack = existingMap.get(track.filePath);
+
+			if (existingTrack) {
+				if (!existingTrack.collectionIds.includes(targetCollectionId)) {
+					const newIds = [...existingTrack.collectionIds, targetCollectionId];
+					toUpdate.push({
+						key: existingTrack.id,
+						changes: {
+							collectionIds: newIds,
+						},
+					});
+				}
+			} else {
+				if (targetCollectionId !== "all") {
+					track.collectionIds.push("all", targetCollectionId);
+				} else {
+					track.collectionIds.push(targetCollectionId);
+				}
+				toAdd.push(track);
+			}
+		}
+
+		const resultIds: string[] = [];
+
+		await db.transaction("rw", db.tracks, async () => {
+			if (toAdd.length > 0) {
+				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys });
+				resultIds.push(...addedIds);
+			}
+			if (toUpdate.length > 0) {
+				await db.tracks.bulkUpdate(toUpdate);
+			}
+		});
+
+		return resultIds;
 	},
 	async update(id: string, changes: Partial<Metadata>): Promise<number> {
 		return await db.tracks.update(id, changes);
