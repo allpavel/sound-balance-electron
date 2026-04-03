@@ -34,6 +34,12 @@ db.version(5).stores({
 	collections: "id",
 });
 
+db.version(6).stores({
+	tracks: "id, filePath, *collectionIds, selected",
+	settings: "id",
+	collections: "id",
+});
+
 db.on("populate", (tx) => {
 	tx.table("collections").add({
 		id: "all",
