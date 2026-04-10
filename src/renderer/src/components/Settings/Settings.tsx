@@ -1,13 +1,10 @@
 import {
 	Box,
 	Button,
-	Group,
 	Loader,
 	Modal,
 	NativeSelect,
-	Radio,
 	Stack,
-	TextInput,
 	Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
@@ -15,8 +12,9 @@ import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
-import { IconSettings, IconUpload } from "@tabler/icons-react";
+import { IconSettings } from "@tabler/icons-react";
 import { useEffect, useMemo } from "react";
+import { GlobalOptions } from "./GlobalOptions/GlobalOptions";
 
 export default function Settings() {
 	const [opened, { open, close }] = useDisclosure(false);
@@ -24,11 +22,7 @@ export default function Settings() {
 	const initialValues = useMemo(
 		() => ({
 			audio: { ...settings.audio },
-			global: {
-				...settings.global,
-				overwrite: settings.global.overwrite ? "yes" : "no",
-				noOverwrite: settings.global.noOverwrite ? "yes" : "no",
-			},
+			global: { ...settings.global },
 		}),
 		[settings],
 	);
@@ -43,14 +37,6 @@ export default function Settings() {
 		form.setValues(initialValues);
 	}, [form.setValues, initialValues]);
 
-	const getOutputDirectoryPath = async () => {
-		const dialog = await window.api.getOutputDirectoryPath();
-		const path = dialog.filePaths[0];
-		if (!dialog.canceled && path) {
-			form.setFieldValue("global.outputDirectoryPath", path);
-		}
-	};
-
 	if (settings.loading) {
 		return <Loader color="blue" type="bars" />;
 	}
@@ -61,84 +47,15 @@ export default function Settings() {
 				<form
 					onSubmit={form.onSubmit((values) => {
 						const newValues = {
-							audio: { ...values.audio },
-							global: {
-								...values.global,
-								overwrite: values.global.overwrite === "yes",
-								noOverwrite: values.global.noOverwrite === "yes",
-							},
+							audio: structuredClone(values.audio),
+							global: structuredClone(values.global),
 						};
 						dispatch(saveSettings(newValues));
 						close();
 					})}
 				>
 					<Stack>
-						<Box>
-							<Title order={3}>Global options</Title>
-							<Stack>
-								<TextInput
-									label={"Output directory:"}
-									rightSection={<IconUpload onClick={getOutputDirectoryPath} />}
-									key={form.key("global.outputDirectoryPath")}
-									{...form.getInputProps("global.outputDirectoryPath")}
-								/>
-								<Stack>
-									<NativeSelect
-										label="Number of processing threads:"
-										key={form.key("global.concurrency")}
-										{...form.getInputProps("global.concurrency")}
-									>
-										<option value="1">1</option>
-										<option value="2">2</option>
-										<option value="3">3</option>
-										<option value="4">4</option>
-										<option value="5">5</option>
-										<option value="6">6</option>
-										<option value="7">7</option>
-										<option value="8">8</option>
-										<option value="9">9</option>
-										<option value="10">10</option>
-									</NativeSelect>
-								</Stack>
-								<Radio.Group
-									label="Overwrite output files without asking:"
-									key={form.key("global.overwrite")}
-									{...form.getInputProps("global.overwrite")}
-								>
-									<Group>
-										<Radio value="yes" label="Yes" />
-										<Radio value="no" label="No" />
-									</Group>
-								</Radio.Group>
-								<Stack>
-									<Box>
-										<NativeSelect
-											label="Audio filter:"
-											key={form.key("audio.audioFilter")}
-											{...form.getInputProps("audio.audioFilter")}
-										>
-											<option value="loudnorm">loudnorm</option>
-											<option value="dynaudnorm">dynaudnorm</option>
-										</NativeSelect>
-									</Box>
-								</Stack>
-								<Radio.Group
-									label="Fail if output file exists:"
-									key={form.key("global.noOverwrite")}
-									{...form.getInputProps("global.noOverwrite")}
-								>
-									<Group>
-										<Radio value={"yes"} label="Yes" />
-										<Radio value={"no"} label="No" />
-									</Group>
-								</Radio.Group>
-								<TextInput
-									label={"Set stats update interval in seconds:"}
-									key={form.key("global.statsPeriod")}
-									{...form.getInputProps("global.statsPeriod")}
-								/>
-							</Stack>
-						</Box>
+						<GlobalOptions form={form} />
 						<Stack>
 							<Box>
 								<Title order={3}>Audio options</Title>
@@ -236,14 +153,6 @@ export default function Settings() {
 											<option value="16k">16 KB/s</option>
 											<option value="8k">8 KB/s</option>
 										</optgroup>
-									</NativeSelect>
-									<NativeSelect
-										label="Audio filter:"
-										key={form.key("audio.audioFilter")}
-										{...form.getInputProps("audio.audioFilter")}
-									>
-										<option value="loudnorm">loudnorm</option>
-										<option value="dynaudnorm">dynaudnorm</option>
 									</NativeSelect>
 								</Stack>
 							</Box>
