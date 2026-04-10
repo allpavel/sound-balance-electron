@@ -13,8 +13,12 @@ prepare-commit-msg:
         if [ -z "$LEFTHOOK" ] && [ -t 1 ]; then
           exec < /dev/tty && npx cz --hook || true
         fi
+      skip:
+        - merge
 
 commit-msg:
   commands:
     lint-commit-message:
       run: npx commitlint --strict --edit
+      skip:
+        - merge
