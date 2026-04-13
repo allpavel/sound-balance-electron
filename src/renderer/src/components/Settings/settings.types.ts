@@ -124,13 +124,99 @@ export type FILTERS = [
 	"afifo",
 ];
 
+type MUXERS = [
+	"alaw",
+	"daud",
+	"dfpwm",
+	"f32be",
+	"f32le",
+	"f64be",
+	"f64le",
+	"mulaw",
+	"s16be",
+	"s16le",
+	"s24be",
+	"s24le",
+	"s32be",
+	"s32le",
+	"s8",
+	"u16be",
+	"u16le",
+	"u24be",
+	"u24le",
+	"u32be",
+	"u32le",
+	"u8",
+	"vidc",
+	"ac3",
+	"ac4",
+	"adts",
+	"adx",
+	"aiff",
+	"alp",
+	"amr",
+	"apm",
+	"aptx",
+	"aptx_hd",
+	"argo_asf",
+	"argo_cvg",
+	"ast",
+	"au",
+	"bit",
+	"caf",
+	"codec2",
+	"codec2raw",
+	"dts",
+	"eac3",
+	"flac",
+	"g722",
+	"g723_1",
+	"g726",
+	"g726le",
+	"gsm",
+	"ilbc",
+	"ircam",
+	"kvag",
+	"latm",
+	"mlp",
+	"mmf",
+	"mp2",
+	"mp3",
+	"oma",
+	"opus",
+	"rso",
+	"sbc",
+	"sox",
+	"spdif",
+	"spx",
+	"tta",
+	"truehd",
+	"voc",
+	"w64",
+	"wav",
+	"wsaud",
+	"wv",
+	"alsa",
+	"oss",
+	"pulse",
+	"oga",
+];
+
 type AUDIO_FILTERS = FILTERS[number];
 type AUDIO_FILTER_OPTION<T extends AUDIO_FILTERS> = {
 	name: T;
 	desc: string;
 };
 
+type AUDIO_MUXERS = MUXERS[number];
+export type AUDIO_MUXER_EXTENSIONS = Record<AUDIO_MUXERS, string>;
+export type AUDIO_MUXER_OPTION<T extends AUDIO_MUXERS> = {
+	name: T;
+	desc: string;
+};
+
 export type AUDIO_FILTERS_OPTIONS = AUDIO_FILTER_OPTION<AUDIO_FILTERS>[];
+export type AUDIO_MUXERS_OPTIONS = AUDIO_MUXER_OPTION<AUDIO_MUXERS>[];
 
 export type SettingsForm = {
 	audio: {
