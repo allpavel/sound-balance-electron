@@ -1,6 +1,7 @@
 import { Box, NativeSelect, Stack, Title } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import OutputExtensions from "./OutputExtensions/OutputExtensions";
 
 export function AudioOptions({
 	form,
@@ -12,9 +13,9 @@ export function AudioOptions({
 			<Box>
 				<Title order={3}>Audio options</Title>
 				<Stack>
+					<OutputExtensions form={form} />
 					<NativeSelect
 						label="Audio codec:"
-						key={form.key("audio.audioCodec")}
 						{...form.getInputProps("audio.audioCodec")}
 					>
 						<optgroup label="Default value">
@@ -71,7 +72,6 @@ export function AudioOptions({
 					</NativeSelect>
 					<NativeSelect
 						label="Audio quality:"
-						key={form.key("audio.audioQuality")}
 						{...form.getInputProps("audio.audioQuality")}
 					>
 						<optgroup label="VBR Encoding">
