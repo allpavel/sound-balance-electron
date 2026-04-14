@@ -124,7 +124,7 @@ export type FILTERS = [
 	"afifo",
 ];
 
-type MUXERS = [
+export type MUXERS = [
 	"alaw",
 	"daud",
 	"dfpwm",
@@ -202,14 +202,66 @@ type MUXERS = [
 	"oga",
 ];
 
+export type EXTENSIONS = [
+	".aac",
+	".ac3",
+	".ac4",
+	".adx",
+	".aiff",
+	".al",
+	".alp",
+	".amr",
+	".apm",
+	".aptx",
+	".asf",
+	".ast",
+	".au",
+	".bit",
+	".c2",
+	".caf",
+	".cvg",
+	".daud",
+	".dfpwm",
+	".dts",
+	".eac3",
+	".flac",
+	".g722",
+	".g723",
+	".g726",
+	".gsm",
+	".ilbc",
+	".mlp",
+	".mmf",
+	".mp2",
+	".mp3",
+	".oma",
+	".opus",
+	".pcm",
+	".rso",
+	".sbc",
+	".sf",
+	".sox",
+	".spdif",
+	".spx",
+	".thd",
+	".tta",
+	".ul",
+	".vag",
+	".vidc",
+	".voc",
+	".w64",
+	".wav",
+	".wsa",
+	".wv",
+];
+
 type AUDIO_FILTERS = FILTERS[number];
+type AUDIO_MUXERS = MUXERS[number];
+
 type AUDIO_FILTER_OPTION<T extends AUDIO_FILTERS> = {
 	name: T;
 	desc: string;
 };
-
-type AUDIO_MUXERS = MUXERS[number];
-export type AUDIO_MUXER_EXTENSIONS = Record<AUDIO_MUXERS, string>;
 export type AUDIO_MUXER_OPTION<T extends AUDIO_MUXERS> = {
 	name: T;
 	desc: string;
@@ -218,11 +270,90 @@ export type AUDIO_MUXER_OPTION<T extends AUDIO_MUXERS> = {
 export type AUDIO_FILTERS_OPTIONS = AUDIO_FILTER_OPTION<AUDIO_FILTERS>[];
 export type AUDIO_MUXERS_OPTIONS = AUDIO_MUXER_OPTION<AUDIO_MUXERS>[];
 
+export type AUDIO_MUXER_EXTENSIONS = {
+	alaw: ".al";
+	daud: ".daud";
+	dfpwm: ".dfpwm";
+	f32be: ".pcm";
+	f32le: ".pcm";
+	f64be: ".pcm";
+	f64le: ".pcm";
+	mulaw: ".ul";
+	s16be: ".pcm";
+	s16le: ".pcm";
+	s24be: ".pcm";
+	s24le: ".pcm";
+	s32be: ".pcm";
+	s32le: ".pcm";
+	s8: ".pcm";
+	u16be: ".pcm";
+	u16le: ".pcm";
+	u24be: ".pcm";
+	u24le: ".pcm";
+	u32be: ".pcm";
+	u32le: ".pcm";
+	u8: ".pcm";
+	vidc: ".vidc";
+	ac3: ".ac3";
+	ac4: ".ac4";
+	adts: ".aac";
+	adx: ".adx";
+	aiff: ".aiff";
+	alp: ".alp";
+	amr: ".amr";
+	apm: ".apm";
+	aptx: ".aptx";
+	aptx_hd: ".aptx";
+	argo_asf: ".asf";
+	argo_cvg: ".cvg";
+	ast: ".ast";
+	au: ".au";
+	bit: ".bit";
+	caf: ".caf";
+	codec2: ".c2";
+	codec2raw: ".c2";
+	dts: ".dts";
+	eac3: ".eac3";
+	flac: ".flac";
+	g722: ".g722";
+	g723_1: ".g723";
+	g726: ".g726";
+	g726le: ".g726";
+	gsm: ".gsm";
+	ilbc: ".ilbc";
+	ircam: ".sf";
+	kvag: ".vag";
+	latm: ".aac";
+	mlp: ".mlp";
+	mmf: ".mmf";
+	mp2: ".mp2";
+	mp3: ".mp3";
+	oma: ".oma";
+	opus: ".opus";
+	rso: ".rso";
+	sbc: ".sbc";
+	sox: ".sox";
+	spdif: ".spdif";
+	spx: ".spx";
+	tta: ".tta";
+	truehd: ".thd";
+	voc: ".voc";
+	w64: ".w64";
+	wav: ".wav";
+	wsaud: ".wsa";
+	wv: ".wv";
+	alsa: "";
+	oss: "";
+	pulse: "";
+	oga: ".oga";
+};
+
 export type SettingsForm = {
 	audio: {
 		audioCodec: string;
 		audioQuality: string;
 		audioFilter: string;
+		outputExtension: string;
 	};
 	global: {
 		outputDirectoryPath: string;
@@ -230,5 +361,6 @@ export type SettingsForm = {
 		overwrite: boolean;
 		noOverwrite: boolean;
 		statsPeriod: number;
+		recastMedia: boolean;
 	};
 };

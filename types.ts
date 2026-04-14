@@ -472,6 +472,7 @@ export type GeneralSettings = {
 		audioQuality: string;
 		/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
 		audioFilter: string;
+		outputExtension: string;
 	};
 };
 
