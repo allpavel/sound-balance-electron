@@ -20,6 +20,7 @@ export const initialSettings: GeneralSettings = {
 		audioCodec: "copy",
 		audioQuality: "4",
 		audioFilter: "loudnorm",
+		outputExtension: "copy",
 	},
 };
 
