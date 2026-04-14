@@ -1,36 +1,20 @@
 import { Button, Loader, Modal, Stack } from "@mantine/core";
-import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
-import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
 import { IconSettings } from "@tabler/icons-react";
-import { useEffect, useMemo } from "react";
 import { AudioOptions } from "./AudioOptions/AudioOptions";
 import { GlobalOptions } from "./GlobalOptions/GlobalOptions";
+import useSettingsForm from "./hooks/useSettingsForm";
 
 export default function Settings() {
 	const [opened, { open, close }] = useDisclosure(false);
-	const settings = useAppSelector((state) => state.settings);
-	const initialValues = useMemo(
-		() => ({
-			audio: { ...settings.audio },
-			global: { ...settings.global },
-		}),
-		[settings],
-	);
 
 	const dispatch = useAppDispatch();
 
-	const form = useForm({
-		initialValues,
-	});
+	const { form, isLoading } = useSettingsForm();
 
-	useEffect(() => {
-		form.setValues(initialValues);
-	}, [form.setValues, initialValues]);
-
-	if (settings.loading) {
+	if (isLoading) {
 		return <Loader color="blue" type="bars" />;
 	}
 

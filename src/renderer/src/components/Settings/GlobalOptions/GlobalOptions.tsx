@@ -30,13 +30,11 @@ export function GlobalOptions({
 				<TextInput
 					label={"Output directory:"}
 					rightSection={<IconUpload onClick={getOutputDirectoryPath} />}
-					key={form.key("global.outputDirectoryPath")}
 					{...form.getInputProps("global.outputDirectoryPath")}
 				/>
 				<Stack>
 					<NativeSelect
 						label="Number of processing threads:"
-						key={form.key("global.concurrency")}
 						{...form.getInputProps("global.concurrency")}
 					>
 						{CONCURRENCY_OPTIONS.map((item) => (
@@ -53,12 +51,12 @@ export function GlobalOptions({
 						onLabel="yes"
 						offLabel="no"
 						size="md"
-						key={form.key("global.overwrite")}
 						styles={{
 							body: {
 								justifyContent: "space-between",
 							},
 						}}
+						{...form.getInputProps("global.overwrite", { type: "checkbox" })}
 					/>
 					<Divider />
 					<Switch
@@ -67,12 +65,12 @@ export function GlobalOptions({
 						onLabel="yes"
 						offLabel="no"
 						size="md"
-						key={form.key("global.noOverwrite")}
 						styles={{
 							body: {
 								justifyContent: "space-between",
 							},
 						}}
+						{...form.getInputProps("global.noOverwrite", { type: "checkbox" })}
 					/>
 				</Stack>
 				<Stack>
