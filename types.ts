@@ -472,6 +472,7 @@ export type GeneralSettings = {
 		audioQuality: string;
 		/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
 		audioFilter: string;
+		outputExtension: string;
 	};
 };
 
@@ -688,24 +689,4 @@ export type StoppingStatus = {
 export type CollectionType = {
 	id: string;
 	title: string;
-};
-
-export type aacType = {
-	name: string;
-	generalOptions: {
-		generalCapabilities: string[];
-		threadingCapabilities: null;
-		supportedSampleRate: string[];
-		supportedSampleFormats: string[];
-	};
-	encoderOptions: {
-		aac_coder: "anmr" | "twoloop" | "fast"; // must be 0, 1, 2
-		aac_ms: "auto" | true | false;
-		aac_is: boolean;
-		aac_pns: boolean;
-		aac_tns: boolean;
-		aac_ltp: boolean;
-		aac_pred: boolean;
-		aac_pce: boolean;
-	};
 };

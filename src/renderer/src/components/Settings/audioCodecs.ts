@@ -1,5 +1,3 @@
-import type { aacType } from "@/types";
-
 export interface EncoderOption {
 	value: string;
 	label: string;
@@ -166,37 +164,3 @@ export const audioEncoderGroups: EncoderGroup[] = [
 		],
 	},
 ];
-
-const aacOptions = {
-	name: "AAC (Advanced Audio Coding)",
-	generalOptions: {
-		generalCapabilities: ["drl", "delay", "small"],
-		threadingCapabilities: null,
-		supportedSampleRate: [
-			"96000",
-			"88200",
-			"64000",
-			"48000",
-			"44100",
-			"32000",
-			"24000",
-			"22050",
-			"16000",
-			"12000",
-			"11025",
-			"8000",
-			"7350",
-		],
-		supportedSampleFormats: ["fltp"],
-	},
-	encoderOptions: {
-		aac_coder: "anmr",
-		aac_ms: "auto",
-		aac_is: true,
-		aac_pns: true,
-		aac_tns: true,
-		aac_ltp: false,
-		aac_pred: false,
-		aac_pce: false,
-	},
-} satisfies aacType;
