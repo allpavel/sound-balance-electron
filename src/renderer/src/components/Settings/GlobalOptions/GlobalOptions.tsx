@@ -23,13 +23,20 @@ export function GlobalOptions({
 }) {
 	const getOutputDirectoryPath = useDirectoryPicker();
 
+	const handleDirectoryPicker = async () => {
+		const path = await getOutputDirectoryPath();
+		if (path.filePaths.length > 0) {
+			form.setFieldValue("global.outputDirectoryPath", path.filePaths[0] ?? "");
+		}
+	};
+
 	return (
 		<Box>
 			<Title order={3}>Global options</Title>
 			<Stack>
 				<TextInput
 					label={"Output directory:"}
-					rightSection={<IconUpload onClick={getOutputDirectoryPath} />}
+					rightSection={<IconUpload onClick={handleDirectoryPicker} />}
 					{...form.getInputProps("global.outputDirectoryPath")}
 				/>
 				<Stack>
