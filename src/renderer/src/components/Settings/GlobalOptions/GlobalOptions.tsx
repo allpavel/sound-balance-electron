@@ -9,10 +9,7 @@ import {
 } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { useDirectoryPicker } from "@renderer/components/Settings/hooks/useDirectoryPicker";
-import {
-	CONCURRENCY_OPTIONS,
-	FILTERS_OPTIONS,
-} from "@renderer/components/Settings/settings.constants";
+import { CONCURRENCY_OPTIONS } from "@renderer/components/Settings/settings.constants";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { IconUpload } from "@tabler/icons-react";
 
@@ -79,21 +76,6 @@ export function GlobalOptions({
 						}}
 						{...form.getInputProps("global.noOverwrite", { type: "checkbox" })}
 					/>
-				</Stack>
-				<Stack>
-					<Box>
-						<NativeSelect
-							label="Audio filter:"
-							key={form.key("audio.audioFilter")}
-							{...form.getInputProps("audio.audioFilter")}
-						>
-							{FILTERS_OPTIONS.map((item) => (
-								<option key={item.name} value={item.name}>
-									{item.name}
-								</option>
-							))}
-						</NativeSelect>
-					</Box>
 				</Stack>
 				<TextInput
 					label={"Set stats update interval in seconds:"}
