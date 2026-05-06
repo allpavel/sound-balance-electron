@@ -3,6 +3,7 @@ import type { UseFormReturnType } from "@mantine/form";
 import { FILTERS_OPTIONS } from "@renderer/components/Settings/settings.constants";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { useMemo } from "react";
+import { filterOptions } from "./FilterOptions";
 
 export default function Filters({
 	form,
@@ -68,6 +69,10 @@ export default function Filters({
 					{options}
 				</Combobox.Options>
 			</Combobox.Dropdown>
+			{exactMatch &&
+				search &&
+				search in filterOptions &&
+				filterOptions[search as keyof typeof filterOptions]()}
 		</Combobox>
 	);
 }

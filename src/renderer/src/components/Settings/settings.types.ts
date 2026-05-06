@@ -255,7 +255,7 @@ export type EXTENSIONS = [
 	".wv",
 ];
 
-type AUDIO_FILTERS = FILTERS[number];
+export type AUDIO_FILTERS = FILTERS[number];
 type AUDIO_MUXERS = MUXERS[number];
 
 type AUDIO_FILTER_OPTION<T extends AUDIO_FILTERS> = {
