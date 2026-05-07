@@ -1,9 +1,9 @@
 import { Combobox, TextInput, useCombobox } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
+import { filterOptions } from "@renderer/components/Settings/AudioOptions/Filters/FilterOptions/FilterOptions";
 import { FILTERS_OPTIONS } from "@renderer/components/Settings/settings.constants";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { useMemo } from "react";
-import { filterOptions } from "./FilterOptions";
 
 export default function Filters({
 	form,
