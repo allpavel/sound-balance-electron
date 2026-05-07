@@ -9,23 +9,12 @@ export const CONCURRENCY_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
 }));
 
 export const FILTERS_OPTIONS = [
-	{ name: "abench", desc: "Benchmark part of a filtergraph." },
+	// { name: "abench", desc: "Benchmark part of a filtergraph." },
 	{ name: "acompressor", desc: "Audio compressor." },
 	{
 		name: "acontrast",
 
 		desc: "Simple audio dynamic range compression/expansion filter.",
-	},
-	{
-		name: "acopy",
-
-		desc: "Copy the input audio unchanged to the output.",
-	},
-	{ name: "acue", desc: "Delay filtering to match a cue." },
-	{
-		name: "acrossfade",
-
-		desc: "Cross fade two input audio streams.",
 	},
 	{ name: "acrusher", desc: "Reduce audio bit resolution." },
 	{
@@ -38,6 +27,17 @@ export const FILTERS_OPTIONS = [
 
 		desc: "Remove clipping from input audio.",
 	},
+	// {
+	// 	name: "acopy",
+
+	// 	desc: "Copy the input audio unchanged to the output.",
+	// },
+	// { name: "acue", desc: "Delay filtering to match a cue." },
+	// {
+	// 	name: "acrossfade",
+
+	// 	desc: "Cross fade two input audio streams.",
+	// },
 	{
 		name: "adecorrelate",
 
