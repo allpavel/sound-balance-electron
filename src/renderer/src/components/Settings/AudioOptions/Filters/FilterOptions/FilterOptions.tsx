@@ -250,6 +250,29 @@ function Adecorrelate() {
 	);
 }
 
+/**
+ * Delay one or more audio channels.
+ *
+ * Samples in delayed channel are filled with silence.
+ */
+function Adelay() {
+	return (
+		<Stack gap={"xs"}>
+			<Title order={4} size={"md"}>
+				Adelay options:
+			</Title>
+			<NumberInput
+				label="delays"
+				description="Set list of delays in milliseconds for each channel separated by '|'. Unused delays will be silently ignored. If number of given delays is smaller than number of channels all remaining channels will not be delayed. If you want to delay exact number of samples, append 'S' to number. If you want instead to delay in seconds, append 's' to number."
+			/>
+			<Select
+				label="all"
+				description="Use last set delay for all remaining channels."
+				data={["enable", "disable"]}
+			/>
+		</Stack>
+	);
+}
 export const filterOptions: Partial<Record<AUDIO_FILTERS, () => JSX.Element>> =
 	{
 		acompressor: Acompressor,
@@ -258,4 +281,5 @@ export const filterOptions: Partial<Record<AUDIO_FILTERS, () => JSX.Element>> =
 		adeclick: Adeclick,
 		adeclip: Adeclip,
 		adecorrelate: Adecorrelate,
+		adelay: Adelay,
 	};
