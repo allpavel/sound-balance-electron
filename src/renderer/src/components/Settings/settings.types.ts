@@ -255,19 +255,52 @@ export type EXTENSIONS = [
 	".wv",
 ];
 
-export type AUDIO_FILTERS = FILTERS[number];
+type BaseOptionn = {
+	label: string;
+	desc: string;
+};
+
+type NumberOption = BaseOptionn & {
+	type: "number";
+	min: number;
+	max: number;
+	defaultValue: number;
+};
+
+type SelectOption = BaseOptionn & {
+	type: "select";
+	options: [string, ...string[]];
+	defaultValue: string;
+};
+
+type TextOption = BaseOptionn & {
+	type: "text";
+	defaultValue: string;
+};
+
+type SwitchOption = BaseOptionn & {
+	type: "switch";
+	defaultValue: boolean;
+};
+
+type Option = NumberOption | SelectOption | TextOption | SwitchOption;
+
+export type AUDIO_FILTER_NAMES = FILTERS[number];
 type AUDIO_MUXERS = MUXERS[number];
 
-type AUDIO_FILTER_OPTION<T extends AUDIO_FILTERS> = {
+type AUDIO_FILTER<T extends AUDIO_FILTER_NAMES> = {
 	name: T;
 	desc: string;
+	options: Option[];
 };
 export type AUDIO_MUXER_OPTION<T extends AUDIO_MUXERS> = {
 	name: T;
 	desc: string;
 };
 
-export type AUDIO_FILTERS_OPTIONS = AUDIO_FILTER_OPTION<AUDIO_FILTERS>[];
+export type AUDIO_FILTERS = {
+	[K in AUDIO_FILTER_NAMES]: AUDIO_FILTER<K>;
+};
 export type AUDIO_MUXERS_OPTIONS = AUDIO_MUXER_OPTION<AUDIO_MUXERS>[];
 
 export type AUDIO_MUXER_EXTENSIONS = {
