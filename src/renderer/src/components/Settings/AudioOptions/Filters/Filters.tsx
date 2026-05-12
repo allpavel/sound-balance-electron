@@ -1,9 +1,12 @@
 import { Combobox, TextInput, useCombobox } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { filterOptions } from "@renderer/components/Settings/AudioOptions/Filters/FilterOptions/FilterOptions";
-import { FILTERS_OPTIONS } from "@renderer/components/Settings/settings.constants";
+import { FILTER_OPTIONS } from "@renderer/components/Settings/settings.constants";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { useMemo } from "react";
+
+// temp line
+const opts = Object.values(FILTER_OPTIONS);
 
 export default function Filters({
 	form,
@@ -16,12 +19,12 @@ export default function Filters({
 	});
 
 	const search = form.values.audio.audioFilter;
-	const exactMatch = FILTERS_OPTIONS.some((item) => item.name === search);
+	const exactMatch = opts.some((item) => item.name === search);
 
 	const options = useMemo(() => {
 		const items = exactMatch
-			? FILTERS_OPTIONS
-			: FILTERS_OPTIONS.filter((item) =>
+			? opts
+			: opts.filter((item) =>
 					item.name.toLowerCase().includes(search.toLowerCase()),
 				);
 
