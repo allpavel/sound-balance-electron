@@ -1,10 +1,6 @@
 export type FILTERS = [
-	"abench",
 	"acompressor",
 	"acontrast",
-	"acopy",
-	"acue",
-	"acrossfade",
 	"acrusher",
 	"adeclick",
 	"adeclip",
