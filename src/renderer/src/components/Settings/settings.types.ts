@@ -265,7 +265,9 @@ type NumberOption = BaseOptionn & {
 
 type SelectOption = BaseOptionn & {
 	type: "select";
-	options: [string, ...string[]];
+	options:
+		| [string, ...string[]]
+		| [{ label: string; value: string }, ...{ label: string; value: string }[]];
 	defaultValue: string;
 };
 
