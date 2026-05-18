@@ -1,8 +1,11 @@
 import { Combobox, TextInput, useCombobox } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
-import { filterOptions } from "@renderer/components/Settings/AudioOptions/Filters/FilterOptions/FilterOptions";
+import { AudioFilterFactory } from "@renderer/components/Settings/AudioOptions/Filters/FilterOptions/FilterOptions";
 import { FILTER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import type {
+	AUDIO_FILTER_NAMES,
+	SettingsForm,
+} from "@renderer/components/Settings/settings.types";
 import { useMemo } from "react";
 
 // temp line
@@ -72,10 +75,9 @@ export default function Filters({
 					{options}
 				</Combobox.Options>
 			</Combobox.Dropdown>
-			{exactMatch &&
-				search &&
-				search in filterOptions &&
-				filterOptions[search as keyof typeof filterOptions]()}
+			{exactMatch && search && (
+				<AudioFilterFactory form={form} filter={search as AUDIO_FILTER_NAMES} />
+			)}
 		</Combobox>
 	);
 }

@@ -473,6 +473,7 @@ export type GeneralSettings = {
 		/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
 		audioFilter: string;
 		outputExtension: string;
+		filterOptions: Record<string, string | number | boolean>;
 	};
 };
 

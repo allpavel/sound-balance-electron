@@ -6,13 +6,19 @@ import {
 	TextInput,
 	Title,
 } from "@mantine/core";
+import type { UseFormReturnType } from "@mantine/form";
 import { FILTER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type { AUDIO_FILTER_NAMES } from "@renderer/components/Settings/settings.types";
+import type {
+	AUDIO_FILTER_NAMES,
+	SettingsForm,
+} from "@renderer/components/Settings/settings.types";
 import type { JSX } from "react";
 
 export function AudioFilterFactory({
+	form,
 	filter,
 }: {
+	form: UseFormReturnType<SettingsForm>;
 	filter: AUDIO_FILTER_NAMES;
 }): JSX.Element {
 	const config = FILTER_OPTIONS[filter as keyof typeof FILTER_OPTIONS];
@@ -35,6 +41,7 @@ export function AudioFilterFactory({
 								description={field.desc}
 								min={field.min}
 								max={field.max}
+								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
 							/>
 						);
 					case "select":
@@ -44,6 +51,7 @@ export function AudioFilterFactory({
 								label={field.label}
 								description={field.desc}
 								data={field.options}
+								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
 							/>
 						);
 					case "text":
@@ -52,6 +60,7 @@ export function AudioFilterFactory({
 								key={field.label}
 								label={field.label}
 								description={field.desc}
+								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
 							/>
 						);
 					case "switch":
@@ -63,6 +72,7 @@ export function AudioFilterFactory({
 								onLabel="enable"
 								offLabel="disable"
 								size="md"
+								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
 								styles={{
 									body: {
 										justifyContent: "space-between",
@@ -77,11 +87,11 @@ export function AudioFilterFactory({
 		</Stack>
 	);
 }
-export const filterOptions: Record<
-	keyof typeof FILTER_OPTIONS,
-	() => JSX.Element
-> = Object.fromEntries(
-	(Object.keys(FILTER_OPTIONS) as Array<keyof typeof FILTER_OPTIONS>).map(
-		(key) => [key, () => <AudioFilterFactory filter={key} />],
-	),
-) as Record<keyof typeof FILTER_OPTIONS, () => JSX.Element>;
+// export const filterOptions: Record<
+// 	keyof typeof FILTER_OPTIONS,
+// 	() => JSX.Element
+// > = Object.fromEntries(
+// 	(Object.keys(FILTER_OPTIONS) as Array<keyof typeof FILTER_OPTIONS>).map(
+// 		(key) => [key, () => <AudioFilterFactory filter={key} />],
+// 	),
+// ) as Record<keyof typeof FILTER_OPTIONS, () => JSX.Element>;

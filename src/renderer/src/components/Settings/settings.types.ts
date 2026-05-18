@@ -383,8 +383,9 @@ export type SettingsForm = {
 	audio: {
 		audioCodec: string;
 		audioQuality: string;
-		audioFilter: string;
 		outputExtension: string;
+		audioFilter: string;
+		filterOptions: Record<string, string | number | boolean>;
 	};
 	global: {
 		outputDirectoryPath: string;
