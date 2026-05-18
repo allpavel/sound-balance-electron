@@ -110,7 +110,7 @@ export const FILTER_OPTIONS = {
 				desc: "Set contrast. Range is between 0 and 100.",
 				defaultValue: 33,
 				min: 0,
-				max: 1,
+				max: 100,
 			},
 		],
 	},

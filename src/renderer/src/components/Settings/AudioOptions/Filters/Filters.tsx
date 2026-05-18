@@ -50,6 +50,7 @@ export default function Filters({
 			withArrow
 			onOptionSubmit={(val) => {
 				form.setFieldValue("audio.audioFilter", val);
+				form.setFieldValue("audio.filterOptions", {});
 				combobox.closeDropdown();
 			}}
 		>

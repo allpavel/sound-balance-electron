@@ -87,11 +87,3 @@ export function AudioFilterFactory({
 		</Stack>
 	);
 }
-// export const filterOptions: Record<
-// 	keyof typeof FILTER_OPTIONS,
-// 	() => JSX.Element
-// > = Object.fromEntries(
-// 	(Object.keys(FILTER_OPTIONS) as Array<keyof typeof FILTER_OPTIONS>).map(
-// 		(key) => [key, () => <AudioFilterFactory filter={key} />],
-// 	),
-// ) as Record<keyof typeof FILTER_OPTIONS, () => JSX.Element>;
