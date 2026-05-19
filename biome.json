@@ -21,7 +21,8 @@
 				"noConsole": "error"
 			},
 			"correctness": {
-				"noUnusedImports": "error"
+				"noUnusedImports": "error",
+				"useSingleJsDocAsterisk": "error"
 			},
 			"nursery": {
 				"useBaseline": "error"
