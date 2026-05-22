@@ -4,6 +4,7 @@
 	"description": "An Electron application for sound normalizing",
 	"main": "./out/main/index.js",
 	"author": "Pavel Alloyarov",
+	"license": "GPL-3.0-only",
 	"scripts": {
 		"typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
 		"typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
