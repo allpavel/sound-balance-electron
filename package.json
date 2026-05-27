@@ -4,6 +4,7 @@
 	"description": "An Electron application for sound normalizing",
 	"main": "./out/main/index.js",
 	"author": "Pavel Alloyarov",
+	"license": "GPL-3.0-only",
 	"scripts": {
 		"typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
 		"typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
@@ -26,7 +27,7 @@
 		"@reduxjs/toolkit": "^2.8.2",
 		"@tabler/icons-react": "^3.41.1",
 		"@tanstack/react-query": "^5.96.2",
-		"@tanstack/react-router": "^1.168.8",
+		"@tanstack/react-router": "^1.169.2",
 		"@tanstack/react-table": "^8.21.3",
 		"dexie": "^4.4.2",
 		"dexie-react-hooks": "^4.4.0",
@@ -38,7 +39,7 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.12",
+		"@biomejs/biome": "2.4.15",
 		"@commitlint/cli": "^20.5.0",
 		"@commitlint/config-conventional": "^20.5.0",
 		"@electron-toolkit/tsconfig": "^2.0.0",
