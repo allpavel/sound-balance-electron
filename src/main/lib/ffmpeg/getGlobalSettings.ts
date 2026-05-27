@@ -1,20 +1,13 @@
-import type { GeneralSettings, OptionMapperKeys } from "@/types";
+import type { GeneralSettings } from "@/types";
 
-export const getGlobalSettings = (
-	initialSettings: GeneralSettings,
-	settings: GeneralSettings["global"],
-	mapper: (option: OptionMapperKeys) => string,
-) => {
+export const getGlobalSettings = (settings: GeneralSettings["global"]) => {
 	const result: string[] = [];
-	for (const s in settings) {
-		const key = s as OptionMapperKeys;
-		if (
-			settings[key] !== initialSettings.global[key] &&
-			s !== "outputDirectoryPath" &&
-			s !== "concurrency"
-		) {
-			result.push(mapper(key));
-		}
+
+	if (settings.overwrite) {
+		result.push("-y");
+	}
+	if (settings.noOverwrite) {
+		result.push("-n");
 	}
 	return result;
 };
