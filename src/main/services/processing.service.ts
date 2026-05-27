@@ -37,9 +37,8 @@ export const startProcessing = async (
 		optionsMapper,
 	);
 	const trackSettings = getTrackSettings(
-		INITIALSETTINGS,
+		INITIALSETTINGS.audio,
 		data.settings.audio,
-		optionsMapper,
 	);
 
 	for (const track of data.tracks) {
