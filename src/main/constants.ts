@@ -27,9 +27,11 @@ export const INITIALSETTINGS = {
 		concurrency: 1,
 	},
 	audio: {
+		outputExtension: ".aac",
 		audioCodec: "copy",
 		audioQuality: "4",
-		audioFilter: "loudnorm",
+		audioFilter: "",
+		filterOptions: {},
 	},
 } satisfies GeneralSettings;
 

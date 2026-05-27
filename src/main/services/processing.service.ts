@@ -17,11 +17,7 @@
  */
 import path from "node:path";
 import { EVENT_CHANNELS, INITIALSETTINGS } from "@main/constants";
-import {
-	getGlobalSettings,
-	getTrackSettings,
-	optionsMapper,
-} from "@main/lib/ffmpeg";
+import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
 import { getTrackTitle, isDirectory } from "@main/lib/utils";
 import { ProcessManager } from "@main/services/ffmpeg/processManager";
 import type { IpcMainInvokeEvent } from "electron";
@@ -48,15 +44,10 @@ export const startProcessing = async (
 	const { signal } = abortController;
 	const queue = new PQueue({ concurrency: +data.settings.global.concurrency });
 
-	const globalSettings = getGlobalSettings(
-		INITIALSETTINGS,
-		data.settings.global,
-		optionsMapper,
-	);
+	const globalSettings = getGlobalSettings(data.settings.global);
 	const trackSettings = getTrackSettings(
-		INITIALSETTINGS,
+		INITIALSETTINGS.audio,
 		data.settings.audio,
-		optionsMapper,
 	);
 
 	for (const track of data.tracks) {

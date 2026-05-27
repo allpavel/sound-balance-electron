@@ -15,18 +15,25 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { GeneralSettings, OptionMapperKeys } from "@/types";
+import type { GeneralSettings } from "@/types";
+import { buildFilter } from "./buildFilter";
 
 export const getTrackSettings = (
-	initialSettings: GeneralSettings,
+	initialSettings: GeneralSettings["audio"],
 	settings: GeneralSettings["audio"],
-	mapper: (option: OptionMapperKeys) => string,
 ) => {
 	const result: string[] = [];
-	for (const s in settings) {
-		const key = s as OptionMapperKeys;
-		if (settings[key] !== initialSettings.audio[key]) {
-			result.push(`${mapper(key)} ${settings[key]}`);
+
+	if (settings.audioCodec !== initialSettings.audioCodec) {
+		result.push(`-codec:a ${settings.audioCodec}`);
+	}
+	if (settings.audioQuality !== initialSettings.audioQuality) {
+		result.push(`-q:a ${settings.audioQuality}`);
+	}
+	if (settings.audioFilter) {
+		const filter = buildFilter(settings.audioFilter, settings.filterOptions);
+		if (filter) {
+			result.push(...filter);
 		}
 	}
 	return result;
