@@ -36,7 +36,7 @@ export const initialSettings: GeneralSettings = {
 	audio: {
 		audioCodec: "copy",
 		audioQuality: "4",
-		audioFilter: "loudnorm",
+		audioFilter: "",
 		outputExtension: "copy",
 		filterOptions: {},
 	},
