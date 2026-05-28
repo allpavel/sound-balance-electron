@@ -94,11 +94,6 @@ export function GlobalOptions({
 						{...form.getInputProps("global.noOverwrite", { type: "checkbox" })}
 					/>
 				</Stack>
-				<TextInput
-					label={"Set stats update interval in seconds:"}
-					key={form.key("global.statsPeriod")}
-					{...form.getInputProps("global.statsPeriod")}
-				/>
 			</Stack>
 		</Box>
 	);
