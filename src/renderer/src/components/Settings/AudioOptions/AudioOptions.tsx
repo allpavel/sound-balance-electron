@@ -20,6 +20,7 @@ import type { UseFormReturnType } from "@mantine/form";
 import OutputExtensions from "@renderer/components/Settings/AudioOptions//OutputExtensions/OutputExtensions";
 import Filters from "@renderer/components/Settings/AudioOptions/Filters/Filters";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import Codecs from "./Codecs/Codecs";
 
 export function AudioOptions({
 	form,
@@ -32,62 +33,7 @@ export function AudioOptions({
 			<Stack>
 				<OutputExtensions form={form} />
 				<Filters form={form} />
-				<NativeSelect
-					label="Audio codec:"
-					{...form.getInputProps("audio.audioCodec")}
-				>
-					<optgroup label="Default value">
-						<option value="copy">Copy</option>
-					</optgroup>
-					<hr />
-					<optgroup label="Opus">
-						<option value="libopus">libopus</option>
-					</optgroup>
-					<hr />
-					<optgroup label="Vorbis">
-						<option value="libvorbis">libvorbis</option>
-						<option value="orbis">orbis</option>
-					</optgroup>
-					<hr />
-					<optgroup label="AAC LC">
-						<option value="libfdk_aac">libfdk_aac</option>
-						<option value="aac">aac</option>
-					</optgroup>
-					<hr />
-					<optgroup label="HE-AAC">
-						<option value="libfdk_aac">libfdk_aac</option>
-					</optgroup>
-					<hr />
-					<optgroup label="MP3">
-						<option value="libmp3lame">libmp3lame</option>
-						<option value="libshine">libshine</option>
-					</optgroup>
-					<hr />
-					<optgroup label="Dolby Digital">
-						<option value="libmp3lame">ac3</option>
-					</optgroup>
-					<hr />
-					<optgroup label="Dolby Digital Plus">
-						<option value="eac3">eac3</option>
-					</optgroup>
-					<hr />
-					<optgroup label="TrueHD 0xFBA">
-						<option value="truehd">truehd</option>
-					</optgroup>
-					<hr />
-					<optgroup label="MP2">
-						<option value="libtwolame">libtwolame</option>
-						<option value="mp2">mp2</option>
-					</optgroup>
-					<hr />
-					<optgroup label="Windows Media Audio 1">
-						<option value="wmav1">wmav1</option>
-					</optgroup>
-					<hr />
-					<optgroup label="Windows Media Audio 2">
-						<option value="wmav2">wmav2</option>
-					</optgroup>
-				</NativeSelect>
+				<Codecs form={form} />
 				<NativeSelect
 					label="Audio quality:"
 					{...form.getInputProps("audio.audioQuality")}
