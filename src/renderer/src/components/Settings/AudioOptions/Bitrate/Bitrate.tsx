@@ -15,28 +15,26 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Box, Stack, Title } from "@mantine/core";
+import { Flex, SegmentedControl, Text } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
-import OutputExtensions from "@renderer/components/Settings/AudioOptions//OutputExtensions/OutputExtensions";
-import Filters from "@renderer/components/Settings/AudioOptions/Filters/Filters";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
-import Bitrate from "./Bitrate/Bitrate";
-import Codecs from "./Codecs/Codecs";
-
-export function AudioOptions({
+import type { SettingsForm } from "../../settings.types";
+import BitrateOptions from "./BitrateOptions/BitrateOptions";
+export default function Bitrate({
 	form,
 }: {
 	form: UseFormReturnType<SettingsForm>;
 }) {
 	return (
-		<Box>
-			<Title order={3}>Audio options</Title>
-			<Stack>
-				<OutputExtensions form={form} />
-				<Filters form={form} />
-				<Codecs form={form} />
-				<Bitrate form={form} />
-			</Stack>
-		</Box>
+		<>
+			<Flex align={"center"} gap={"sm"}>
+				<Text>Choose an audio bitrate:</Text>
+				<SegmentedControl
+					data={["cbr", "vbr", "auto"]}
+					radius={"lg"}
+					{...form.getInputProps("audio.audioQuality")}
+				/>
+			</Flex>
+			<BitrateOptions form={form} />
+		</>
 	);
 }

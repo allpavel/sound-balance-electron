@@ -1,16 +1,3 @@
-import { Select } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
-import { audioEncoderGroups } from "@renderer/components/Settings/audioCodecs";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
-
-const data = audioEncoderGroups.map((item) => ({
-	group: item.category,
-	items: item.encoders.map((encoder) => ({
-		value: encoder.value,
-		label: encoder.label,
-	})),
-}));
-
 /*
  * sound-balance-electron
  * Copyright (C) 2026 Pavel Alloyarov
@@ -28,6 +15,20 @@ const data = audioEncoderGroups.map((item) => ({
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { Select } from "@mantine/core";
+import type { UseFormReturnType } from "@mantine/form";
+import { audioEncoderGroups } from "@renderer/components/Settings/audioCodecs";
+import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+
+const data = audioEncoderGroups.map((item) => ({
+	group: item.category,
+	items: item.encoders.map((encoder) => ({
+		value: encoder.value,
+		label: encoder.label,
+	})),
+}));
+
 export default function Codecs({
 	form,
 }: {
