@@ -396,10 +396,31 @@ export type AUDIO_MUXER_EXTENSIONS = {
 	oga: ".oga";
 };
 
+type CBR =
+	| "320k"
+	| "256k"
+	| "224k"
+	| "192k"
+	| "160k"
+	| "128k"
+	| "112k"
+	| "96k"
+	| "80k"
+	| "64k"
+	| "48k"
+	| "40k"
+	| "32k"
+	| "24k"
+	| "16k"
+	| "8k";
+
+type VBR = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+
 export type SettingsForm = {
 	audio: {
 		audioCodec: string;
-		audioQuality: string;
+		audioQuality: "cbr" | "vbr" | "auto";
+		audioQualityValue: VBR | CBR | "auto";
 		outputExtension: string;
 		audioFilter: string;
 		filterOptions: Record<string, string | number | boolean>;
@@ -409,7 +430,5 @@ export type SettingsForm = {
 		concurrency: number;
 		overwrite: boolean;
 		noOverwrite: boolean;
-		statsPeriod: number;
-		recastMedia: boolean;
 	};
 };

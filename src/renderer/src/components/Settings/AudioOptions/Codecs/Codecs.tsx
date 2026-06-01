@@ -15,28 +15,30 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Box, Stack, Title } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
-import OutputExtensions from "@renderer/components/Settings/AudioOptions//OutputExtensions/OutputExtensions";
-import Filters from "@renderer/components/Settings/AudioOptions/Filters/Filters";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
-import Bitrate from "./Bitrate/Bitrate";
-import Codecs from "./Codecs/Codecs";
 
-export function AudioOptions({
+import { Select } from "@mantine/core";
+import type { UseFormReturnType } from "@mantine/form";
+import { audioEncoderGroups } from "@renderer/components/Settings/audioCodecs";
+import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+
+const data = audioEncoderGroups.map((item) => ({
+	group: item.category,
+	items: item.encoders.map((encoder) => ({
+		value: encoder.value,
+		label: encoder.label,
+	})),
+}));
+
+export default function Codecs({
 	form,
 }: {
 	form: UseFormReturnType<SettingsForm>;
 }) {
 	return (
-		<Box>
-			<Title order={3}>Audio options</Title>
-			<Stack>
-				<OutputExtensions form={form} />
-				<Filters form={form} />
-				<Codecs form={form} />
-				<Bitrate form={form} />
-			</Stack>
-		</Box>
+		<Select
+			label="Audio codec:"
+			data={data}
+			{...form.getInputProps("audio.audioCodec")}
+		/>
 	);
 }

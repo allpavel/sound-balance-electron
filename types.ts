@@ -465,6 +465,26 @@ type AudioMetadata = {
 	};
 };
 
+type CBR =
+	| "320k"
+	| "256k"
+	| "224k"
+	| "192k"
+	| "160k"
+	| "128k"
+	| "112k"
+	| "96k"
+	| "80k"
+	| "64k"
+	| "48k"
+	| "40k"
+	| "32k"
+	| "24k"
+	| "16k"
+	| "8k";
+
+type VBR = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+
 export type GeneralSettings = {
 	// ===== GLOBAL OPTIONS =====
 	global: {
@@ -475,9 +495,6 @@ export type GeneralSettings = {
 		/** Fail if output file exists (-n) */
 		noOverwrite: boolean;
 		/** Set stats update interval in seconds (-stats_period) */
-		statsPeriod: number;
-		/** Recast media type when needed (-recast_media) */
-		recastMedia: boolean;
 		/** Number of processing threads */
 		concurrency: number;
 	};
@@ -486,7 +503,8 @@ export type GeneralSettings = {
 		/** Audio codec (e.g., 'libmp3lame', 'flac', 'copy') (-c:a) */
 		audioCodec: string;
 		/** Audio quality (VBR scale, 0-9 for MP3) (-q:a) */
-		audioQuality: string;
+		audioQuality: "vbr" | "cbr" | "auto";
+		audioQualityValue: VBR | CBR | "auto";
 		/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
 		audioFilter: string;
 		outputExtension: string;
