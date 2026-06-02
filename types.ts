@@ -485,6 +485,21 @@ type CBR =
 
 type VBR = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 
+type AudioSettings = {
+	/** Audio codec (e.g., 'libmp3lame', 'flac', 'copy') (-c:a) */
+	audioCodec: string;
+	/** Audio quality (VBR scale, 0-9 for MP3) (-q:a) */
+	audioQuality: "vbr" | "cbr" | "auto";
+	/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
+	audioFilter: string;
+	outputExtension: string;
+	filterOptions: Record<string, string | number | boolean>;
+} & (
+	| { audioQuality: "vbr"; audioQualityValue: VBR }
+	| { audioQuality: "cbr"; audioQualityValue: CBR }
+	| { audioQuality: "auto"; audioQualityValue: "auto" }
+);
+
 export type GeneralSettings = {
 	// ===== GLOBAL OPTIONS =====
 	global: {
@@ -499,17 +514,7 @@ export type GeneralSettings = {
 		concurrency: number;
 	};
 	// ===== AUDIO ENCODING =====
-	audio: {
-		/** Audio codec (e.g., 'libmp3lame', 'flac', 'copy') (-c:a) */
-		audioCodec: string;
-		/** Audio quality (VBR scale, 0-9 for MP3) (-q:a) */
-		audioQuality: "vbr" | "cbr" | "auto";
-		audioQualityValue: VBR | CBR | "auto";
-		/** Audio filter chain (e.g., 'volume=0.8, loudnorm') (-af) */
-		audioFilter: string;
-		outputExtension: string;
-		filterOptions: Record<string, string | number | boolean>;
-	};
+	audio: AudioSettings;
 };
 
 export type TrackSettings = {

@@ -25,15 +25,19 @@ export const getTrackSettings = (
 	const result: string[] = [];
 
 	if (settings.audioCodec !== initialSettings.audioCodec) {
-		result.push(`-codec:a ${settings.audioCodec}`);
-	}
-	if (settings.audioQuality !== initialSettings.audioQuality) {
-		result.push(`-q:a ${settings.audioQuality}`);
+		result.push("-codec:a", settings.audioCodec);
 	}
 	if (settings.audioFilter) {
 		const filter = buildFilter(settings.audioFilter, settings.filterOptions);
 		if (filter) {
 			result.push(...filter);
+		}
+	}
+	if (settings.audioQuality !== "auto") {
+		if (settings.audioQuality === "cbr") {
+			result.push("-b:a", settings.audioQualityValue);
+		} else {
+			result.push("-q:a", settings.audioQualityValue);
 		}
 	}
 	return result;
