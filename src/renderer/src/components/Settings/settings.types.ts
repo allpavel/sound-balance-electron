@@ -137,6 +137,22 @@ export type FILTERS = [
 	"afifo",
 ];
 
+export type ENCODERS = [
+	"aac",
+	"ac3",
+	"ac3_fixed",
+	"flac",
+	"libmp3lame",
+	"libopencore_amrnb",
+	"libopus",
+	"libtwolame",
+	"libshine",
+	"libvo_amrwbenc",
+	"libvorbis",
+	"wavpack",
+	"alac",
+];
+
 export type MUXERS = [
 	"alaw",
 	"daud",
@@ -268,19 +284,19 @@ export type EXTENSIONS = [
 	".wv",
 ];
 
-type BaseOptionn = {
+type BaseOption = {
 	label: string;
 	desc: string;
 };
 
-type NumberOption = BaseOptionn & {
+type NumberOption = BaseOption & {
 	type: "number";
 	min: number;
 	max: number;
 	defaultValue: number;
 };
 
-type SelectOption = BaseOptionn & {
+type SelectOption = BaseOption & {
 	type: "select";
 	options:
 		| [string, ...string[]]
@@ -288,17 +304,27 @@ type SelectOption = BaseOptionn & {
 	defaultValue: string;
 };
 
-type TextOption = BaseOptionn & {
+type TextOption = BaseOption & {
 	type: "text";
 	defaultValue: string;
 };
 
-type SwitchOption = BaseOptionn & {
+type SwitchOption = BaseOption & {
 	type: "switch";
 	defaultValue: boolean;
 };
 
 type Option = NumberOption | SelectOption | TextOption | SwitchOption;
+
+export type AUDIO_ENCODER_NAMES = ENCODERS[number];
+type AUDIO_ENCODER<T extends AUDIO_ENCODER_NAMES> = {
+	name: T;
+	desc: string;
+	options: Option[];
+};
+export type AUDIO_ENCODERS = {
+	[K in AUDIO_ENCODER_NAMES]: AUDIO_ENCODER<K>;
+};
 
 export type AUDIO_FILTER_NAMES = FILTERS[number];
 type AUDIO_MUXERS = MUXERS[number];

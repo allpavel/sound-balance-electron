@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import type {
+	AUDIO_ENCODERS,
 	AUDIO_FILTERS,
 	AUDIO_MUXER_EXTENSIONS,
 	EXTENSIONS,
@@ -1533,6 +1534,106 @@ export const FILTER_OPTIONS = {
 	// 	options: [],
 	// },
 } satisfies Partial<AUDIO_FILTERS>;
+
+export const ENCODER_OPTIONS = {
+	aac: {
+		name: "aac",
+		desc: "A compressor is mainly used to reduce the dynamic range of a signal.",
+		options: [
+			{
+				type: "select",
+				label: "b",
+				desc: "Set bit rate in bits/s.",
+				defaultValue: "128k",
+				options: [
+					"320k",
+					"256k",
+					"224k",
+					"192k",
+					"160k",
+					"128k",
+					"112k",
+					"96k",
+					"80k",
+					"64k",
+					"48k",
+					"40k",
+					"32k",
+					"24k",
+					"16k",
+					"8k",
+				],
+			},
+			{
+				type: "number",
+				label: "cutoff",
+				desc: "Set bit rate in bits/s.",
+				defaultValue: 0,
+				min: 0,
+				max: 24000,
+			},
+			{
+				type: "select",
+				label: "aac_coder",
+				desc: "Set AAC encoder coding method.",
+				defaultValue: "twoloop",
+				options: [
+					{
+						label: "twoloop - Two loop searching (TLS) method",
+						value: "twoloop",
+					},
+					{
+						label:
+							"anmr - Average noise to mask ratio (ANMR) trellis-based solution.",
+						value: "anmr",
+					},
+					{
+						label: "fast - Constant quantizer method.",
+						value: "fast",
+					},
+				],
+			},
+			{
+				type: "select",
+				label: "aac_ms",
+				desc: "Sets mid/side coding mode.",
+				defaultValue: "auto",
+				options: ["auto", "enable", "disable"],
+			},
+			{
+				type: "switch",
+				label: "aac_is",
+				desc: "Sets intensity stereo coding tool usage.",
+				defaultValue: true,
+			},
+			{
+				type: "switch",
+				label: "aac_pns",
+				desc: "Uses perceptual noise substitution to replace low entropy high frequency bands with imperceptible white noise during the decoding process.",
+				defaultValue: true,
+			},
+			{
+				type: "switch",
+				label: "aac_tns",
+				desc: "Uses perceptual noise substitution to replace low entropy high frequency bands with imperceptible white noise during the decoding process.",
+				defaultValue: true,
+			},
+			{
+				type: "switch",
+				label: "aac_ltp",
+				desc: "Enables the use of the long term prediction extension which increases coding efficiency in very low bandwidth situations such as encoding of voice or solo piano music by extending constant harmonic peaks in bands throughout frames.",
+				defaultValue: true,
+			},
+			{
+				type: "select",
+				label: "profile",
+				desc: "Sets the encoding profile.",
+				defaultValue: "aac_low",
+				options: ["aac_low", "mpeg2_aac_low", "aac_ltp"],
+			},
+		],
+	},
+} satisfies Partial<AUDIO_ENCODERS>;
 
 export const EXTENSIONS_LIST = [
 	".aac",
