@@ -155,7 +155,6 @@ export type ENCODERS = [
 	"libvo_amrwbenc",
 	"libvorbis",
 	"wavpack",
-	"alac",
 ];
 
 export type MUXERS = [
@@ -325,6 +324,7 @@ export type AUDIO_ENCODER_NAMES = ENCODERS[number];
 type AUDIO_ENCODER<T extends AUDIO_ENCODER_NAMES> = {
 	name: T;
 	desc: string;
+	category: ENCODER_CATEGORY;
 	options: Option[];
 };
 export type AUDIO_ENCODERS = {
