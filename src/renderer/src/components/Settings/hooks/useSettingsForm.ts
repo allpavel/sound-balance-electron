@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { useForm } from "@mantine/form";
+import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useEffect } from "react";
-import type { SettingsForm } from "../settings.types";
 
 export default function useSettingsForm() {
 	const settings = useAppSelector((state) => state.settings);

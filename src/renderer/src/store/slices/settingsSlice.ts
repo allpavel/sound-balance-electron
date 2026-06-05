@@ -16,15 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
-import type { GeneralSettings } from "types";
 
 const SETTINGS_ACTIONS = {
 	loadFromDB: "settings/loadFromDB",
 	saveToDB: "settings/saveToDB",
 };
 
-export const initialSettings: GeneralSettings = {
+export const initialSettings: SettingsForm = {
 	global: {
 		outputDirectoryPath: "",
 		overwrite: true,
@@ -38,6 +38,7 @@ export const initialSettings: GeneralSettings = {
 		audioFilter: "",
 		outputExtension: "copy",
 		filterOptions: {},
+		codecOptions: {},
 	},
 };
 
@@ -51,7 +52,7 @@ export const getSettings = createAsyncThunk(
 
 export const saveSettings = createAsyncThunk(
 	SETTINGS_ACTIONS.saveToDB,
-	async (settings: GeneralSettings, { dispatch }) => {
+	async (settings: SettingsForm, { dispatch }) => {
 		await settingsRepository.saveSettings(settings);
 		dispatch(setSettings(settings));
 	},
