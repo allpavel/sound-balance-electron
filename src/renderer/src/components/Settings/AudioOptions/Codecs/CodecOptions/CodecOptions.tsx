@@ -22,69 +22,71 @@ import type {
 	AUDIO_ENCODER_NAMES,
 	SettingsForm,
 } from "@renderer/components/Settings/settings.types";
-import type { JSX } from "react";
 
 export function CodecOptions({
 	form,
 	codec,
 }: {
 	form: UseFormReturnType<SettingsForm>;
-	codec: AUDIO_ENCODER_NAMES;
-}): JSX.Element {
-	const config = ENCODER_OPTIONS[codec as keyof typeof ENCODER_OPTIONS];
+	codec: AUDIO_ENCODER_NAMES | "copy";
+}) {
+	if (codec !== "copy") {
+		const config = ENCODER_OPTIONS[codec];
 
-	if (!config) return <div>Unknown codec</div>;
+		if (!config) return <div>Unknown codec</div>;
 
-	return (
-		<Stack gap="xs">
-			<Title order={4} size="md">
-				{config.name} options:
-			</Title>
+		return (
+			<Stack gap="xs">
+				<Title order={4} size="md">
+					{config.name} options:
+				</Title>
 
-			{config.options.map((field) => {
-				switch (field.type) {
-					case "number":
-						return (
-							<NumberInput
-								key={field.label}
-								label={field.label}
-								description={field.desc}
-								min={field.min}
-								max={field.max}
-								{...form.getInputProps(`audio.codecOptions.${field.label}`)}
-							/>
-						);
-					case "select":
-						return (
-							<Select
-								key={field.label}
-								label={field.label}
-								description={field.desc}
-								data={field.options}
-								{...form.getInputProps(`audio.codecOptions.${field.label}`)}
-							/>
-						);
-					case "switch":
-						return (
-							<Switch
-								label={field.label}
-								key={field.label}
-								labelPosition="left"
-								onLabel="enable"
-								offLabel="disable"
-								size="md"
-								{...form.getInputProps(`audio.codecOptions.${field.label}`)}
-								styles={{
-									body: {
-										justifyContent: "space-between",
-									},
-								}}
-							/>
-						);
-					default:
-						return null;
-				}
-			})}
-		</Stack>
-	);
+				{config.options.map((field) => {
+					switch (field.type) {
+						case "number":
+							return (
+								<NumberInput
+									key={field.label}
+									label={field.label}
+									description={field.desc}
+									min={field.min}
+									max={field.max}
+									{...form.getInputProps(`audio.codecOptions.${field.label}`)}
+								/>
+							);
+						case "select":
+							return (
+								<Select
+									key={field.label}
+									label={field.label}
+									description={field.desc}
+									data={field.options}
+									{...form.getInputProps(`audio.codecOptions.${field.label}`)}
+								/>
+							);
+						case "switch":
+							return (
+								<Switch
+									label={field.label}
+									key={field.label}
+									labelPosition="left"
+									onLabel="enable"
+									offLabel="disable"
+									size="md"
+									{...form.getInputProps(`audio.codecOptions.${field.label}`)}
+									styles={{
+										body: {
+											justifyContent: "space-between",
+										},
+									}}
+								/>
+							);
+						default:
+							return null;
+					}
+				})}
+			</Stack>
+		);
+	}
+	return null;
 }

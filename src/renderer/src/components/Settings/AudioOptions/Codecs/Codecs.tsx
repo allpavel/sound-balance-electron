@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Select } from "@mantine/core";
+import { Select, Stack } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { ENCODER_GROUPS } from "@renderer/components/Settings/settings.constants";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import { CodecOptions } from "./CodecOptions/CodecOptions";
 
 const data = ENCODER_GROUPS.map((item) => ({
 	group: item.category,
@@ -31,11 +32,20 @@ export default function Codecs({
 }: {
 	form: UseFormReturnType<SettingsForm>;
 }) {
+	const activeCodec = form.values.audio.audioCodec;
+
 	return (
-		<Select
-			label="Audio codec:"
-			data={data}
-			{...form.getInputProps("audio.audioCodec")}
-		/>
+		<Stack>
+			<Select
+				label="Audio codec:"
+				data={data}
+				{...form.getInputProps("audio.audioCodec")}
+				onOptionSubmit={(value) => {
+					form.setFieldValue("audio.audioCodec", value);
+					form.setFieldValue("audio.codecOptions", {});
+				}}
+			/>
+			{activeCodec && <CodecOptions form={form} codec={activeCodec} />}
+		</Stack>
 	);
 }

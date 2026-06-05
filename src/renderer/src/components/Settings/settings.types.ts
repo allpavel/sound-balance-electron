@@ -449,7 +449,8 @@ type VBR = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 
 export type SettingsForm = {
 	audio: {
-		audioCodec: string;
+		audioCodec: AUDIO_ENCODER_NAMES | "copy";
+		codecOptions: Record<string, string | number | boolean>;
 		audioQuality: "cbr" | "vbr" | "auto";
 		audioQualityValue: VBR | CBR | "auto";
 		outputExtension: string;
