@@ -15,6 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+type ENCODER_CATEGORY =
+	| "Lossy General Audio"
+	| "Speech & Voice Codecs"
+	| "Lossless Audio";
+
 export type FILTERS = [
 	"acompressor",
 	"acontrast",

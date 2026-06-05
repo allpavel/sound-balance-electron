@@ -18,15 +18,12 @@
 
 import { Select } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
-import { audioEncoderGroups } from "@renderer/components/Settings/audioCodecs";
+import { ENCODER_GROUPS } from "@renderer/components/Settings/settings.constants";
 import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 
-const data = audioEncoderGroups.map((item) => ({
+const data = ENCODER_GROUPS.map((item) => ({
 	group: item.category,
-	items: item.encoders.map((encoder) => ({
-		value: encoder.value,
-		label: encoder.label,
-	})),
+	items: [...item.encoders],
 }));
 
 export default function Codecs({

@@ -1539,6 +1539,7 @@ export const ENCODER_OPTIONS = {
 	aac: {
 		name: "aac",
 		desc: "Advanced Audio Coding (AAC) encoder. This encoder is the default AAC encoder, natively implemented into FFmpeg.",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "select",
@@ -1649,6 +1650,7 @@ export const ENCODER_OPTIONS = {
 	ac3: {
 		name: "ac3",
 		desc: "AC-3 audio encoder using floating-point math. Implements ATSC A/52:2010 and ETSI TS 102 366.",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "switch",
@@ -1888,6 +1890,7 @@ export const ENCODER_OPTIONS = {
 	ac3_fixed: {
 		name: "ac3_fixed",
 		desc: "AC-3 audio encoder using fixed-point integer math. Suitable for systems without FPU.",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "switch",
@@ -2108,6 +2111,7 @@ export const ENCODER_OPTIONS = {
 	flac: {
 		name: "flac",
 		desc: "FLAC (Free Lossless Audio Codec) encoder - lossless compression.",
+		category: "Lossless Audio",
 		options: [
 			{
 				type: "number",
@@ -2195,6 +2199,7 @@ export const ENCODER_OPTIONS = {
 	libmp3lame: {
 		name: "libmp3lame",
 		desc: "LAME MP3 encoder wrapper.",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "select",
@@ -2271,6 +2276,7 @@ export const ENCODER_OPTIONS = {
 	libopencore_amrnb: {
 		name: "libopencore_amrnb",
 		desc: "OpenCORE Adaptive Multi-Rate Narrowband encoder (mono only, typically 8000 Hz).",
+		category: "Speech & Voice Codecs",
 		options: [
 			{
 				type: "select",
@@ -2299,6 +2305,7 @@ export const ENCODER_OPTIONS = {
 	libopus: {
 		name: "libopus",
 		desc: "libopus Opus Interactive Audio Codec encoder wrapper.",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "select",
@@ -2426,6 +2433,7 @@ export const ENCODER_OPTIONS = {
 	libshine: {
 		name: "libshine",
 		desc: "Shine fixed-point MP3 encoder (CBR only, lower quality than LAME but faster on FPU-less systems).",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "select",
@@ -2456,6 +2464,7 @@ export const ENCODER_OPTIONS = {
 	libtwolame: {
 		name: "libtwolame",
 		desc: "TwoLAME MP2 encoder wrapper.",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "select",
@@ -2532,7 +2541,8 @@ export const ENCODER_OPTIONS = {
 	},
 	libvo_amrwbenc: {
 		name: "libvo_amrwbenc",
-		desc: "VisualOn Adaptive Multi-Rate Wideband encoder (mono only, typically 16000 Hz). Requires `--enable-libvo-amrwbenc --enable-version3`.",
+		desc: "VisualOn Adaptive Multi-Rate Wideband encoder (mono only, typically 16000 Hz).",
+		category: "Speech & Voice Codecs",
 		options: [
 			{
 				type: "select",
@@ -2562,6 +2572,7 @@ export const ENCODER_OPTIONS = {
 	libvorbis: {
 		name: "libvorbis",
 		desc: "libvorbis encoder wrapper. Requires `--enable-libvorbis`.",
+		category: "Lossy General Audio",
 		options: [
 			{
 				type: "select",
@@ -2624,6 +2635,7 @@ export const ENCODER_OPTIONS = {
 	wavpack: {
 		name: "wavpack",
 		desc: "WavPack lossless audio encoder.",
+		category: "Lossless Audio",
 		options: [
 			{
 				type: "number",
@@ -2665,6 +2677,30 @@ export const ENCODER_OPTIONS = {
 		],
 	},
 } satisfies Partial<AUDIO_ENCODERS>;
+
+export const ENCODER_GROUPS = [
+	{
+		category: "Lossy General Audio",
+		encoders: [
+			"aac",
+			"ac3",
+			"ac3_fixed",
+			"libtwolame",
+			"libmp3lame",
+			"libshine",
+			"libopus",
+			"libvorbis",
+		],
+	},
+	{
+		category: "Lossless Audio",
+		encoders: ["flac", "wavpack"],
+	},
+	{
+		category: "Speech & Voice Codecs",
+		encoders: ["libopencore_amrnb", "libvo_amrwbenc"],
+	},
+];
 
 export const EXTENSIONS_LIST = [
 	".aac",
