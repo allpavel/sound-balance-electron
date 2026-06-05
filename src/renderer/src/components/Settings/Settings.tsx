@@ -51,7 +51,9 @@ export default function Settings() {
 					<Stack>
 						<GlobalOptions form={form} />
 						<AudioOptions form={form} />
-						<Button type="submit">Submit</Button>
+						<Button type="submit" mt={"lg"}>
+							Submit
+						</Button>
 					</Stack>
 				</form>
 			</Modal>

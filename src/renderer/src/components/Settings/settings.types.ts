@@ -15,6 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+type ENCODER_CATEGORY =
+	| "Lossy General Audio"
+	| "Speech & Voice Codecs"
+	| "Lossless Audio";
+
 export type FILTERS = [
 	"acompressor",
 	"acontrast",
@@ -135,6 +140,21 @@ export type FILTERS = [
 	"volume",
 	"volumedetect",
 	"afifo",
+];
+
+export type ENCODERS = [
+	"aac",
+	"ac3",
+	"ac3_fixed",
+	"flac",
+	"libmp3lame",
+	"libopencore_amrnb",
+	"libopus",
+	"libtwolame",
+	"libshine",
+	"libvo_amrwbenc",
+	"libvorbis",
+	"wavpack",
 ];
 
 export type MUXERS = [
@@ -268,19 +288,19 @@ export type EXTENSIONS = [
 	".wv",
 ];
 
-type BaseOptionn = {
+type BaseOption = {
 	label: string;
 	desc: string;
 };
 
-type NumberOption = BaseOptionn & {
+type NumberOption = BaseOption & {
 	type: "number";
 	min: number;
 	max: number;
 	defaultValue: number;
 };
 
-type SelectOption = BaseOptionn & {
+type SelectOption = BaseOption & {
 	type: "select";
 	options:
 		| [string, ...string[]]
@@ -288,17 +308,28 @@ type SelectOption = BaseOptionn & {
 	defaultValue: string;
 };
 
-type TextOption = BaseOptionn & {
+type TextOption = BaseOption & {
 	type: "text";
 	defaultValue: string;
 };
 
-type SwitchOption = BaseOptionn & {
+type SwitchOption = BaseOption & {
 	type: "switch";
 	defaultValue: boolean;
 };
 
 type Option = NumberOption | SelectOption | TextOption | SwitchOption;
+
+export type AUDIO_ENCODER_NAMES = ENCODERS[number];
+type AUDIO_ENCODER<T extends AUDIO_ENCODER_NAMES> = {
+	name: T;
+	desc: string;
+	category: ENCODER_CATEGORY;
+	options: Option[];
+};
+export type AUDIO_ENCODERS = {
+	[K in AUDIO_ENCODER_NAMES]: AUDIO_ENCODER<K>;
+};
 
 export type AUDIO_FILTER_NAMES = FILTERS[number];
 type AUDIO_MUXERS = MUXERS[number];
@@ -418,7 +449,8 @@ type VBR = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 
 export type SettingsForm = {
 	audio: {
-		audioCodec: string;
+		audioCodec: AUDIO_ENCODER_NAMES | "copy";
+		codecOptions: Record<string, string | number | boolean>;
 		audioQuality: "cbr" | "vbr" | "auto";
 		audioQualityValue: VBR | CBR | "auto";
 		outputExtension: string;

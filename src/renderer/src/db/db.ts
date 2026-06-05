@@ -15,12 +15,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import Dexie, { type EntityTable } from "dexie";
-import type { CollectionType, GeneralSettings, Metadata } from "@/types";
+import type { CollectionType, Metadata } from "@/types";
 
 const db = new Dexie("AudioDB") as Dexie & {
 	tracks: EntityTable<Metadata, "id">;
-	settings: EntityTable<{ id: string; settings: GeneralSettings }, "id">;
+	settings: EntityTable<{ id: string; settings: SettingsForm }, "id">;
 	collections: EntityTable<CollectionType, "id">;
 };
 
