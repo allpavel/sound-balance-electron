@@ -22,7 +22,7 @@ import {
 	createSlice,
 } from "@reduxjs/toolkit";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import type { Metadata } from "types";
+import type { Metadata } from "@/types";
 
 const TRACKS_DB_ACTIONS = {
 	loadFromDB: "tracks/loadFromDB",
@@ -36,21 +36,6 @@ const TRACKS_DB_ACTIONS = {
 export const tracksAdapter = createEntityAdapter<Metadata>({
 	sortComparer: (a: Metadata, b: Metadata) => a.id.localeCompare(b.id),
 });
-
-export const loadTracksFromDB = createAsyncThunk(
-	TRACKS_DB_ACTIONS.loadFromDB,
-	async () => {
-		return await tracksRepository.getAll();
-	},
-);
-
-export const addManyToDB = createAsyncThunk(
-	TRACKS_DB_ACTIONS.addManyToDB,
-	async (tracks: Metadata[], { dispatch }) => {
-		await tracksRepository.addMany(tracks);
-		dispatch(tracksSlice.actions.addTracks(tracks));
-	},
-);
 
 export const updateInDB = createAsyncThunk(
 	TRACKS_DB_ACTIONS.updateInDB,
@@ -88,25 +73,10 @@ const tracksSlice = createSlice({
 		updateTrack: tracksAdapter.updateOne,
 		updateAllTracks: tracksAdapter.updateMany,
 	},
-	extraReducers: (builder) => {
-		builder.addCase(loadTracksFromDB.pending, (state) => {
-			state.loading = true;
-		});
-		builder.addCase(loadTracksFromDB.fulfilled, (state, action) => {
-			tracksAdapter.setAll(state, action.payload);
-			state.loading = false;
-		});
-		builder.addCase(loadTracksFromDB.rejected, (state) => {
-			state.loading = false;
-		});
-	},
 });
 
 const selectors = tracksAdapter.getSelectors();
-export const {
-	selectAll: selectAllTracks,
-	// selectById: selectTrackById
-} = selectors;
+export const { selectAll: selectAllTracks } = selectors;
 
 export const selectTrackById: (
 	state: ReturnType<typeof tracksAdapter.getInitialState>,
