@@ -28,6 +28,9 @@ export default defineConfig({
 		},
 		resolve: {
 			tsconfigPaths: true,
+			alias: {
+				"@types": resolve("src/shared/types/index.ts"),
+			},
 		},
 	},
 	preload: {
