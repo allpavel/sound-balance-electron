@@ -15,148 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-type ENCODER_CATEGORY =
-	| "Lossy General Audio"
-	| "Speech & Voice Codecs"
-	| "Lossless Audio";
-
-export type FILTERS = [
-	"acompressor",
-	"acontrast",
-	"acrusher",
-	"adeclick",
-	"adeclip",
-	"adecorrelate",
-	"adelay",
-	"adenorm",
-	"aderivative",
-	"adrc",
-	"adynamicequalizer",
-	"adynamicsmooth",
-	"aecho",
-	"aemphasis",
-	"aeval",
-	"aexciter",
-	"afade",
-	"afftdn",
-	"afftfilt",
-	"aformat",
-	"afreqshift",
-	"afwtdn",
-	"agate",
-	"aintegral",
-	"alatency",
-	"alimiter",
-	"allpass",
-	"aloop",
-	"ametadata",
-	"amultiply",
-	"anlmdn",
-	"anlmf",
-	"anlms",
-	"anull",
-	"apad",
-	"aperms",
-	"aphaser",
-	"aphaseshift",
-	"apsnr",
-	"apsyclip",
-	"apulsator",
-	"arealtime",
-	"aresample",
-	"areverse",
-	"arls",
-	"arnndn",
-	"asdr",
-	"asendcmd",
-	"asetnsamples",
-	"asetpts",
-	"asetrate",
-	"asettb",
-	"ashowinfo",
-	"asidedata",
-	"asisdr",
-	"asoftclip",
-	"aspectralstats",
-	"asr",
-	"astats",
-	"asubboost",
-	"asubcut",
-	"asupercut",
-	"asuperpass",
-	"asuperstop",
-	"atempo",
-	"atilt",
-	"atrim",
-	"axcorrelate",
-	"azmq",
-	"bandpass",
-	"bandreject",
-	"bass",
-	"biquad",
-	"bs2b",
-	"channelmap",
-	"chorus",
-	"compand",
-	"compensationdelay",
-	"crossfeed",
-	"crystalizer",
-	"dcshift",
-	"deesser",
-	"dialoguenhance",
-	"drmeter",
-	"dynaudnorm",
-	"earwax",
-	"equalizer",
-	"extrastereo",
-	"firequalizer",
-	"flanger",
-	"haas",
-	"hdcd",
-	"highpass",
-	"highshelf",
-	"loudnorm",
-	"lowpass",
-	"lowshelf",
-	"mcompand",
-	"pan",
-	"replaygain",
-	"rubberband",
-	"sidechaincompress",
-	"sidechaingate",
-	"silencedetect",
-	"silenceremove",
-	"sofalizer",
-	"speechnorm",
-	"stereotools",
-	"stereowiden",
-	"superequalizer",
-	"surround",
-	"tiltshelf",
-	"treble",
-	"tremolo",
-	"vibrato",
-	"virtualbass",
-	"volume",
-	"volumedetect",
-	"afifo",
-];
-
-export type ENCODERS = [
-	"aac",
-	"ac3",
-	"ac3_fixed",
-	"flac",
-	"libmp3lame",
-	"libopencore_amrnb",
-	"libopus",
-	"libtwolame",
-	"libshine",
-	"libvo_amrwbenc",
-	"libvorbis",
-	"wavpack",
-];
-
 export type MUXERS = [
 	"alaw",
 	"daud",
@@ -288,65 +146,13 @@ export type EXTENSIONS = [
 	".wv",
 ];
 
-type BaseOption = {
-	label: string;
-	desc: string;
-};
-
-type NumberOption = BaseOption & {
-	type: "number";
-	min: number;
-	max: number;
-	defaultValue: number;
-};
-
-type SelectOption = BaseOption & {
-	type: "select";
-	options:
-		| [string, ...string[]]
-		| [{ label: string; value: string }, ...{ label: string; value: string }[]];
-	defaultValue: string;
-};
-
-type TextOption = BaseOption & {
-	type: "text";
-	defaultValue: string;
-};
-
-type SwitchOption = BaseOption & {
-	type: "switch";
-	defaultValue: boolean;
-};
-
-type Option = NumberOption | SelectOption | TextOption | SwitchOption;
-
-export type AUDIO_ENCODER_NAMES = ENCODERS[number];
-type AUDIO_ENCODER<T extends AUDIO_ENCODER_NAMES> = {
-	name: T;
-	desc: string;
-	category: ENCODER_CATEGORY;
-	options: Option[];
-};
-export type AUDIO_ENCODERS = {
-	[K in AUDIO_ENCODER_NAMES]: AUDIO_ENCODER<K>;
-};
-
-export type AUDIO_FILTER_NAMES = FILTERS[number];
 type AUDIO_MUXERS = MUXERS[number];
 
-type AUDIO_FILTER<T extends AUDIO_FILTER_NAMES> = {
-	name: T;
-	desc: string;
-	options: Option[];
-};
 export type AUDIO_MUXER_OPTION<T extends AUDIO_MUXERS> = {
 	name: T;
 	desc: string;
 };
 
-export type AUDIO_FILTERS = {
-	[K in AUDIO_FILTER_NAMES]: AUDIO_FILTER<K>;
-};
 export type AUDIO_MUXERS_OPTIONS = AUDIO_MUXER_OPTION<AUDIO_MUXERS>[];
 
 export type AUDIO_MUXER_EXTENSIONS = {
@@ -425,42 +231,4 @@ export type AUDIO_MUXER_EXTENSIONS = {
 	oss: "";
 	pulse: "";
 	oga: ".oga";
-};
-
-type CBR =
-	| "320k"
-	| "256k"
-	| "224k"
-	| "192k"
-	| "160k"
-	| "128k"
-	| "112k"
-	| "96k"
-	| "80k"
-	| "64k"
-	| "48k"
-	| "40k"
-	| "32k"
-	| "24k"
-	| "16k"
-	| "8k";
-
-type VBR = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
-
-export type SettingsForm = {
-	audio: {
-		audioCodec: AUDIO_ENCODER_NAMES | "copy";
-		codecOptions: Record<string, string | number | boolean>;
-		audioQuality: "cbr" | "vbr" | "auto";
-		audioQualityValue: VBR | CBR | "auto";
-		outputExtension: string;
-		audioFilter: string;
-		filterOptions: Record<string, string | number | boolean>;
-	};
-	global: {
-		outputDirectoryPath: string;
-		concurrency: number;
-		overwrite: boolean;
-		noOverwrite: boolean;
-	};
 };
