@@ -49,7 +49,7 @@ import {
 	type VisibilityState,
 } from "@tanstack/react-table";
 import { type ChangeEvent, useMemo, useState } from "react";
-import type { Metadata } from "types";
+import type { Metadata } from "@/types";
 
 export default function TableComponent() {
 	const selectedRows = useAppSelector((state) => state.selectedTracks);

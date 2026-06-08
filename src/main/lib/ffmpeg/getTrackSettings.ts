@@ -15,12 +15,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { GeneralSettings } from "@/types";
+
+import type { SettingsForm } from "@types";
 import { buildFilter } from "./buildFilter";
 
 export const getTrackSettings = (
-	initialSettings: GeneralSettings["audio"],
-	settings: GeneralSettings["audio"],
+	initialSettings: SettingsForm["audio"],
+	settings: SettingsForm["audio"],
 ) => {
 	const result: string[] = [];
 

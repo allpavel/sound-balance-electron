@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import type { SettingsForm } from "@types";
 import Dexie, { type EntityTable } from "dexie";
 import type { CollectionType, Metadata } from "@/types";
 

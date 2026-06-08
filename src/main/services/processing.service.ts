@@ -20,9 +20,10 @@ import { EVENT_CHANNELS, INITIALSETTINGS } from "@main/constants";
 import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
 import { getTrackTitle, isDirectory } from "@main/lib/utils";
 import { ProcessManager } from "@main/services/ffmpeg/processManager";
+import type { Data } from "@types";
 import type { IpcMainInvokeEvent } from "electron";
 import PQueue from "p-queue";
-import type { Data, Failed, ProcessingStatus } from "@/types";
+import type { Failed, ProcessingStatus } from "@/types";
 
 const activeProcesses = new Map<string, ProcessManager>();
 let abortController: AbortController | null = null;

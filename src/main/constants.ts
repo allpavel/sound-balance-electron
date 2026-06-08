@@ -15,7 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { GeneralSettings } from "@/types";
+
+import type { SettingsForm } from "@types";
 
 export const INITIALSETTINGS = {
 	global: {
@@ -31,8 +32,9 @@ export const INITIALSETTINGS = {
 		audioQualityValue: "auto",
 		audioFilter: "",
 		filterOptions: {},
+		codecOptions: {},
 	},
-} satisfies GeneralSettings;
+} satisfies SettingsForm;
 
 export const EVENT_CHANNELS = {
 	RESPONSE_ON_STOP: "response-on-stop",

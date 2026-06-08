@@ -19,10 +19,7 @@ import { Combobox, TextInput, useCombobox } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { AudioFilterFactory } from "@renderer/components/Settings/AudioOptions/Filters/FilterOptions/FilterOptions";
 import { FILTER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type {
-	AUDIO_FILTER_NAMES,
-	SettingsForm,
-} from "@renderer/components/Settings/settings.types";
+import type { AUDIO_FILTER_NAMES, SettingsForm } from "@types";
 import { useMemo } from "react";
 
 // temp line

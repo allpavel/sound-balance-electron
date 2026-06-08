@@ -19,7 +19,7 @@
 import { Select, Stack } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { ENCODER_GROUPS } from "@renderer/components/Settings/settings.constants";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import type { SettingsForm } from "@types";
 import { CodecOptions } from "./CodecOptions/CodecOptions";
 
 const data = ENCODER_GROUPS.map((item) => ({

@@ -17,7 +17,7 @@
  */
 import { NativeSelect } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import type { SettingsForm } from "@types";
 import { EXTENSIONS_LIST } from "../../settings.constants";
 
 export default function OutputExtensions({
