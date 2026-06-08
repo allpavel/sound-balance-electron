@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
+import type { SettingsForm } from "@types";
 
 const SETTINGS_ACTIONS = {
 	loadFromDB: "settings/loadFromDB",

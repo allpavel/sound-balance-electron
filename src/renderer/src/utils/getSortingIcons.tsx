@@ -22,7 +22,7 @@ import {
 	IconSortDescending,
 } from "@tabler/icons-react";
 import type { Column } from "@tanstack/react-table";
-import type { Metadata } from "types";
+import type { Metadata } from "@/types";
 
 export function getSortingIcon(column: Column<Metadata>) {
 	if (!column.getCanSort()) {

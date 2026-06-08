@@ -4,6 +4,7 @@
 		"electron.vite.config.*",
 		"src/main/**/*",
 		"src/preload/**/*",
+		"src/shared/**/*",
 		"./types.ts",
 		"src/main/constants.ts"
 	],
@@ -12,10 +13,12 @@
 		"types": [
 			"electron-vite/node"
 		],
-		"baseUrl": ".",
 		"paths": {
 			"@main/*": [
-				"src/main/*"
+				"./src/main/*"
+			],
+			"@types": [
+				"./src/shared/types/index.ts"
 			],
 			"@/*": [
 				"./*"

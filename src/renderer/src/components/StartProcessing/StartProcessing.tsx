@@ -25,8 +25,9 @@ import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
 import { updateInDB } from "@renderer/store/slices/tracksSlice";
+import type { Data } from "@types";
 import { useEffect, useState } from "react";
-import type { Data, ProcessingStatus, StoppingStatus } from "types";
+import type { ProcessingStatus, StoppingStatus } from "@/types";
 
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();

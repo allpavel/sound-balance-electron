@@ -19,7 +19,7 @@ import { Box, Stack, Title } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import OutputExtensions from "@renderer/components/Settings/AudioOptions//OutputExtensions/OutputExtensions";
 import Filters from "@renderer/components/Settings/AudioOptions/Filters/Filters";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import type { SettingsForm } from "@types";
 import Bitrate from "./Bitrate/Bitrate";
 import Codecs from "./Codecs/Codecs";
 

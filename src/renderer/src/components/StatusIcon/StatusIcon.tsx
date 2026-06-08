@@ -22,7 +22,7 @@ import {
 	IconClock,
 	IconExclamationCircle,
 } from "@tabler/icons-react";
-import type { Metadata } from "types";
+import type { Metadata } from "@/types";
 
 type Status = Pick<Metadata, "status">;
 

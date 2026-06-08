@@ -27,8 +27,8 @@ import {
 import type { UseFormReturnType } from "@mantine/form";
 import { useDirectoryPicker } from "@renderer/components/Settings/hooks/useDirectoryPicker";
 import { CONCURRENCY_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { IconUpload } from "@tabler/icons-react";
+import type { SettingsForm } from "@types";
 
 export function GlobalOptions({
 	form,

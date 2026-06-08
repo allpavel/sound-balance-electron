@@ -18,10 +18,7 @@
 import { NumberInput, Select, Stack, Switch, Title } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { ENCODER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type {
-	AUDIO_ENCODER_NAMES,
-	SettingsForm,
-} from "@renderer/components/Settings/settings.types";
+import type { AUDIO_ENCODER_NAMES, SettingsForm } from "@types";
 
 export function CodecOptions({
 	form,

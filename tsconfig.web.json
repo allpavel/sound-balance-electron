@@ -5,7 +5,8 @@
 		"src/renderer/src/**/*",
 		"src/renderer/src/**/*.tsx",
 		"src/preload/*.d.ts",
-		"./types.ts"
+		"./types.ts",
+		"src/shared/**/*",
 	],
 	"compilerOptions": {
 		"target": "es2022",
@@ -24,10 +25,12 @@
 		"noEmitOnError": true,
 		"forceConsistentCasingInFileNames": true,
 		"jsx": "react-jsx",
-		"baseUrl": ".",
 		"paths": {
 			"@renderer/*": [
-				"src/renderer/src/*"
+				"./src/renderer/src/*"
+			],
+			"@types": [
+				"./src/shared/types/index.ts"
 			],
 			"@/*": [
 				"./*"

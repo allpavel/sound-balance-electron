@@ -15,12 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type {
-	AUDIO_ENCODERS,
-	AUDIO_FILTERS,
-	AUDIO_MUXER_EXTENSIONS,
-	EXTENSIONS,
-} from "./settings.types";
+import type { AUDIO_ENCODERS, AUDIO_FILTERS } from "@types";
+import type { AUDIO_MUXER_EXTENSIONS, EXTENSIONS } from "./settings.types";
 
 export const CONCURRENCY_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
 	value: String(i + 1),

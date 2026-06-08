@@ -15,9 +15,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { GeneralSettings } from "@/types";
 
-export const getGlobalSettings = (settings: GeneralSettings["global"]) => {
+import type { SettingsForm } from "@types";
+
+export const getGlobalSettings = (settings: SettingsForm["global"]) => {
 	const result: string[] = [];
 
 	if (settings.overwrite) {

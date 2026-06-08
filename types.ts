@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import type { Data } from "@types";
 import type { IAudioMetadata } from "music-metadata";
 
 type Status = "pending" | "processing" | "completed" | "failed";
@@ -689,11 +690,6 @@ export type Settings = {
 	albumArt?: string;
 	/** Mark attached stream as album art (-disposition:v:0 attached_pic) */
 	isAlbumArt?: boolean;
-};
-
-export type Data = {
-	tracks: Metadata[];
-	settings: GeneralSettings;
 };
 
 export type OptionMapperKeys =

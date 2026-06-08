@@ -17,7 +17,7 @@
  */
 import { Select, Slider, Text } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
+import type { SettingsForm } from "@types";
 
 export default function BitrateOptions({
 	form,

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { createSlice } from "@reduxjs/toolkit";
-import type { ProcessingResult } from "types";
+import type { ProcessingResult } from "@/types";
 
 const initialState: ProcessingResult = {
 	successful: 0,

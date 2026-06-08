@@ -19,7 +19,7 @@ import { ActionIcon, Popover, Select } from "@mantine/core";
 import { IconFilter } from "@tabler/icons-react";
 import type { Column } from "@tanstack/react-table";
 import { useMemo } from "react";
-import type { Metadata } from "types";
+import type { Metadata } from "@/types";
 
 export default function FilterSelect({
 	column,

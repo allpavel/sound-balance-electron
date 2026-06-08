@@ -17,7 +17,7 @@
  */
 import { Flex, SegmentedControl, Text } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
-import type { SettingsForm } from "../../settings.types";
+import type { SettingsForm } from "@types";
 import BitrateOptions from "./BitrateOptions/BitrateOptions";
 export default function Bitrate({
 	form,

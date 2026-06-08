@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { SettingsForm } from "@renderer/components/Settings/settings.types";
 import { db } from "@renderer/db/db";
+import type { SettingsForm } from "@types";
 
 const SETTINGS_ID = "globalSettings";
 
