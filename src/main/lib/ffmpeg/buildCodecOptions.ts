@@ -16,31 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { SettingsForm } from "@types";
-import { buildCodecOptions } from "./buildCodecOptions";
-import { buildFilter } from "./buildFilter";
-
-export const getTrackSettings = (
-	initialSettings: SettingsForm["audio"],
-	settings: SettingsForm["audio"],
+export const buildCodecOptions = (
+	options: Record<string, string | boolean | number>,
 ) => {
 	const result: string[] = [];
-
-	if (settings.audioCodec !== initialSettings.audioCodec) {
-		const options = buildCodecOptions(settings.codecOptions);
-		result.push("-c:a", settings.audioCodec, ...options);
-	}
-	if (settings.audioFilter) {
-		const filter = buildFilter(settings.audioFilter, settings.filterOptions);
-		if (filter) {
-			result.push(...filter);
-		}
-	}
-	if (settings.audioQuality !== "auto") {
-		if (settings.audioQuality === "cbr") {
-			result.push("-b:a", settings.audioQualityValue);
+	const optionsArray = Object.entries(options);
+	for (const [key, value] of optionsArray) {
+		if (typeof value === "boolean") {
+			const flag = value ? "1" : "0";
+			result.push(`-${key}:a`, flag);
 		} else {
-			result.push("-q:a", settings.audioQualityValue);
+			result.push(`-${key}:a`, value.toString());
 		}
 	}
 	return result;
