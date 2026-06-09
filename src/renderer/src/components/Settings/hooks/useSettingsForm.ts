@@ -24,15 +24,15 @@ export default function useSettingsForm() {
 	const settings = useAppSelector((state) => state.settings);
 	const form = useForm<SettingsForm>({
 		initialValues: {
-			audio: { ...settings.audio },
-			global: { ...settings.global },
+			audio: structuredClone(settings.audio),
+			global: structuredClone(settings.global),
 		},
 	});
 
 	useEffect(() => {
 		form.setValues({
-			audio: { ...settings.audio },
-			global: { ...settings.global },
+			audio: structuredClone(settings.audio),
+			global: structuredClone(settings.global),
 		});
 	}, [form.setValues, settings]);
 
