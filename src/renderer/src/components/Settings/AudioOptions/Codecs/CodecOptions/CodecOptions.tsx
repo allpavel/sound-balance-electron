@@ -16,17 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { NumberInput, Select, Stack, Switch, Title } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
+import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { ENCODER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type { AUDIO_ENCODER_NAMES, SettingsForm } from "@types";
+import type { AUDIO_ENCODER_NAMES } from "@types";
 
 export function CodecOptions({
-	form,
 	codec,
 }: {
-	form: UseFormReturnType<SettingsForm>;
 	codec: AUDIO_ENCODER_NAMES | "copy";
 }) {
+	const form = useSettingsFormContext();
 	if (codec !== "copy") {
 		const config = ENCODER_OPTIONS[codec];
 

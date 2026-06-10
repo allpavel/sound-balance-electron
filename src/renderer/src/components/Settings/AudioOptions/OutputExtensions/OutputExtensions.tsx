@@ -16,15 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { NativeSelect } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
-import type { SettingsForm } from "@types";
+import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { EXTENSIONS_LIST } from "../../settings.constants";
 
-export default function OutputExtensions({
-	form,
-}: {
-	form: UseFormReturnType<SettingsForm>;
-}) {
+export default function OutputExtensions() {
+	const form = useSettingsFormContext();
 	return (
 		<NativeSelect
 			label="Output file extension:"

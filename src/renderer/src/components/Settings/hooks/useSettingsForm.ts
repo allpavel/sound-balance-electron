@@ -15,14 +15,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { useForm } from "@mantine/form";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import type { SettingsForm } from "@types";
 import { useEffect } from "react";
+import { useSettingsFormInstance } from "../context/SettingsFormContext";
 
 export default function useSettingsForm() {
 	const settings = useAppSelector((state) => state.settings);
-	const form = useForm<SettingsForm>({
+	const form = useSettingsFormInstance({
 		initialValues: {
 			audio: structuredClone(settings.audio),
 			global: structuredClone(settings.global),
