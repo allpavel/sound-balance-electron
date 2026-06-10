@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Button, Loader, Modal, Stack } from "@mantine/core";
+import { Button, Flex, Loader, Modal, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
@@ -51,9 +51,12 @@ export default function Settings() {
 					<Stack>
 						<GlobalOptions form={form} />
 						<AudioOptions form={form} />
-						<Button type="submit" mt={"lg"}>
-							Submit
-						</Button>
+						<Flex align={"center"} justify={"space-between"} mt={"sm"}>
+							<Button onClick={() => form.reset()}>Reset</Button>
+							<Button type="submit" bg="green" px={"xl"}>
+								Submit
+							</Button>
+						</Flex>
 					</Stack>
 				</form>
 			</Modal>
