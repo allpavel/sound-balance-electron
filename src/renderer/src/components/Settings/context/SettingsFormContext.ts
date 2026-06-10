@@ -15,22 +15,22 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Box, Stack, Title } from "@mantine/core";
-import OutputExtensions from "@renderer/components/Settings/AudioOptions//OutputExtensions/OutputExtensions";
-import Filters from "@renderer/components/Settings/AudioOptions/Filters/Filters";
-import Bitrate from "./Bitrate/Bitrate";
-import Codecs from "./Codecs/Codecs";
+import { createFormContext, type UseFormReturnType } from "@mantine/form";
+import type { SettingsForm } from "@types";
+import type { FC, PropsWithChildren, ReactNode } from "react";
 
-export function AudioOptions() {
-	return (
-		<Box>
-			<Title order={3}>Audio options</Title>
-			<Stack>
-				<OutputExtensions />
-				<Filters />
-				<Codecs />
-				<Bitrate />
-			</Stack>
-		</Box>
-	);
-}
+const [Provider, useSettingsFormContext, useSettingsFormInstance] =
+	createFormContext<SettingsForm>();
+
+type SettingsFormProviderProps = PropsWithChildren<{
+	form: UseFormReturnType<SettingsForm>;
+	children: ReactNode;
+}>;
+
+const SettingsFormProvider: FC<SettingsFormProviderProps> = Provider;
+
+export {
+	SettingsFormProvider,
+	useSettingsFormContext,
+	useSettingsFormInstance,
+};

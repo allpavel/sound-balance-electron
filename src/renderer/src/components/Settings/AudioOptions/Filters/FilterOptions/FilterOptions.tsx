@@ -23,18 +23,17 @@ import {
 	TextInput,
 	Title,
 } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
+import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { FILTER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type { AUDIO_FILTER_NAMES, SettingsForm } from "@types";
+import type { AUDIO_FILTER_NAMES } from "@types";
 import type { JSX } from "react";
 
 export function AudioFilterFactory({
-	form,
 	filter,
 }: {
-	form: UseFormReturnType<SettingsForm>;
 	filter: AUDIO_FILTER_NAMES;
 }): JSX.Element {
+	const form = useSettingsFormContext();
 	const config = FILTER_OPTIONS[filter as keyof typeof FILTER_OPTIONS];
 
 	if (!config) return <div>Unknown filter</div>;

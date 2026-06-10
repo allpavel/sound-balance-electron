@@ -17,9 +17,8 @@
  */
 
 import { Select, Stack } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
+import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { ENCODER_GROUPS } from "@renderer/components/Settings/settings.constants";
-import type { SettingsForm } from "@types";
 import { CodecOptions } from "./CodecOptions/CodecOptions";
 
 const data = ENCODER_GROUPS.map((item) => ({
@@ -27,11 +26,8 @@ const data = ENCODER_GROUPS.map((item) => ({
 	items: [...item.encoders],
 }));
 
-export default function Codecs({
-	form,
-}: {
-	form: UseFormReturnType<SettingsForm>;
-}) {
+export default function Codecs() {
+	const form = useSettingsFormContext();
 	const activeCodec = form.values.audio.audioCodec;
 
 	return (
@@ -46,7 +42,7 @@ export default function Codecs({
 				}}
 				clearable
 			/>
-			{activeCodec && <CodecOptions form={form} codec={activeCodec} />}
+			{activeCodec && <CodecOptions codec={activeCodec} />}
 		</Stack>
 	);
 }

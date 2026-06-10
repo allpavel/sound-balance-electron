@@ -16,14 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { Select, Slider, Text } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
-import type { SettingsForm } from "@types";
+import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 
-export default function BitrateOptions({
-	form,
-}: {
-	form: UseFormReturnType<SettingsForm>;
-}) {
+export default function BitrateOptions() {
+	const form = useSettingsFormContext();
 	const mode = form.getInputProps("audio.audioQuality").value;
 
 	switch (mode) {

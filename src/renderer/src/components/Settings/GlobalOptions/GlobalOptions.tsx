@@ -24,17 +24,13 @@ import {
 	TextInput,
 	Title,
 } from "@mantine/core";
-import type { UseFormReturnType } from "@mantine/form";
+import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { useDirectoryPicker } from "@renderer/components/Settings/hooks/useDirectoryPicker";
 import { CONCURRENCY_OPTIONS } from "@renderer/components/Settings/settings.constants";
 import { IconUpload } from "@tabler/icons-react";
-import type { SettingsForm } from "@types";
 
-export function GlobalOptions({
-	form,
-}: {
-	form: UseFormReturnType<SettingsForm>;
-}) {
+export function GlobalOptions() {
+	const form = useSettingsFormContext();
 	const getOutputDirectoryPath = useDirectoryPicker();
 
 	const handleDirectoryPicker = async () => {
