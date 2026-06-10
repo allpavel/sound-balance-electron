@@ -44,6 +44,7 @@ export default function Codecs({
 					form.setFieldValue("audio.audioCodec", value);
 					form.setFieldValue("audio.codecOptions", {});
 				}}
+				clearable
 			/>
 			{activeCodec && <CodecOptions form={form} codec={activeCodec} />}
 		</Stack>
