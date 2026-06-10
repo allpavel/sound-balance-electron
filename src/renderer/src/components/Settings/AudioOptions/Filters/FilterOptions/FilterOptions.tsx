@@ -86,7 +86,9 @@ export function AudioFilterFactory({
 								onLabel="enable"
 								offLabel="disable"
 								size="md"
-								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
+								{...form.getInputProps(`audio.filterOptions.${field.label}`, {
+									type: "checkbox",
+								})}
 								styles={{
 									body: {
 										justifyContent: "space-between",
