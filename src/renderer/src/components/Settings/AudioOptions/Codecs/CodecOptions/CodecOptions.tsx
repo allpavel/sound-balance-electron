@@ -70,7 +70,9 @@ export function CodecOptions({
 									onLabel="enable"
 									offLabel="disable"
 									size="md"
-									{...form.getInputProps(`audio.codecOptions.${field.label}`)}
+									{...form.getInputProps(`audio.codecOptions.${field.label}`, {
+										type: "checkbox",
+									})}
 									styles={{
 										body: {
 											justifyContent: "space-between",
