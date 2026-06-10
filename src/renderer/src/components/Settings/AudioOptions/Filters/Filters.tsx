@@ -70,7 +70,7 @@ export default function Filters({
 		>
 			<Combobox.Target>
 				<TextInput
-					label="Pick an audio filter or type anything:"
+					label="Audio filter:"
 					value={search}
 					{...inputProps}
 					onChange={(e) => {
@@ -81,7 +81,15 @@ export default function Filters({
 					onClick={() => combobox.openDropdown()}
 					onFocus={() => combobox.openDropdown()}
 					onBlur={() => combobox.closeDropdown()}
-					rightSection={<Combobox.Chevron />}
+					rightSection={
+						search ? (
+							<Combobox.ClearButton
+								onClear={() => form.setFieldValue("audio.audioFilter", "")}
+							/>
+						) : (
+							<Combobox.Chevron />
+						)
+					}
 					key={form.key("audio.audioFilter")}
 				/>
 			</Combobox.Target>
