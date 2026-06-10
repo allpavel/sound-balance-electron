@@ -61,6 +61,7 @@ export default function StartProcessing() {
 			const data: Data = { tracks, settings };
 			const results = await window.api.startProcessing(data);
 			dispatch(setResults(results));
+			setIsRunning(false);
 		}
 	};
 
