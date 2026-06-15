@@ -15,19 +15,31 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-type SecondOptions = {
+type Stats = {
 	measured_I: number;
 	measured_LRA: number;
 	measured_TP: number;
-	measured_tresh: number;
+	measured_thresh: number;
+	measured_offset: number;
 };
+
+export type LoudnormTwoPassOptions = {
+	input: string;
+	output: string;
+	globalSettings: string[];
+	filterOptions: Record<string, string | number | boolean>;
+	signal: AbortSignal;
+};
+
 export const buildLoudnormFirstPassOptions = (
-	options: Record<string, string | number | boolean>,
+	options: LoudnormTwoPassOptions,
 	stats_file: string,
 ) => {
 	const optionsArray = Object.entries(options);
 	if (optionsArray.length > 0) {
-		const filterArgs = optionsArray.map(([k, v]) => `${k}=${v}`).join(":");
+		const filterArgs = optionsArray
+			.map(([k, v]) => `${k}=${v === "boolean" ? (v ? "1" : "0") : v}`)
+			.join(":");
 		return [
 			"-af",
 			`loudnorm=${filterArgs}:print_format=json:stats_file=${stats_file}`,
@@ -38,14 +50,14 @@ export const buildLoudnormFirstPassOptions = (
 
 export const buildLoudnormSecondPassOptions = (
 	options: Record<string, string | number | boolean>,
-	stats: SecondOptions,
+	stats: Stats,
 ) => {
 	const optionsArray = Object.entries(options);
 	const filterArgs: string[] = [
 		`measured_I=${stats.measured_I}`,
 		`measured_LRA=${stats.measured_LRA}`,
 		`measured_TP=${stats.measured_TP}`,
-		`measured_tresh=${stats.measured_tresh}`,
+		`measured_tresh=${stats.measured_thresh}`,
 		"linear=1",
 	];
 	if (optionsArray.length > 0) {
