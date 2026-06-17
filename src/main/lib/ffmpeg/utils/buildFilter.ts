@@ -15,35 +15,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { BaseProcess } from "./baseProcess";
-
-export type ProcessManagerOptions = {
-	input: string;
-	output: string;
-	globalSettings: string[];
-	trackSettings: string[];
+export const buildFilter = (
+	filterName: string,
+	options: Record<string, string | number | boolean>,
+) => {
+	const optionsArray = Object.entries(options);
+	if (optionsArray.length > 0) {
+		const filterArgs = optionsArray.map(([k, v]) => `${k}=${v}`).join(":");
+		return ["-af", `${filterName}=${filterArgs}`];
+	}
+	return ["-af", `${filterName}`];
 };
-
-export class ProcessManager extends BaseProcess {
-	async run(options: ProcessManagerOptions): Promise<void> {
-		const args = [
-			...options.globalSettings,
-			"-i",
-			options.input,
-			...options.trackSettings,
-			options.output,
-		];
-
-		return this.runProcessing(args);
-	}
-
-	kill(signal: NodeJS.Signals = "SIGINT"): void {
-		if (this.process) {
-			this.process.kill(signal);
-		}
-	}
-
-	isRunning(): boolean {
-		return this.process !== null;
-	}
-}

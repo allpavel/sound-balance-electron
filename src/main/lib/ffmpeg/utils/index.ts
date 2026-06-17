@@ -15,35 +15,5 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { BaseProcess } from "./baseProcess";
-
-export type ProcessManagerOptions = {
-	input: string;
-	output: string;
-	globalSettings: string[];
-	trackSettings: string[];
-};
-
-export class ProcessManager extends BaseProcess {
-	async run(options: ProcessManagerOptions): Promise<void> {
-		const args = [
-			...options.globalSettings,
-			"-i",
-			options.input,
-			...options.trackSettings,
-			options.output,
-		];
-
-		return this.runProcessing(args);
-	}
-
-	kill(signal: NodeJS.Signals = "SIGINT"): void {
-		if (this.process) {
-			this.process.kill(signal);
-		}
-	}
-
-	isRunning(): boolean {
-		return this.process !== null;
-	}
-}
+export { buildCodecOptions } from "./buildCodecOptions";
+export { buildFilter } from "./buildFilter";

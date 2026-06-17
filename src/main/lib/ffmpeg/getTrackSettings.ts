@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { buildCodecOptions, buildFilter } from "@main/lib/ffmpeg/utils";
 import type { SettingsForm } from "@types";
-import { buildCodecOptions } from "./buildCodecOptions";
-import { buildFilter } from "./buildFilter";
 
 export const getTrackSettings = (
 	initialSettings: SettingsForm["audio"],
