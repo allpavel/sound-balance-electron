@@ -24,6 +24,7 @@ import type { Data } from "@types";
 import type { IpcMainInvokeEvent } from "electron";
 import PQueue from "p-queue";
 import type { Failed, ProcessingStatus } from "@/types";
+import { TwoPassProcessManager } from "./ffmpeg/twoPassProcessManager";
 
 const activeProcesses = new Map<string, ProcessManager>();
 let abortController: AbortController | null = null;
@@ -56,8 +57,36 @@ export const startProcessing = async (
 
 		queue.add(async () => {
 			if (signal.aborted) return;
+			let proc: TwoPassProcessManager | ProcessManager;
 
-			const proc = new ProcessManager();
+			if (
+				data.settings.audio.audioFilter === "loudnorm" &&
+				data.settings.audio.filterOptions?.linear !== false
+			) {
+				proc = new TwoPassProcessManager();
+				const inputFile = track.filePath;
+				const outputFile = path.join(dirPath, track.file);
+
+				await proc.run({
+					input: inputFile,
+					output: outputFile,
+					globalSettings,
+					trackSettings,
+					filterOptions: data.settings.audio.filterOptions,
+					signal: signal,
+				});
+			} else {
+				proc = new ProcessManager();
+				const inputFile = track.filePath;
+				const outputFile = path.join(dirPath, track.file);
+				await proc.run({
+					input: inputFile,
+					output: outputFile,
+					globalSettings,
+					trackSettings,
+				});
+			}
+
 			activeProcesses.set(track.id, proc);
 
 			try {
@@ -66,18 +95,7 @@ export const startProcessing = async (
 					status: "processing",
 				} satisfies ProcessingStatus);
 
-				const inputFile = track.filePath;
-				const outputFile = path.join(dirPath, track.file);
-
 				total++;
-
-				await proc.run({
-					input: inputFile,
-					output: outputFile,
-					globalSettings,
-					trackSettings,
-				});
-
 				successful++;
 
 				event.sender.send(EVENT_CHANNELS.PROCESSING_RESULT, {

@@ -33,19 +33,15 @@ export type LoudnormTwoPassOptions = {
 
 export const buildLoudnormFirstPassOptions = (
 	options: LoudnormTwoPassOptions,
-	stats_file: string,
 ) => {
-	const optionsArray = Object.entries(options);
+	const optionsArray = Object.entries(options.filterOptions);
 	if (optionsArray.length > 0) {
 		const filterArgs = optionsArray
 			.map(([k, v]) => `${k}=${v === "boolean" ? (v ? "1" : "0") : v}`)
 			.join(":");
-		return [
-			"-af",
-			`loudnorm=${filterArgs}:print_format=json:stats_file=${stats_file}`,
-		];
+		return ["-af", `loudnorm=${filterArgs}:print_format=json`];
 	}
-	return ["-af", `loudnorm=print_format=json:stats_file=${stats_file}`];
+	return ["-af", `loudnorm=print_format=json`];
 };
 
 export const buildLoudnormSecondPassOptions = (

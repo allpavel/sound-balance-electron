@@ -22,6 +22,7 @@ import ffmpegPath from "ffmpeg-static";
 export abstract class BaseProcess extends EventEmitter {
 	protected process: ChildProcessWithoutNullStreams | null = null;
 	protected readonly ffmpeg: string;
+	protected stderrData: string;
 
 	constructor() {
 		super();
@@ -31,14 +32,15 @@ export abstract class BaseProcess extends EventEmitter {
 			);
 		}
 		this.ffmpeg = ffmpegPath;
+		this.stderrData = "";
 	}
 
 	protected runProcessing(args: string[]): Promise<void> {
 		let resolved = false;
-		let stderrData = "";
 		const MAX_STDERR_BUFFER = 1024 * 1024;
 
 		return new Promise((resolve, reject) => {
+			this.stderrData = "";
 			if (this.process) {
 				reject(new Error("FFmpeg process is already running"));
 				return;
@@ -60,11 +62,12 @@ export abstract class BaseProcess extends EventEmitter {
 
 			const stdoutHandler = (data: Buffer) =>
 				this.emit("stdout", data.toString());
+
 			const stderrHandler = (data: Buffer) => {
 				const chunk = data.toString();
-				stderrData += chunk;
-				if (stderrData.length > MAX_STDERR_BUFFER) {
-					stderrData = stderrData.slice(-MAX_STDERR_BUFFER / 2);
+				this.stderrData += chunk;
+				if (this.stderrData.length > MAX_STDERR_BUFFER) {
+					this.stderrData = this.stderrData.slice(-MAX_STDERR_BUFFER / 2);
 				}
 				this.emit("stderr", chunk);
 			};
@@ -100,7 +103,9 @@ export abstract class BaseProcess extends EventEmitter {
 						new Error(`FFmpeg process was terminated by signal: ${signal}`),
 					);
 				} else {
-					reject(new Error(`FFmpeg exited with code ${code}\n${stderrData}`));
+					reject(
+						new Error(`FFmpeg exited with code ${code}\n${this.stderrData}`),
+					);
 				}
 			};
 

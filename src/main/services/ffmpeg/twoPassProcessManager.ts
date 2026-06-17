@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import {
 	buildLoudnormFirstPassOptions,
 	buildLoudnormSecondPassOptions,
@@ -28,25 +26,9 @@ export type LoudnormTwoPassOptions = {
 	input: string;
 	output: string;
 	globalSettings: string[];
+	trackSettings: string[];
 	filterOptions: Record<string, string | number | boolean>;
 	signal: AbortSignal;
-};
-
-type LoudnormStats = {
-	input_i: number;
-	input_lra: number;
-	input_tp: number;
-	input_thresh: number;
-	output_i: number;
-	output_lra: number;
-	output_tp: number;
-	output_thresh: number;
-	target_offset: number;
-	measured_I: number;
-	measured_LRA: number;
-	measured_TP: number;
-	measured_thresh: number;
-	measured_offset: number;
 };
 
 type Stats = {
@@ -60,17 +42,43 @@ type Stats = {
 export class TwoPassProcessManager extends BaseProcess {
 	private tempDir: string | null = null;
 
+	private extractStatsFromStderr(stderr: string): Stats {
+		const match = stderr.match(/\{[\s\S]*\}/);
+		if (!match) {
+			throw new Error("Could not find loudnorm stats in stderr output");
+		}
+		try {
+			const parsed = JSON.parse(match[0]);
+			return {
+				measured_I: parsed.input_i ?? parsed.measured_I,
+				measured_LRA: parsed.input_lra ?? parsed.measured_LRA,
+				measured_TP: parsed.input_tp ?? parsed.measured_TP,
+				measured_thresh: parsed.input_thresh ?? parsed.measured_thresh,
+				measured_offset: parsed.target_offset ?? parsed.measured_offset,
+			};
+		} catch (err) {
+			throw new Error(`Failed to parse loudnorm stats: ${err}`);
+		}
+	}
+
 	async run(options: LoudnormTwoPassOptions): Promise<void> {
-		const { input, output, globalSettings, filterOptions, signal } = options;
+		const {
+			input,
+			output,
+			globalSettings,
+			trackSettings,
+			filterOptions,
+			signal,
+		} = options;
 
 		if (signal.aborted) {
 			throw new Error("Processing aborted before start");
 		}
 
-		this.tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loudnorm-"));
-		const statsFile = path.join(this.tempDir, "stats.json");
+		// this.tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loudnorm-"));
+		// const statsFile = path.join(this.tempDir, "stats.json");
 
-		const analysisFilter = buildLoudnormFirstPassOptions(options, statsFile);
+		const analysisFilter = buildLoudnormFirstPassOptions(options);
 
 		const firstPassArgs = [
 			...globalSettings,
@@ -81,47 +89,39 @@ export class TwoPassProcessManager extends BaseProcess {
 			"null",
 			"-",
 		];
-
-		// run first pass
-		await this.runProcessing(firstPassArgs);
-
-		// read and parse statistics
-		let stats: LoudnormStats;
 		try {
-			const statsRaw = await fs.readFile(statsFile, "utf-8");
-			stats = JSON.parse(statsRaw) as LoudnormStats;
-		} catch (err) {
-			throw new Error(
-				`Failed to read or parse loudnorm stats file: ${err instanceof Error ? err.message : String(err)}`,
+			// run first pass
+			await this.runProcessing(firstPassArgs);
+
+			// prepare second pass with measured values
+			const stats = this.extractStatsFromStderr(this.stderrData);
+			const measuredParams: Stats = {
+				measured_I: stats.measured_I,
+				measured_LRA: stats.measured_LRA,
+				measured_TP: stats.measured_TP,
+				measured_thresh: stats.measured_thresh,
+				measured_offset: stats.measured_offset,
+			};
+
+			const secondPassFilter = buildLoudnormSecondPassOptions(
+				filterOptions,
+				measuredParams,
 			);
+			const secondPassArgs = [
+				...globalSettings,
+				"-i",
+				input,
+				...secondPassFilter,
+				...trackSettings,
+				output,
+			];
+
+			// run second pass
+			await this.runProcessing(secondPassArgs);
+		} finally {
+			// always cleanup temporary files
+			await this.cleanup();
 		}
-
-		// prepare second pass with measured values
-		const measuredParams: Stats = {
-			measured_I: stats.measured_I,
-			measured_LRA: stats.measured_LRA,
-			measured_TP: stats.measured_TP,
-			measured_thresh: stats.measured_thresh,
-			measured_offset: stats.measured_offset,
-		};
-
-		const secondPassFilter = buildLoudnormSecondPassOptions(
-			filterOptions,
-			measuredParams,
-		);
-		const secondPassArgs = [
-			...globalSettings,
-			"-i",
-			input,
-			...secondPassFilter,
-			output,
-		];
-
-		// run second pass
-		await this.runProcessing(secondPassArgs);
-
-		// cleanup temporary files
-		await this.cleanup();
 	}
 
 	async kill(signal: NodeJS.Signals = "SIGINT"): Promise<void> {
