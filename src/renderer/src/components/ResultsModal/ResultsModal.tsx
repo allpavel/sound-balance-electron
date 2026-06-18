@@ -31,12 +31,21 @@ import { Fragment, useEffect } from "react";
 export default function ResultModal() {
 	const [opened, { open, close }] = useDisclosure();
 	const results = useAppSelector((state) => state.results);
+	const {
+		global: { outputDirectoryPath },
+	} = useAppSelector((state) => state.settings);
 
 	useEffect(() => {
 		if (results.total > 0) {
 			open();
 		}
 	}, [results, open]);
+
+	const handleOpenOutputFolder = () => {
+		if (outputDirectoryPath) {
+			window.api.openOutputFolder(outputDirectoryPath);
+		}
+	};
 
 	return (
 		<>
@@ -62,6 +71,11 @@ export default function ResultModal() {
 								</Accordion.Panel>
 							</Accordion.Item>
 						</Accordion>
+					)}
+					{results.total > 0 && (
+						<Button onClick={handleOpenOutputFolder} mt={"md"}>
+							Open Output Folder
+						</Button>
 					)}
 				</Stack>
 			</Modal>
