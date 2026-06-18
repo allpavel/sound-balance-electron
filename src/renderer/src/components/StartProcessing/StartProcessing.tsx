@@ -70,6 +70,12 @@ export default function StartProcessing() {
 			try {
 				const results = await window.api.startProcessing(data);
 				dispatch(setResults(results));
+				if (
+					settings.global.openOutputFolderOnComplete &&
+					settings.global.outputDirectoryPath
+				) {
+					window.api.openOutputFolder(settings.global.outputDirectoryPath);
+				}
 			} catch (error) {
 				setErrorMsg(
 					`An error occurred during processing: ${error instanceof Error ? error.message : String(error)}`,

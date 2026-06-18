@@ -14,6 +14,7 @@ export type SettingsForm = {
 	};
 	global: {
 		outputDirectoryPath: string;
+		openOutputFolderOnComplete: boolean;
 		concurrency: number;
 		overwrite: boolean;
 		noOverwrite: boolean;

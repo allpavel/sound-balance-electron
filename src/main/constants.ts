@@ -21,6 +21,7 @@ import type { SettingsForm } from "@types";
 export const INITIALSETTINGS = {
 	global: {
 		outputDirectoryPath: "",
+		openOutputFolderOnComplete: false,
 		overwrite: true,
 		noOverwrite: false,
 		concurrency: 1,
