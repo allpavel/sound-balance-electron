@@ -47,4 +47,5 @@ export const INVOKE_CHANNELS = {
 	GET_OUTPUT_DIRECTORY: "getOutputDirectoryPath",
 	START_PROCESSING: "startProcessing",
 	STOP_PROCESSING: "stopProcessing",
+	OPEN_OUTPUT_FOLDER: "openOutputFolder",
 } as const;

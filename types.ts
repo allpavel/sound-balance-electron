@@ -28,6 +28,7 @@ export type API = {
 	responseOnStart: (cb: (msg: string) => void) => () => void;
 	responseOnStop: (cb: (msg: StoppingStatus) => void) => () => void;
 	processingResult: (cb: (msg: ProcessingStatus) => void) => () => void;
+	openOutputFolder: (outputDirectoryPath: string) => Promise<void>;
 };
 
 export type Metadata = IAudioMetadata & {

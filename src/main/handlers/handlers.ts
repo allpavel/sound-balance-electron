@@ -25,6 +25,7 @@ import {
 	startProcessing,
 	stopProcessing,
 } from "@main/services/processing.service";
+import { openOutputFolder } from "@main/services/shell.service";
 import { ipcMain } from "electron";
 
 export function registerIpcHandlers(): void {
@@ -36,6 +37,7 @@ export function registerIpcHandlers(): void {
 		return await parseMetadata(filePaths);
 	});
 	ipcMain.handle(INVOKE_CHANNELS.GET_OUTPUT_DIRECTORY, getOutputDirectoryPath);
+	ipcMain.handle(INVOKE_CHANNELS.OPEN_OUTPUT_FOLDER, openOutputFolder);
 
 	ipcMain.handle(INVOKE_CHANNELS.START_PROCESSING, startProcessing);
 	ipcMain.handle(INVOKE_CHANNELS.STOP_PROCESSING, stopProcessing);
