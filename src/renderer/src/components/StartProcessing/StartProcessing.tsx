@@ -32,6 +32,7 @@ import type { ProcessingStatus, StoppingStatus } from "@/types";
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
 	const [isRunning, setIsRunning] = useState(false);
+	const [errorMsg, setErrorMsg] = useState("");
 	const { selectedTracks: tracks } = useTracks();
 	const settings = useAppSelector((state) => state.settings);
 	const dispatch = useAppDispatch();
@@ -54,14 +55,28 @@ export default function StartProcessing() {
 
 	const sendData = async () => {
 		if (!settings.global.outputDirectoryPath) {
+			setErrorMsg(
+				"Please specify the output folder in the settings before starting processing.",
+			);
 			open();
-			return;
+		} else if (tracks.length === 0) {
+			setErrorMsg(
+				"No tracks selected. Please select at least one track to process.",
+			);
+			open();
 		} else {
 			setIsRunning(true);
 			const data: Data = { tracks, settings };
-			const results = await window.api.startProcessing(data);
-			dispatch(setResults(results));
-			setIsRunning(false);
+			try {
+				const results = await window.api.startProcessing(data);
+				dispatch(setResults(results));
+			} catch (error) {
+				setErrorMsg(
+					`An error occurred during processing: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			} finally {
+				setIsRunning(false);
+			}
 		}
 	};
 
@@ -76,13 +91,7 @@ export default function StartProcessing() {
 
 	return (
 		<>
-			<ErrorModal
-				message="Please specify the output folder in the settings before starting
-          processing."
-				onClose={close}
-				opened={opened}
-				centered
-			/>
+			<ErrorModal message={errorMsg} onClose={close} opened={opened} centered />
 			<Flex gap={"md"}>
 				<ResultsModal />
 				<RunButton
