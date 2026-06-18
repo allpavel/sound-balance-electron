@@ -45,6 +45,8 @@ const api = {
 		return () =>
 			ipcRenderer.removeAllListeners(EVENT_CHANNELS.PROCESSING_RESULT);
 	},
+	openOutputFolder: (outputDirectoryPath: string) =>
+		ipcRenderer.invoke(INVOKE_CHANNELS.OPEN_OUTPUT_FOLDER, outputDirectoryPath),
 } satisfies API;
 
 if (process.contextIsolated) {
