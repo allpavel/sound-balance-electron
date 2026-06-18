@@ -89,6 +89,22 @@ export function GlobalOptions() {
 						}}
 						{...form.getInputProps("global.noOverwrite", { type: "checkbox" })}
 					/>
+					<Divider />
+					<Switch
+						label={"Open output folder after processing completes:"}
+						labelPosition="left"
+						onLabel="yes"
+						offLabel="no"
+						size="md"
+						styles={{
+							body: {
+								justifyContent: "space-between",
+							},
+						}}
+						{...form.getInputProps("global.openOutputFolderOnComplete", {
+							type: "checkbox",
+						})}
+					/>
 				</Stack>
 			</Stack>
 		</Box>

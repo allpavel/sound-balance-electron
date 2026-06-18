@@ -27,6 +27,7 @@ const SETTINGS_ACTIONS = {
 export const initialSettings: SettingsForm = {
 	global: {
 		outputDirectoryPath: "",
+		openOutputFolderOnComplete: false,
 		overwrite: true,
 		noOverwrite: false,
 		concurrency: 1,
