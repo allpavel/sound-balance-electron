@@ -51,42 +51,18 @@ export const startProcessing = async (
 		INITIALSETTINGS.audio,
 		data.settings.audio,
 	);
+	const isTwoPass =
+		data.settings.audio.audioFilter === "loudnorm" &&
+		data.settings.audio.filterOptions?.linear !== false;
 
 	for (const track of data.tracks) {
 		if (!track.filePath || track.status !== "pending") continue;
 
 		queue.add(async () => {
 			if (signal.aborted) return;
-			let proc: TwoPassProcessManager | ProcessManager;
-
-			if (
-				data.settings.audio.audioFilter === "loudnorm" &&
-				data.settings.audio.filterOptions?.linear !== false
-			) {
-				proc = new TwoPassProcessManager();
-				const inputFile = track.filePath;
-				const outputFile = path.join(dirPath, track.file);
-
-				await proc.run({
-					input: inputFile,
-					output: outputFile,
-					globalSettings,
-					trackSettings,
-					filterOptions: data.settings.audio.filterOptions,
-					signal: signal,
-				});
-			} else {
-				proc = new ProcessManager();
-				const inputFile = track.filePath;
-				const outputFile = path.join(dirPath, track.file);
-				await proc.run({
-					input: inputFile,
-					output: outputFile,
-					globalSettings,
-					trackSettings,
-				});
-			}
-
+			const proc = isTwoPass
+				? new TwoPassProcessManager()
+				: new ProcessManager();
 			activeProcesses.set(track.id, proc);
 
 			try {
@@ -95,7 +71,27 @@ export const startProcessing = async (
 					status: "processing",
 				} satisfies ProcessingStatus);
 
+				const inputFile = track.filePath;
+				const outputFile = path.join(dirPath, track.file);
 				total++;
+
+				if (proc instanceof TwoPassProcessManager) {
+					await proc.run({
+						input: inputFile,
+						output: outputFile,
+						globalSettings,
+						trackSettings,
+						filterOptions: data.settings.audio.filterOptions,
+						signal: signal,
+					});
+				} else if (proc instanceof ProcessManager) {
+					await proc.run({
+						input: inputFile,
+						output: outputFile,
+						globalSettings,
+						trackSettings,
+					});
+				}
 				successful++;
 
 				event.sender.send(EVENT_CHANNELS.PROCESSING_RESULT, {
