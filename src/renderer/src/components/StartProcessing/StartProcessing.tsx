@@ -24,7 +24,6 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
-import { updateInDB } from "@renderer/store/slices/tracksSlice";
 import type { Data } from "@types";
 import { useEffect, useState } from "react";
 import type { ProcessingStatus, StoppingStatus } from "@/types";
@@ -33,7 +32,7 @@ export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
 	const [isRunning, setIsRunning] = useState(false);
 	const [errorMsg, setErrorMsg] = useState("");
-	const { selectedTracks: tracks } = useTracks();
+	const { selectedTracks: tracks, updateTrack } = useTracks();
 	const settings = useAppSelector((state) => state.settings);
 	const dispatch = useAppDispatch();
 
@@ -47,11 +46,13 @@ export default function StartProcessing() {
 	}, []);
 
 	useEffect(() => {
-		const unsubscribe = window.api.processingResult((data: ProcessingStatus) =>
-			dispatch(updateInDB({ id: data.id, changes: { status: data.status } })),
+		const unsubscribe = window.api.processingResult(
+			(data: ProcessingStatus) => {
+				updateTrack({ id: data.id, changes: { status: data.status } });
+			},
 		);
 		return () => unsubscribe();
-	}, [dispatch]);
+	}, [updateTrack]);
 
 	const sendData = async () => {
 		if (!settings.global.outputDirectoryPath) {
