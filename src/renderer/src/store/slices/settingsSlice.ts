@@ -34,7 +34,7 @@ export const initialSettings: SettingsForm = {
 	},
 	audio: {
 		audioCodec: "copy",
-		audioQuality: "vbr",
+		audioQuality: "auto",
 		audioQualityValue: "4",
 		audioFilter: "",
 		outputExtension: "copy",

@@ -1102,19 +1102,6 @@ export const FILTER_OPTIONS = {
 				desc: "Treat mono input files as dual-mono.",
 				defaultValue: true,
 			},
-			{
-				type: "select",
-				label: "print_format",
-				desc: "Set print format for stats.",
-				options: ["none", "summary", "json"],
-				defaultValue: "none",
-			},
-			{
-				type: "text",
-				label: "stats_file",
-				desc: "Write stats to specified file.",
-				defaultValue: "",
-			},
 		],
 	},
 	// afftdn: {

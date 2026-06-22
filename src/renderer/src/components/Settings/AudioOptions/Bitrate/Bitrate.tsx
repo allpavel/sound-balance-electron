@@ -27,6 +27,7 @@ export default function Bitrate() {
 				<Text>Choose an audio bitrate:</Text>
 				<SegmentedControl
 					data={["cbr", "vbr", "auto"]}
+					defaultValue={"auto"}
 					radius={"lg"}
 					{...form.getInputProps("audio.audioQuality")}
 				/>

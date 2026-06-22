@@ -54,6 +54,7 @@ export function AudioFilterFactory({
 								description={field.desc}
 								min={field.min}
 								max={field.max}
+								defaultValue={field.defaultValue}
 								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
 							/>
 						);
@@ -64,6 +65,7 @@ export function AudioFilterFactory({
 								label={field.label}
 								description={field.desc}
 								data={field.options}
+								defaultValue={field.defaultValue}
 								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
 							/>
 						);
@@ -73,6 +75,7 @@ export function AudioFilterFactory({
 								key={field.label}
 								label={field.label}
 								description={field.desc}
+								defaultValue={field.defaultValue}
 								{...form.getInputProps(`audio.filterOptions.${field.label}`)}
 							/>
 						);
@@ -85,6 +88,7 @@ export function AudioFilterFactory({
 								onLabel="enable"
 								offLabel="disable"
 								size="md"
+								defaultChecked={field.defaultValue}
 								{...form.getInputProps(`audio.filterOptions.${field.label}`, {
 									type: "checkbox",
 								})}

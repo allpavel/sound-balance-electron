@@ -68,6 +68,8 @@ export default function BitrateOptions() {
 		case "auto":
 			return null;
 		default:
-			return <Text>Unsupported value. Please choose "cbr" or "vbr".</Text>;
+			return (
+				<Text>Unsupported value. Please choose "cbr", "vbr" or "auto".</Text>
+			);
 	}
 }

@@ -47,6 +47,7 @@ export function CodecOptions({
 									description={field.desc}
 									min={field.min}
 									max={field.max}
+									defaultValue={field.defaultValue}
 									{...form.getInputProps(`audio.codecOptions.${field.label}`)}
 								/>
 							);
@@ -57,6 +58,7 @@ export function CodecOptions({
 									label={field.label}
 									description={field.desc}
 									data={field.options}
+									defaultValue={field.defaultValue}
 									{...form.getInputProps(`audio.codecOptions.${field.label}`)}
 								/>
 							);
@@ -69,6 +71,7 @@ export function CodecOptions({
 									onLabel="enable"
 									offLabel="disable"
 									size="md"
+									defaultValue={field.defaultValue}
 									{...form.getInputProps(`audio.codecOptions.${field.label}`, {
 										type: "checkbox",
 									})}
