@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import {
 	ActionIcon,
 	Button,
@@ -23,11 +24,16 @@ import {
 	TextInput,
 	Tooltip,
 } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useCollections } from "@renderer/hooks/useCollections";
 import { IconPlusFilled } from "@tabler/icons-react";
+import z from "zod";
 import type { CollectionType } from "@/types";
+
+const addCollectionSchema = z.object({
+	title: z.string().min(1, "Title is required"),
+});
 
 export default function AddCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
@@ -39,6 +45,7 @@ export default function AddCollection() {
 
 	const form = useForm({
 		initialValues,
+		validate: schemaResolver(addCollectionSchema),
 	});
 
 	return (
@@ -58,7 +65,6 @@ export default function AddCollection() {
 				>
 					<TextInput
 						label={"Title:"}
-						required
 						key={form.key("title")}
 						{...form.getInputProps("title")}
 					/>

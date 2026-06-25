@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { createFormContext, type UseFormReturnType } from "@mantine/form";
-import type { SettingsForm } from "@types";
 import type { FC, PropsWithChildren, ReactNode } from "react";
+import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 
 const [Provider, useSettingsFormContext, useSettingsFormInstance] =
 	createFormContext<SettingsForm>();

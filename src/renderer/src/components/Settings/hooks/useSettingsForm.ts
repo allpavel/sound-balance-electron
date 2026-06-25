@@ -15,9 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { schemaResolver } from "@mantine/form";
+import { useSettingsFormInstance } from "@renderer/components/Settings/context/SettingsFormContext";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useEffect } from "react";
-import { useSettingsFormInstance } from "../context/SettingsFormContext";
+import { settingsSchema } from "../../../../../shared/schemas/settings.schema";
 
 export default function useSettingsForm() {
 	const settings = useAppSelector((state) => state.settings);
@@ -26,6 +29,7 @@ export default function useSettingsForm() {
 			audio: structuredClone(settings.audio),
 			global: structuredClone(settings.global),
 		},
+		validate: schemaResolver(settingsSchema),
 	});
 
 	useEffect(() => {
