@@ -37,7 +37,7 @@ export function useCollections() {
 			changes,
 		}: {
 			id: string;
-			changes: Partial<CollectionType>;
+			changes: Omit<CollectionType, "id">;
 		}) => collectionsRepository.updateCollection(id, changes),
 	});
 
