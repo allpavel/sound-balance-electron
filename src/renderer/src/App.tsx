@@ -17,8 +17,8 @@
  */
 import { AppShell, Group } from "@mantine/core";
 import AddButton from "@renderer/components/AddButton/AddButton";
-import Collections from "@renderer/components/Collections/Collections";
-import { CollectionTitle } from "@renderer/components/CollectionTitle/CollectionTitle";
+import CollectionsList from "@renderer/components/Collections/CollectionsList/CollectionsList";
+import { CollectionTitle } from "@renderer/components/Collections/CollectionTitle/CollectionTitle";
 import DeleteButton from "@renderer/components/DeleteButton/DeleteButton";
 import Settings from "@renderer/components/Settings/Settings";
 import StartProcessing from "@renderer/components/StartProcessing/StartProcessing";
@@ -52,7 +52,7 @@ function App(): React.JSX.Element {
 					<StartProcessing />
 				</Group>
 			</AppShell.Header>
-			<Collections />
+			<CollectionsList />
 			<AppShell.Main>
 				<CollectionTitle />
 				<TableComponent />
