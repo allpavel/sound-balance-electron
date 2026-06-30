@@ -15,15 +15,46 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { existsSync, statSync } from "node:fs";
+import type { OpenPathResult } from "@types";
 import { shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron/main";
+
+const isSystemError = (err: unknown): err is Error & { code: string } => {
+	return err instanceof Error && "code" in err && typeof err.code === "string";
+};
 
 export async function openOutputFolder(
 	_: IpcMainInvokeEvent,
 	folderPath: string,
-): Promise<void> {
-	const error = await shell.openPath(folderPath);
-	if (error) {
-		throw new Error(`Failed to open folder: ${error}`);
+): Promise<OpenPathResult> {
+	let error = "";
+	try {
+		if (!existsSync(folderPath)) {
+			try {
+				statSync(folderPath);
+			} catch (err) {
+				if (isSystemError(err)) {
+					if (err.code === "EACCES" || err.code === "EPERM") {
+						return {
+							success: false,
+							reason: "Permission denied. You cannot access output folder.",
+						};
+					}
+				}
+			}
+			return { success: false, reason: "Folder doesn't exist." };
+		}
+		error = await shell.openPath(folderPath);
+		if (error) {
+			return { success: false, reason: error };
+		}
+		return { success: true, reason: "" };
+	} catch (err) {
+		return {
+			success: false,
+			reason: err instanceof Error ? err.message : "Unexpected error",
+		};
 	}
 }
