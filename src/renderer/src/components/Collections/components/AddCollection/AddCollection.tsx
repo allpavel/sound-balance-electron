@@ -27,7 +27,7 @@ import {
 import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
-import { IconPlusFilled } from "@tabler/icons-react";
+import { Plus } from "lucide-react";
 import z from "zod";
 import type { CollectionType } from "@/types";
 
@@ -80,7 +80,7 @@ export default function AddCollection() {
 					onClick={open}
 					my="sm"
 				>
-					<IconPlusFilled />
+					<Plus />
 				</ActionIcon>
 			</Tooltip>
 		</>

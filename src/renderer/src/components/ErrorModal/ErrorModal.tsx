@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { Flex, Modal, type ModalRootProps, Text } from "@mantine/core";
-import { IconAlertHexagon } from "@tabler/icons-react";
+import { AlertOctagon } from "lucide-react";
 
 type ErrorModal = {
 	message: string;
@@ -36,7 +36,7 @@ export default function ErrorModal({
 			onClose={onClose}
 			title={
 				<Flex gap={"xs"}>
-					<IconAlertHexagon color="red" />
+					<AlertOctagon color="red" />
 					<Text>{title}</Text>
 				</Flex>
 			}

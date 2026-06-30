@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { Button } from "@mantine/core";
-import { IconPlayerPlayFilled, IconPlayerStop } from "@tabler/icons-react";
+import { Play, Square } from "lucide-react";
 
 type RunButtonProps = {
 	isRunning: boolean;
@@ -29,19 +29,13 @@ export default function RunButton({
 }: RunButtonProps) {
 	if (isRunning) {
 		return (
-			<Button
-				leftSection={<IconPlayerStop size={14} />}
-				onClick={handleButtonClick}
-			>
+			<Button leftSection={<Square size={14} />} onClick={handleButtonClick}>
 				Stop
 			</Button>
 		);
 	}
 	return (
-		<Button
-			leftSection={<IconPlayerPlayFilled size={14} />}
-			onClick={handleButtonClick}
-		>
+		<Button leftSection={<Play size={14} />} onClick={handleButtonClick}>
 			Run
 		</Button>
 	);

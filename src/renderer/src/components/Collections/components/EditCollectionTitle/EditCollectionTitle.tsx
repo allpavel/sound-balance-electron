@@ -30,7 +30,7 @@ import { useCollections } from "@renderer/components/Collections/hooks/useCollec
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
-import { IconEdit } from "@tabler/icons-react";
+import { Edit } from "lucide-react";
 import z from "zod";
 
 const collectionTitleSchema = z.object({
@@ -103,7 +103,7 @@ export default function EditCollectionTitle() {
 					onClick={handleOpen}
 					ms="sm"
 				>
-					<IconEdit />
+					<Edit />
 				</ActionIcon>
 			</Tooltip>
 		</>

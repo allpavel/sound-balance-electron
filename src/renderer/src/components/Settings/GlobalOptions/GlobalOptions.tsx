@@ -27,7 +27,7 @@ import {
 import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { useDirectoryPicker } from "@renderer/components/Settings/hooks/useDirectoryPicker";
 import { CONCURRENCY_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import { IconUpload } from "@tabler/icons-react";
+import { Upload } from "lucide-react";
 
 export function GlobalOptions() {
 	const form = useSettingsFormContext();
@@ -46,7 +46,7 @@ export function GlobalOptions() {
 			<Stack>
 				<TextInput
 					label={"Output directory:"}
-					rightSection={<IconUpload onClick={handleDirectoryPicker} />}
+					rightSection={<Upload onClick={handleDirectoryPicker} />}
 					{...form.getInputProps("global.outputDirectoryPath")}
 				/>
 				<Stack>
