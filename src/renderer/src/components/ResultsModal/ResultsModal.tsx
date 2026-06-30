@@ -27,6 +27,7 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { Fragment, useEffect } from "react";
+import { toast } from "sonner";
 
 export default function ResultModal() {
 	const [opened, { open, close }] = useDisclosure();
@@ -41,9 +42,19 @@ export default function ResultModal() {
 		}
 	}, [results, open]);
 
-	const handleOpenOutputFolder = () => {
+	const handleOpenOutputFolder = async () => {
 		if (outputDirectoryPath) {
-			window.api.openOutputFolder(outputDirectoryPath);
+			try {
+				const { success, reason } =
+					await window.api.openOutputFolder(outputDirectoryPath);
+				if (!success) {
+					toast.error(reason);
+				}
+			} catch {
+				toast.error("Failed to open the output directory.");
+			}
+		} else {
+			toast.error("Output directory doesn't set.");
 		}
 	};
 
