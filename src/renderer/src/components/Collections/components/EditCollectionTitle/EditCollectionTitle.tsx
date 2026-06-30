@@ -22,14 +22,13 @@ import {
 	Flex,
 	Modal,
 	TextInput,
-	Title,
 	Tooltip,
 } from "@mantine/core";
 import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
+import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import { useCollections } from "@renderer/hooks/useCollections";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
 import { IconEdit } from "@tabler/icons-react";
 import z from "zod";
@@ -38,10 +37,13 @@ const collectionTitleSchema = z.object({
 	title: z.string().min(1, "Title is required."),
 });
 
-export function CollectionTitle() {
-	const collection = useAppSelector((state) => state.activeCollection);
-	const [opened, { open, close }] = useDisclosure(false);
+export default function EditCollectionTitle() {
 	const { updateCollection } = useCollections();
+	const collection = useAppSelector((state) => state.activeCollection);
+
+	const dispatch = useAppDispatch();
+	const [opened, { open, close }] = useDisclosure(false);
+
 	const form = useForm({
 		initialValues: { title: collection.title },
 		validate: schemaResolver(collectionTitleSchema),
@@ -49,7 +51,6 @@ export function CollectionTitle() {
 			title: values.title.trim(),
 		}),
 	});
-	const dispatch = useAppDispatch();
 
 	const handleOpen = () => {
 		form.setValues({
@@ -76,40 +77,35 @@ export function CollectionTitle() {
 	});
 
 	return (
-		<Flex mb={"sm"} align={"center"}>
-			<Title order={1}>{collection.title}</Title>
-			{collection.title !== "All" && (
-				<>
-					<Modal
-						opened={opened}
-						onClose={handleClose}
-						title="Collection title"
-						centered
-					>
-						<form onSubmit={handleSubmit}>
-							<TextInput
-								label={"New title:"}
-								key={form.key("title")}
-								{...form.getInputProps("title")}
-							/>
-							<Flex justify={"center"} mt={"md"}>
-								<Button type="submit">Submit</Button>
-							</Flex>
-						</form>
-					</Modal>
+		<>
+			<Modal
+				opened={opened}
+				onClose={handleClose}
+				title="Collection title"
+				centered
+			>
+				<form onSubmit={handleSubmit}>
+					<TextInput
+						label={"New title:"}
+						key={form.key("title")}
+						{...form.getInputProps("title")}
+					/>
+					<Flex justify={"center"} mt={"md"}>
+						<Button type="submit">Submit</Button>
+					</Flex>
+				</form>
+			</Modal>
 
-					<Tooltip label="Edit title">
-						<ActionIcon
-							variant="filled"
-							aria-label="edit title"
-							onClick={handleOpen}
-							ms="sm"
-						>
-							<IconEdit />
-						</ActionIcon>
-					</Tooltip>
-				</>
-			)}
-		</Flex>
+			<Tooltip label="Edit title">
+				<ActionIcon
+					variant="filled"
+					aria-label="edit title"
+					onClick={handleOpen}
+					ms="sm"
+				>
+					<IconEdit />
+				</ActionIcon>
+			</Tooltip>
+		</>
 	);
 }
