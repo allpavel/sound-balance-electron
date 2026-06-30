@@ -26,9 +26,9 @@ import {
 } from "@mantine/core";
 import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
+import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import { useCollections } from "@renderer/hooks/useCollections";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
 import { IconEdit } from "@tabler/icons-react";
 import z from "zod";
@@ -75,6 +75,7 @@ export default function EditCollectionTitle() {
 		form.reset();
 		close();
 	});
+
 	return (
 		<>
 			<Modal

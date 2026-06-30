@@ -17,8 +17,8 @@
  */
 
 import { Flex, Title } from "@mantine/core";
-import EditCollectionTitle from "@renderer/components/Collections/AddCollection/AddCollection";
-import DeleteCollection from "@renderer/components/Collections/DeleteCollection/DeleteCollection";
+import DeleteCollection from "@renderer/components/Collections/components/DeleteCollection/DeleteCollection";
+import EditCollectionTitle from "@renderer/components/Collections/components/EditCollectionTitle/EditCollectionTitle";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 
 export function CollectionTitle() {

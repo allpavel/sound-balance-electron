@@ -28,10 +28,17 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
+import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
+import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
+import { useAppSelector } from "@renderer/hooks/useAppSelector";
+import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
 import { IconAlertTriangleFilled, IconTrash } from "@tabler/icons-react";
 
 export default function DeleteCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
+	const { deleteCollection } = useCollections();
+	const activeCollection = useAppSelector((state) => state.activeCollection);
+	const dispatch = useAppDispatch();
 
 	const form = useForm({
 		initialValues: { check: false },
@@ -41,6 +48,16 @@ export default function DeleteCollection() {
 		form.reset();
 		close();
 	};
+
+	const handleSubmit = form.onSubmit((values) => {
+		deleteCollection({
+			id: activeCollection.id,
+			deleteFromAllCollections: values.check,
+		});
+		dispatch(setActiveCollection({ id: "all", title: "All" }));
+		form.reset();
+		close();
+	});
 
 	return (
 		<>
@@ -66,7 +83,7 @@ export default function DeleteCollection() {
 								</Text>
 							</Flex>
 						</Stack>
-						<form onSubmit={close}>
+						<form onSubmit={handleSubmit}>
 							<Checkbox
 								label="Also delete tracks from other collections"
 								my={"sm"}

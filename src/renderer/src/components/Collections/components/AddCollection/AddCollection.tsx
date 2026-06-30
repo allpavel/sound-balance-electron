@@ -26,7 +26,7 @@ import {
 } from "@mantine/core";
 import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
-import { useCollections } from "@renderer/hooks/useCollections";
+import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
 import { IconPlusFilled } from "@tabler/icons-react";
 import z from "zod";
 import type { CollectionType } from "@/types";

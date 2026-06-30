@@ -42,7 +42,14 @@ export function useCollections() {
 	});
 
 	const deleteMutation = useMutation({
-		mutationFn: (id: string) => collectionsRepository.deleteCollection(id),
+		mutationFn: ({
+			id,
+			deleteFromAllCollections,
+		}: {
+			id: string;
+			deleteFromAllCollections: boolean;
+		}) =>
+			collectionsRepository.deleteCollection({ id, deleteFromAllCollections }),
 	});
 
 	return {

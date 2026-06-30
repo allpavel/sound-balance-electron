@@ -36,16 +36,36 @@ export const collectionsRepository = {
 	async updateCollection(id: string, changes: Partial<CollectionType>) {
 		return await db.collections.update(id, changes);
 	},
-	async deleteCollection(id: string): Promise<void> {
-		await db.transaction("readwrite", db.collections, db.tracks, async () => {
-			const trackIds = await db.tracks
-				.where("collectionIds")
-				.equals(id)
-				.primaryKeys();
-			if (trackIds.length > 0) {
-				await db.tracks.bulkDelete(trackIds);
-			}
-			await db.collections.delete(id);
-		});
+	async deleteCollection({
+		id,
+		deleteFromAllCollections = false,
+	}: {
+		id: string;
+		deleteFromAllCollections: boolean;
+	}): Promise<void> {
+		if (deleteFromAllCollections) {
+			await db.transaction("readwrite", db.collections, db.tracks, async () => {
+				const trackIds = await db.tracks
+					.where("collectionIds")
+					.equals(id)
+					.primaryKeys();
+				if (trackIds.length > 0) {
+					await db.tracks.bulkDelete(trackIds);
+				}
+				await db.collections.delete(id);
+			});
+		} else {
+			await db.transaction("readwrite", db.collections, db.tracks, async () => {
+				await db.tracks
+					.where("collectionIds")
+					.equals(id)
+					.modify((track) => {
+						track.collectionIds = track.collectionIds.filter(
+							(collectionId) => collectionId !== id,
+						);
+					});
+				await db.collections.delete(id);
+			});
+		}
 	},
 };

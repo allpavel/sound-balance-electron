@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { AppShell, NavLink, Text } from "@mantine/core";
-import AddCollection from "@renderer/components/Collections/AddCollection/AddCollection";
+import AddCollection from "@renderer/components/Collections/components/AddCollection/AddCollection";
+import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import { useCollections } from "@renderer/hooks/useCollections";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
 
 export default function CollectionsList() {
