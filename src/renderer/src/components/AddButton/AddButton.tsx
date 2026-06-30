@@ -18,7 +18,7 @@
 import { Button } from "@mantine/core";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
-import { IconUpload } from "@tabler/icons-react";
+import { Upload } from "lucide-react";
 
 export default function AddButton() {
 	const activeCollection = useAppSelector((state) => state.activeCollection);
@@ -36,7 +36,7 @@ export default function AddButton() {
 	};
 
 	return (
-		<Button leftSection={<IconUpload size={14} />} onClick={loadFiles}>
+		<Button leftSection={<Upload size={14} />} onClick={loadFiles}>
 			Add
 		</Button>
 	);

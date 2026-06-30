@@ -16,12 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { ActionIcon } from "@mantine/core";
-import {
-	IconArrowsSort,
-	IconSortAscending,
-	IconSortDescending,
-} from "@tabler/icons-react";
 import type { Column } from "@tanstack/react-table";
+import { ArrowDown, ArrowDownUp, ArrowUp } from "lucide-react";
 import type { Metadata } from "@/types";
 
 export function getSortingIcon(column: Column<Metadata>) {
@@ -37,7 +33,7 @@ export function getSortingIcon(column: Column<Metadata>) {
 				color="dark"
 				aria-label={`Sort ${header} in ascending order`}
 			>
-				<IconSortAscending size={16} />
+				<ArrowUp size={16} />
 			</ActionIcon>
 		);
 	} else if (dir === "desc") {
@@ -47,7 +43,7 @@ export function getSortingIcon(column: Column<Metadata>) {
 				color="dark"
 				aria-label={`Sort ${header} in descending order`}
 			>
-				<IconSortDescending size={16} />
+				<ArrowDown size={16} />
 			</ActionIcon>
 		);
 	} else {
@@ -57,7 +53,7 @@ export function getSortingIcon(column: Column<Metadata>) {
 				color="dark"
 				aria-label={`Default ${header} Sorting`}
 			>
-				<IconArrowsSort size={16} />
+				<ArrowDownUp size={16} />
 			</ActionIcon>
 		);
 	}

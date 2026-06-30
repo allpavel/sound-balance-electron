@@ -32,7 +32,7 @@ import { useCollections } from "@renderer/components/Collections/hooks/useCollec
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
-import { IconAlertTriangleFilled, IconTrash } from "@tabler/icons-react";
+import { Trash2, TriangleAlert } from "lucide-react";
 
 export default function DeleteCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
@@ -69,7 +69,7 @@ export default function DeleteCollection() {
 					</Modal.Header>
 					<Modal.Body>
 						<Stack align="center">
-							<IconAlertTriangleFilled size={48} color="red" />
+							<TriangleAlert size={48} color="red" />
 							<Title order={2}>Delete collection</Title>
 							<Flex justify={"center"}>
 								<Text
@@ -109,7 +109,7 @@ export default function DeleteCollection() {
 					onClick={open}
 					ms="sm"
 				>
-					<IconTrash />
+					<Trash2 />
 				</ActionIcon>
 			</Tooltip>
 		</>

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { ActionIcon, Popover, Select } from "@mantine/core";
-import { IconFilter } from "@tabler/icons-react";
 import type { Column } from "@tanstack/react-table";
+import { Funnel } from "lucide-react";
 import { useMemo } from "react";
 import type { Metadata } from "@/types";
 
@@ -42,7 +42,7 @@ export default function FilterSelect({
 		<Popover shadow="lg" trapFocus>
 			<Popover.Target>
 				<ActionIcon variant="subtle" aria-label="Filter" color="dark">
-					<IconFilter size={16} />
+					<Funnel size={16} />
 				</ActionIcon>
 			</Popover.Target>
 			<Popover.Dropdown>

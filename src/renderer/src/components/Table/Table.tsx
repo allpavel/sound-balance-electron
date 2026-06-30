@@ -33,7 +33,6 @@ import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
-import { IconSearch } from "@tabler/icons-react";
 import {
 	type ColumnDef,
 	flexRender,
@@ -48,6 +47,7 @@ import {
 	useReactTable,
 	type VisibilityState,
 } from "@tanstack/react-table";
+import { Search } from "lucide-react";
 import { type ChangeEvent, useMemo, useState } from "react";
 import type { Metadata } from "@/types";
 
@@ -216,7 +216,7 @@ export default function TableComponent() {
 				<TextInput
 					label="Search:"
 					placeholder="Search all columns..."
-					leftSection={<IconSearch size={16} />}
+					leftSection={<Search size={16} />}
 					value={globalFilter}
 					onChange={handleGlobalFilterChange}
 				/>

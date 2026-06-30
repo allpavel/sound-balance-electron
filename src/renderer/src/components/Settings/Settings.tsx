@@ -19,7 +19,7 @@ import { Button, Flex, Loader, Modal, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
-import { IconSettings } from "@tabler/icons-react";
+import { Settings as IconSettings } from "lucide-react";
 import { AudioOptions } from "./AudioOptions/AudioOptions";
 import { SettingsFormProvider } from "./context/SettingsFormContext";
 import { GlobalOptions } from "./GlobalOptions/GlobalOptions";

@@ -16,12 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { Loader, Tooltip, useMantineTheme } from "@mantine/core";
-import {
-	IconCircleCheck,
-	IconCircleX,
-	IconClock,
-	IconExclamationCircle,
-} from "@tabler/icons-react";
+import { CircleAlert, CircleCheck, CircleX, Clock } from "lucide-react";
 import type { Metadata } from "@/types";
 
 type Status = Pick<Metadata, "status">;
@@ -33,7 +28,7 @@ export default function StatusIcon({ status }: Status) {
 		case "pending": {
 			return (
 				<Tooltip label="Pending">
-					<IconClock stroke={2} color={theme.colors.blue[6]} />
+					<Clock color={theme.colors.blue[6]} />
 				</Tooltip>
 			);
 		}
@@ -47,21 +42,21 @@ export default function StatusIcon({ status }: Status) {
 		case "completed": {
 			return (
 				<Tooltip label="Completed">
-					<IconCircleCheck stroke={2} color={theme.colors.green[6]} />
+					<CircleCheck color={theme.colors.green[6]} />
 				</Tooltip>
 			);
 		}
 		case "failed": {
 			return (
 				<Tooltip label="Failed">
-					<IconCircleX stroke={2} color={theme.colors.red[8]} />
+					<CircleX color={theme.colors.red[8]} />
 				</Tooltip>
 			);
 		}
 		default: {
 			return (
 				<Tooltip label="Status unknown">
-					<IconExclamationCircle stroke={2} color={theme.colors.red[8]} />
+					<CircleAlert color={theme.colors.red[8]} />
 				</Tooltip>
 			);
 		}
