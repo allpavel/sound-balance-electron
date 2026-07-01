@@ -20,6 +20,7 @@ import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
 import { Settings as IconSettings } from "lucide-react";
+import { toast } from "sonner";
 import { AudioOptions } from "./AudioOptions/AudioOptions";
 import { SettingsFormProvider } from "./context/SettingsFormContext";
 import { GlobalOptions } from "./GlobalOptions/GlobalOptions";
@@ -46,7 +47,12 @@ export default function Settings() {
 								audio: structuredClone(values.audio),
 								global: structuredClone(values.global),
 							};
-							dispatch(saveSettings(newValues));
+							try {
+								dispatch(saveSettings(newValues));
+								toast.success("Settings updated successfully.");
+							} catch {
+								toast.error("Unable to save settings. Please try again.");
+							}
 							close();
 						})}
 					>
