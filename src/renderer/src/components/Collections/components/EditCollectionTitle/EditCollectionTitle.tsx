@@ -31,6 +31,7 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
 import { Edit } from "lucide-react";
+import { toast } from "sonner";
 import z from "zod";
 
 const collectionTitleSchema = z.object({
@@ -66,11 +67,22 @@ export default function EditCollectionTitle() {
 
 	const handleSubmit = form.onSubmit((values) => {
 		if (values.title !== collection.title) {
-			updateCollection({
-				id: collection.id,
-				changes: { title: values.title },
-			});
-			dispatch(setActiveCollection({ id: collection.id, title: values.title }));
+			try {
+				updateCollection({
+					id: collection.id,
+					changes: { title: values.title },
+				});
+				dispatch(
+					setActiveCollection({ id: collection.id, title: values.title }),
+				);
+				toast.success("Collection title successfully changed.");
+			} catch (error) {
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Can't change collection title. Please try againg.",
+				);
+			}
 		}
 		form.reset();
 		close();
