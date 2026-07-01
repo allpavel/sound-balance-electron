@@ -33,6 +33,7 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
 import { Trash2, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
 
 export default function DeleteCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
@@ -50,13 +51,20 @@ export default function DeleteCollection() {
 	};
 
 	const handleSubmit = form.onSubmit((values) => {
-		deleteCollection({
-			id: activeCollection.id,
-			deleteFromAllCollections: values.check,
-		});
-		dispatch(setActiveCollection({ id: "all", title: "All" }));
-		form.reset();
-		close();
+		try {
+			deleteCollection({
+				id: activeCollection.id,
+				deleteFromAllCollections: values.check,
+			});
+			dispatch(setActiveCollection({ id: "all", title: "All" }));
+			toast.success(`${activeCollection.title} was successfully removed.`);
+			form.reset();
+			close();
+		} catch {
+			toast.error(
+				"There was an error deleting the collection. Please try again.",
+			);
+		}
 	});
 
 	return (
@@ -92,10 +100,10 @@ export default function DeleteCollection() {
 							/>
 							<Flex gap={"sm"} mt={"md"}>
 								<Button onClick={handleClose} variant="outline" fullWidth>
-									Cancell
+									Cancel
 								</Button>
 								<Button type="submit" color="red" fullWidth>
-									Submit
+									Delete
 								</Button>
 							</Flex>
 						</form>
