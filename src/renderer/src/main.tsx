@@ -22,6 +22,7 @@ import App from "./App";
 import "@mantine/core/styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Provider as RTKProvider } from "react-redux";
+import { Toaster } from "sonner";
 import { store } from "./store/store";
 
 const theme = createTheme({
@@ -38,6 +39,7 @@ createRoot(root).render(
 			<RTKProvider store={store}>
 				<MantineProvider theme={theme}>
 					<App />
+					<Toaster richColors closeButton position="bottom-right" />
 				</MantineProvider>
 			</RTKProvider>
 		</QueryClientProvider>

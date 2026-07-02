@@ -42,7 +42,7 @@ export const settingsSchema = z.object({
 	global: z.object({
 		outputDirectoryPath: z.string().min(1, "Output directory is required"),
 		openOutputFolderOnComplete: z.boolean(),
-		concurrency: z
+		concurrency: z.coerce
 			.number()
 			.int()
 			.min(1)
