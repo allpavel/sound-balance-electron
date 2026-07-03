@@ -15,10 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { AppShell, Group } from "@mantine/core";
+import { AppShell, Flex, Group } from "@mantine/core";
 import AddButton from "@renderer/components/AddButton/AddButton";
 import CollectionsList from "@renderer/components/Collections/components/CollectionsList/CollectionsList";
 import { CollectionTitle } from "@renderer/components/Collections/components/CollectionTitle/CollectionTitle";
+import Copyright from "@renderer/components/Copyright/Copyright";
 import DeleteButton from "@renderer/components/DeleteButton/DeleteButton";
 import Settings from "@renderer/components/Settings/Settings";
 import StartProcessing from "@renderer/components/StartProcessing/StartProcessing";
@@ -27,6 +28,7 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { loadSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
 import { getSettings } from "@renderer/store/slices/settingsSlice";
 import { useEffect } from "react";
+import DropdownMenu from "./components/DropdownMenu/DropdownMenu";
 
 function App(): React.JSX.Element {
 	const dispatch = useAppDispatch();
@@ -48,6 +50,7 @@ function App(): React.JSX.Element {
 						<AddButton />
 						<Settings />
 						<DeleteButton />
+						<DropdownMenu />
 					</Group>
 					<StartProcessing />
 				</Group>
@@ -57,6 +60,11 @@ function App(): React.JSX.Element {
 				<CollectionTitle />
 				<TableComponent />
 			</AppShell.Main>
+			<AppShell.Footer>
+				<Flex justify={"center"} p={"md"}>
+					<Copyright />
+				</Flex>
+			</AppShell.Footer>
 		</AppShell>
 	);
 }
