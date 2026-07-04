@@ -38,33 +38,47 @@ const cbrSchema = z.enum(cbrValues);
 const vbrSchema = z.enum(vbrValues);
 const encoderNames = z.enum(encoders);
 
+const globalBaseSchema = z.object({
+	outputDirectoryPath: z.string().min(1, "Output directory is required"),
+	openOutputFolderOnComplete: z.boolean(),
+	concurrency: z.coerce
+		.number()
+		.int()
+		.min(1)
+		.max(10, "Concurrency must be between 1 and 10"),
+	overwrite: z.boolean(),
+	noOverwrite: z.boolean(),
+});
+const audioBaseSchema = z.object({
+	audioCodec: z.union([encoderNames, z.literal("copy")]),
+	codecOptions: z.record(z.string(), z.string().or(z.number()).or(z.boolean())),
+	audioQuality: z.enum(["cbr", "vbr", "auto"]),
+	audioQualityValue: z.union([cbrSchema, vbrSchema, z.literal("auto")]),
+	outputExtension: z.string(),
+	audioFilter: z.string(),
+	filterOptions: z.record(
+		z.string(),
+		z.string().or(z.number()).or(z.boolean()),
+	),
+});
+const audioSchema = z.discriminatedUnion("audioQuality", [
+	audioBaseSchema.extend({
+		audioQuality: z.literal("cbr"),
+		audioQualityValue: cbrSchema,
+	}),
+	audioBaseSchema.extend({
+		audioQuality: z.literal("vbr"),
+		audioQualityValue: vbrSchema,
+	}),
+	audioBaseSchema.extend({
+		audioQuality: z.literal("auto"),
+		audioQualityValue: z.literal("auto"),
+	}),
+]);
+
 export const settingsSchema = z.object({
-	global: z.object({
-		outputDirectoryPath: z.string().min(1, "Output directory is required"),
-		openOutputFolderOnComplete: z.boolean(),
-		concurrency: z.coerce
-			.number()
-			.int()
-			.min(1)
-			.max(10, "Concurrency must be between 1 and 10"),
-		overwrite: z.boolean(),
-		noOverwrite: z.boolean(),
-	}),
-	audio: z.object({
-		audioCodec: z.union([encoderNames, z.literal("copy")]),
-		codecOptions: z.record(
-			z.string(),
-			z.string().or(z.number()).or(z.boolean()),
-		),
-		audioQuality: z.enum(["cbr", "vbr", "auto"]),
-		audioQualityValue: z.union([cbrSchema, vbrSchema, z.literal("auto")]),
-		outputExtension: z.string(),
-		audioFilter: z.string(),
-		filterOptions: z.record(
-			z.string(),
-			z.string().or(z.number()).or(z.boolean()),
-		),
-	}),
+	global: globalBaseSchema,
+	audio: audioSchema,
 });
 
 export type SettingsForm = z.infer<typeof settingsSchema>;
