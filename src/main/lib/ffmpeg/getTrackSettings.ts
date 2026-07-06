@@ -25,7 +25,10 @@ export const getTrackSettings = (
 ) => {
 	const result: string[] = [];
 
-	if (settings.audioCodec !== initialSettings.audioCodec) {
+	if (
+		settings.audioCodec &&
+		settings.audioCodec !== initialSettings.audioCodec
+	) {
 		const options = buildCodecOptions(settings.codecOptions);
 		result.push("-c:a", settings.audioCodec, ...options);
 	}
@@ -35,10 +38,11 @@ export const getTrackSettings = (
 			result.push(...filter);
 		}
 	}
-	if (settings.audioQuality !== "auto") {
-		if (settings.audioQuality === "cbr") {
+	const audioQuality = settings.audioQuality;
+	if (audioQuality !== "auto") {
+		if (audioQuality === "cbr") {
 			result.push("-b:a", settings.audioQualityValue);
-		} else {
+		} else if (audioQuality === "vbr") {
 			result.push("-q:a", settings.audioQualityValue);
 		}
 	}
