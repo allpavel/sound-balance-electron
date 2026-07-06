@@ -18,7 +18,6 @@
 import fs from "node:fs/promises";
 import { isDirectory } from "./isDirectory";
 
-// biome-ignore-start lint/suspicious/noExplicitAny: no matter for tests
 describe("isDirectory", () => {
 	it("returns true for a valid directory", async () => {
 		const statSpy = vi.spyOn(fs, "stat");
@@ -45,4 +44,3 @@ describe("isDirectory", () => {
 		await expect(isDirectory("/music")).rejects.toThrow("EACCES");
 	});
 });
-// biome-ignore-end lint/suspicious/noExplicitAny: no matter for tests
