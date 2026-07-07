@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { SettingsForm } from "@types";
 import Dexie, { type EntityTable } from "dexie";
+import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 import type { CollectionType, Metadata } from "@/types";
 
 const db = new Dexie("AudioDB") as Dexie & {

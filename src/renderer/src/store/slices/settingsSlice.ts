@@ -17,7 +17,7 @@
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
-import type { SettingsForm } from "@types";
+import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 
 const SETTINGS_ACTIONS = {
 	loadFromDB: "settings/loadFromDB",
@@ -35,7 +35,7 @@ export const initialSettings: SettingsForm = {
 	audio: {
 		audioCodec: "copy",
 		audioQuality: "auto",
-		audioQualityValue: "4",
+		audioQualityValue: "auto",
 		audioFilter: "",
 		outputExtension: "copy",
 		filterOptions: {},

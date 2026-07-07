@@ -17,7 +17,7 @@
  */
 
 import { db } from "@renderer/db/db";
-import type { SettingsForm } from "@types";
+import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 
 const SETTINGS_ID = "globalSettings";
 
