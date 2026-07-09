@@ -14,3 +14,8 @@ vi.mock("node:fs/promises", async () => {
 	const actual = await vi.importActual("node:fs/promises");
 	return { ...actual, stat: vi.fn() };
 });
+
+vi.mock("node:child_process", async () => {
+	const actual = await vi.importActual("node:child_process");
+	return { ...actual, spawn: vi.fn() };
+});
