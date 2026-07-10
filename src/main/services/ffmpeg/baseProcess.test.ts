@@ -86,7 +86,7 @@ describe("BaseProcess", () => {
 		});
 	});
 
-	describe("runProcessing", () => {
+	describe("runProcessing - spawn", () => {
 		it("should spawn ffmpeg with correct args", async () => {
 			const mockProc = createMockChildProcess();
 			mockSpawn.mockReturnValueOnce(mockProc);
@@ -140,6 +140,189 @@ describe("BaseProcess", () => {
 			const proc = new TestProcess();
 			await expect(proc.run([])).rejects.toThrow();
 			expect(proc.getProcess()).toBeNull();
+		});
+	});
+
+	describe("runProcessing - close event", () => {
+		it("should resolve when process exits with code 0", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, null);
+			await expect(promise).resolves.toBeUndefined();
+		});
+		it("should resolve when process exits with code 255", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 255, null);
+			await expect(promise).resolves.toBeUndefined();
+		});
+		it("should resolve when process exits with code 0 even stderr data exists", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("Some warning"));
+			mockProc.emit("close", 0, null);
+			await expect(promise).resolves.toBeUndefined();
+		});
+		it("should reject when process exits with non-zero code", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("Some warning"));
+			mockProc.emit("close", 1, null);
+			await expect(promise).rejects.toThrow(
+				"FFmpeg exited with code 1\nSome warning",
+			);
+		});
+		it("should reject when process exits with code 137 (SIGKILL)", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 137, null);
+			await expect(promise).rejects.toThrow("FFmpeg exited with code 137");
+		});
+		it("should reject when process exits with code null and no signal", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("Another warning"));
+			mockProc.emit("close", null, null);
+			await expect(promise).rejects.toThrow(
+				"FFmpeg exited with code null\nAnother warning",
+			);
+		});
+		it("should reject when process exits with signal SIGTERM", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", null, "SIGTERM");
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process was terminated by signal: SIGTERM",
+			);
+		});
+		it("should reject when process exits with signal SIGINT", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", null, "SIGINT");
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process was terminated by signal: SIGINT",
+			);
+		});
+		it("should reject when process exits with signal SIGINT", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", null, "SIGINT");
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process was terminated by signal: SIGINT",
+			);
+		});
+		it("should prioritize signal over code 0", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, "SIGTERM");
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process was terminated by signal: SIGTERM",
+			);
+		});
+		it("should prioritize signal over code 255", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 255, "SIGTERM");
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process was terminated by signal: SIGTERM",
+			);
+		});
+		it("should prioritize signal over code other than 0 and 255", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 1, "SIGTERM");
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process was terminated by signal: SIGTERM",
+			);
+		});
+		it("should include full stderr on non-zero exit", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("Error: codec not found"));
+			mockProc.stderr.emit("data", Buffer.from("\nAt line 42"));
+			mockProc.emit("close", 1, null);
+			await expect(promise).rejects.toThrow(
+				"FFmpeg exited with code 1\nError: codec not found\nAt line 42",
+			);
+		});
+	});
+
+	describe("runProcessing - error event", () => {
+		it("should reject when error event fires", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("error", new Error("ENOENT"));
+			await expect(promise).rejects.toThrow("FFmpeg process error: ENOENT");
+		});
+		it("should resolve when error and close events fires", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("error", new Error("ENOENT"));
+			mockProc.emit("close", 0, null);
+			await expect(promise).rejects.toThrow("FFmpeg process error: ENOENT");
+		});
+		it("should not reject twice when error and close events fires", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			promise.catch(() => {});
+			mockProc.emit("close", 1, null);
+			mockProc.on("error", () => {});
+			mockProc.emit("error", new Error("Late error"));
+			await expect(promise).rejects.toThrow("FFmpeg exited with code 1");
+		});
+		it("should not reject twice when double error events fires", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			promise.catch(() => {});
+			mockProc.emit("error", new Error("First error"));
+			mockProc.on("error", () => {});
+			mockProc.emit("error", new Error("Second error"));
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process error: First error",
+			);
+		});
+		it("should not close twice when double close events fires", async () => {
+			const mockProc = createMockChildProcess();
+			mockSpawn.mockReturnValueOnce(mockProc);
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, null);
+			mockProc.emit("close", 1, null);
+			await expect(promise).resolves.toBeUndefined();
 		});
 	});
 });
