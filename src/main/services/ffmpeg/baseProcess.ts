@@ -97,12 +97,12 @@ export abstract class BaseProcess extends EventEmitter {
 				resolved = true;
 				cleanup();
 
-				if (code === 0 || code === 255) {
-					resolve();
-				} else if (signal) {
+				if (signal) {
 					reject(
 						new Error(`FFmpeg process was terminated by signal: ${signal}`),
 					);
+				} else if (code === 0 || code === 255) {
+					resolve();
 				} else {
 					reject(
 						new Error(`FFmpeg exited with code ${code}\n${this.stderrData}`),
