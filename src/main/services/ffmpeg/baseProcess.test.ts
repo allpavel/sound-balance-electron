@@ -54,7 +54,7 @@ describe("BaseProcess", () => {
 	let mockSpawn: ReturnType<typeof vi.fn>;
 	beforeEach(() => {
 		mockSpawn = vi.mocked(spawn);
-		vi.restoreAllMocks();
+		vi.resetAllMocks();
 	});
 
 	function createProcess() {
@@ -287,6 +287,180 @@ describe("BaseProcess", () => {
 			mockProc.emit("close", 0, null);
 			mockProc.emit("close", 1, null);
 			await expect(promise).resolves.toBeUndefined();
+		});
+	});
+
+	describe("runProcessing - stdout/stderr events", () => {
+		it("should emit stdout events with string data", async () => {
+			const { mockProc, proc } = createProcess();
+			const handler = vi.fn();
+			proc.on("stdout", handler);
+			const promise = proc.run([]);
+			mockProc.stdout.emit("data", Buffer.from("frame=100"));
+			mockProc.stdout.emit("data", Buffer.from("fps=30"));
+			expect(handler).toHaveBeenCalledTimes(2);
+			expect(handler).toHaveBeenNthCalledWith(1, "frame=100");
+			expect(handler).toHaveBeenNthCalledWith(2, "fps=30");
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should emit stderr events with string data", async () => {
+			const { mockProc, proc } = createProcess();
+			const handler = vi.fn();
+			proc.on("stderr", handler);
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("warning"));
+			mockProc.stderr.emit("data", Buffer.from("info"));
+			expect(handler).toHaveBeenCalledTimes(2);
+			expect(handler).toHaveBeenNthCalledWith(1, "warning");
+			expect(handler).toHaveBeenNthCalledWith(2, "info");
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should accumulate stderr data across multiple chunks", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("warning;"));
+			mockProc.stderr.emit("data", Buffer.from("info;"));
+			mockProc.stderr.emit("data", Buffer.from("error;"));
+			expect(proc.getStderrData()).toBe("warning;info;error;");
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should reset stderr on each new runProcessing call", async () => {
+			const { mockProc: pr1, proc } = createProcess();
+			const { mockProc: pr2 } = createProcess();
+
+			const promise1 = proc.run([]);
+			pr1.stderr.emit("data", Buffer.from("old data"));
+			pr1.emit("close", 0, null);
+			await promise1;
+			expect(proc.getStderrData()).toBe("old data");
+
+			const promise2 = proc.run([]);
+			pr2.emit("close", 0, null);
+			await promise2;
+
+			expect(proc.getStderrData()).toBe("");
+		});
+		it("should trim stderrData when a single chunk exceeds MAX_STDERR_BUFFER", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			const largeChunk = "x".repeat(MAX_STDERR_BUFFER + 100);
+			mockProc.stderr.emit("data", Buffer.from(largeChunk));
+			expect(proc.getStderrData().length).toBe(MAX_STDERR_BUFFER / 2);
+			expect(proc.getStderrData()).toBe("x".repeat(MAX_STDERR_BUFFER / 2));
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should trim stderrData when accumulated chunks exceeds MAX_STDERR_BUFFER", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("x".repeat(600_000)));
+			expect(proc.getStderrData().length).toBe(600_000);
+			mockProc.stderr.emit("data", Buffer.from("y".repeat(600_000)));
+			expect(proc.getStderrData().length).toBe(MAX_STDERR_BUFFER / 2);
+			expect(proc.getStderrData()).toBe("y".repeat(MAX_STDERR_BUFFER / 2));
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should emit stderr chunks after buffer trimming", async () => {
+			const { mockProc, proc } = createProcess();
+			const handler = vi.fn();
+			proc.on("stderr", handler);
+			const promise = proc.run([]);
+			mockProc.stderr.emit(
+				"data",
+				Buffer.from("x".repeat(MAX_STDERR_BUFFER + 100)),
+			);
+			mockProc.stderr.emit("data", Buffer.from("after trim"));
+			expect(handler).toHaveBeenCalledTimes(2);
+			expect(handler).toHaveBeenNthCalledWith(2, "after trim");
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should not accumulate stdout data into stderrData", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.stdout.emit("data", Buffer.from("stdout data"));
+			mockProc.stderr.emit("data", Buffer.from("stderr data"));
+			expect(proc.getStderrData()).toBe("stderr data");
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should handle special/unicode characters in stderr", async () => {
+			const { mockProc, proc } = createProcess();
+			const chars = "Error: ñ é ü 日本語";
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from(chars));
+			mockProc.emit("close", 1, null);
+			await expect(promise).rejects.toThrow(
+				`FFmpeg exited with code 1\n${chars}`,
+			);
+		});
+		it("should handle binary data in stderr", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			const handler = vi.fn();
+			proc.on("stderr", handler);
+			const binaryData = Buffer.from([0x00, 0x01, 0xff, 0xfe]);
+			mockProc.stderr.emit("data", binaryData);
+			expect(handler).toHaveBeenLastCalledWith(binaryData.toString());
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+	});
+
+	describe("runProcessing - cleanup", () => {
+		it("should cleanup process and all listeners after successful close", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, null);
+			await promise;
+			expect(proc.getProcess()).toBeNull();
+			expect(mockProc.listenerCount("error")).toBe(0);
+			expect(mockProc.listenerCount("close")).toBe(0);
+			expect(mockProc.stdout.listenerCount("data")).toBe(0);
+			expect(mockProc.stderr.listenerCount("data")).toBe(0);
+		});
+		it("should cleanup after failed exit code", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 1, null);
+			await expect(promise).rejects.toThrow("FFmpeg exited with code 1");
+			expect(proc.getProcess()).toBeNull();
+		});
+		it("should cleanup after signal termination", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", null, "SIGTERM");
+			await expect(promise).rejects.toThrow();
+			expect(proc.getProcess()).toBeNull();
+		});
+		it("should allow running again after cleanup", async () => {
+			const { mockProc: pr1, proc } = createProcess();
+			const { mockProc: pr2 } = createProcess();
+			const promise1 = proc.run(["first"]);
+			pr1.emit("close", 0, null);
+			await promise1;
+			const promise2 = proc.run(["second"]);
+			pr2.emit("close", 0, null);
+			await promise2;
+			expect(mockSpawn).toHaveBeenCalledTimes(2);
+		});
+		it("should not emit events after cleanup", async () => {
+			const { mockProc, proc } = createProcess();
+			const stdoutHandler = vi.fn();
+			const stderrHandler = vi.fn();
+			proc.on("stdout", stdoutHandler);
+			proc.on("stderr", stderrHandler);
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, null);
+			await promise;
+			mockProc.stdout.emit("data", Buffer.from("late stdout"));
+			mockProc.stderr.emit("data", Buffer.from("late stderr"));
+			expect(stdoutHandler).not.toHaveBeenCalled();
+			expect(stderrHandler).not.toHaveBeenCalled();
 		});
 	});
 });
