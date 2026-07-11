@@ -463,4 +463,88 @@ describe("BaseProcess", () => {
 			expect(stderrHandler).not.toHaveBeenCalled();
 		});
 	});
+
+	describe("kill", () => {
+		it("should call process.kill with default SIGINT signal", () => {
+			const { mockProc, proc } = createProcess();
+			proc.run([]);
+			proc.kill();
+			expect(mockProc.kill).toHaveBeenCalledWith("SIGINT");
+		});
+		it("should call process.kill with SIGKILL", () => {
+			const { mockProc, proc } = createProcess();
+			proc.run([]);
+			proc.kill("SIGKILL");
+			expect(mockProc.kill).toHaveBeenCalledWith("SIGKILL");
+		});
+		it("should not throw when no process exists", () => {
+			const { proc } = createProcess();
+			expect(() => proc.kill()).not.toThrow();
+		});
+		it("should not throw when no process exists (with custom signal)", () => {
+			const { proc } = createProcess();
+			expect(() => proc.kill("SIGTERM")).not.toThrow();
+		});
+		it("should not throw when kill is called multiple times", () => {
+			const { mockProc, proc } = createProcess();
+			proc.run([]);
+			proc.kill("SIGTERM");
+			proc.kill("SIGKILL");
+			proc.kill("SIGINT");
+			expect(mockProc.kill).toHaveBeenCalledTimes(3);
+		});
+		it("should not call kill after process has completed", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, null);
+			await promise;
+			proc.kill("SIGTERM");
+			expect(mockProc.kill).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("isRunning", () => {
+		it("should return false initially", () => {
+			const proc = new TestProcess();
+			expect(proc.isRunning()).toBe(false);
+		});
+		it("should return true while process is running", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			expect(proc.isRunning()).toBe(true);
+			mockProc.emit("close", 0, null);
+			await promise;
+			expect(proc.isRunning()).toBe(false);
+		});
+		it("should return false after process errors", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("error", new Error("Error test"));
+			await expect(promise).rejects.toThrow();
+			expect(proc.isRunning()).toBe(false);
+		});
+		it("should return false after process exits with non-zero code", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 1, null);
+			await expect(promise).rejects.toThrow();
+			expect(proc.isRunning()).toBe(false);
+		});
+		it("should return false after process terminated by signal", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, "SIGTERM");
+			await expect(promise).rejects.toThrow();
+			expect(proc.isRunning()).toBe(false);
+		});
+		it("should return false after spawn throws", async () => {
+			mockSpawn.mockImplementationOnce(() => {
+				throw new Error("spawn failed");
+			});
+			const proc = new TestProcess();
+			const promise = proc.run([]);
+			await expect(promise).rejects.toThrow();
+			expect(proc.isRunning()).toBe(false);
+		});
+	});
 });
