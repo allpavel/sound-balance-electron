@@ -36,14 +36,4 @@ export class ProcessManager extends BaseProcess {
 
 		return this.runProcessing(args);
 	}
-
-	kill(signal: NodeJS.Signals = "SIGINT"): void {
-		if (this.process) {
-			this.process.kill(signal);
-		}
-	}
-
-	isRunning(): boolean {
-		return this.process !== null;
-	}
 }
