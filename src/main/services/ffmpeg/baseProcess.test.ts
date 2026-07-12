@@ -343,6 +343,15 @@ describe("BaseProcess", () => {
 
 			expect(proc.getStderrData()).toBe("");
 		});
+		it("should handle stderr that exactly reaches MAX_STDERR_BUFFER without trimming", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			const largeChunk = "x".repeat(MAX_STDERR_BUFFER);
+			mockProc.stderr.emit("data", Buffer.from(largeChunk));
+			expect(proc.getStderrData().length).toBe(MAX_STDERR_BUFFER);
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
 		it("should trim stderrData when a single chunk exceeds MAX_STDERR_BUFFER", async () => {
 			const { mockProc, proc } = createProcess();
 			const promise = proc.run([]);
@@ -545,6 +554,117 @@ describe("BaseProcess", () => {
 			const promise = proc.run([]);
 			await expect(promise).rejects.toThrow();
 			expect(proc.isRunning()).toBe(false);
+		});
+	});
+
+	describe("integration and edge cases", () => {
+		it("should handle concurrent stdout and stderr events", async () => {
+			const { mockProc, proc } = createProcess();
+			const stdoutHandler = vi.fn();
+			const stderrHandler = vi.fn();
+			proc.on("stdout", stdoutHandler);
+			proc.on("stderr", stderrHandler);
+			const promise = proc.run([]);
+			mockProc.stdout.emit("data", Buffer.from("stdout1"));
+			mockProc.stderr.emit("data", Buffer.from("stderr1"));
+			mockProc.stdout.emit("data", Buffer.from("stdout2"));
+			mockProc.stderr.emit("data", Buffer.from("stderr2"));
+			expect(stdoutHandler).toHaveBeenCalledTimes(2);
+			expect(stderrHandler).toHaveBeenCalledTimes(2);
+			expect(proc.getStderrData()).toBe("stderr1stderr2");
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should support multiple listeners on the same event", async () => {
+			const { mockProc, proc } = createProcess();
+			const handler1 = vi.fn();
+			const handler2 = vi.fn();
+			proc.on("stdout", handler1);
+			proc.on("stdout", handler2);
+			const promise = proc.run([]);
+			mockProc.stdout.emit("data", Buffer.from("stdout1"));
+			expect(handler1).toHaveBeenCalledWith("stdout1");
+			expect(handler2).toHaveBeenCalledWith("stdout1");
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should handle a very large args array", async () => {
+			const { mockProc, proc } = createProcess();
+			const args = Array.from({ length: 1000 }, (_, i) => `-args${i}`);
+			const promise = proc.run(args);
+			expect(mockSpawn).toHaveBeenCalledWith(
+				"/fake/ffmpeg",
+				args,
+				expect.any(Object),
+			);
+			mockProc.emit("close", 0, null);
+			await promise;
+		});
+		it("should preserve stderrData in error message when process fails", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.stderr.emit("data", Buffer.from("stderr1\n"));
+			mockProc.stderr.emit("data", Buffer.from("stderr2\n"));
+			mockProc.stderr.emit("data", Buffer.from("stderr3\n"));
+			mockProc.emit("close", 1, null);
+			await expect(promise).rejects.toThrow(
+				"FFmpeg exited with code 1\nstderr1\nstderr2\nstderr3\n",
+			);
+		});
+		it("should work with a realistic ffmpeg invocation flow", async () => {
+			const { mockProc, proc } = createProcess();
+			const handler = vi.fn();
+			proc.on("stderr", handler);
+			const args = [
+				"-i",
+				"input.flac",
+				"-codec:a",
+				"libmp3lame",
+				"-qscale:a",
+				"2",
+				"output.mp3",
+			];
+			const promise = proc.run(args);
+			mockProc.stderr.emit(
+				"data",
+				Buffer.from(
+					"frame=  100 fps=30 q=0.0 size=   1024kB time=00:00:04.12 bitrate=2034.1kbits/s\r",
+				),
+			);
+			mockProc.stderr.emit(
+				"data",
+				Buffer.from(
+					"frame=  200 fps=30 q=0.0 size=   2048kB time=00:00:08.24 bitrate=2034.1kbits/s\r",
+				),
+			);
+			expect(handler).toHaveBeenCalledTimes(2);
+			expect(proc.getStderrData()).toContain("frame=  200");
+			mockProc.emit("close", 0, null);
+			await expect(promise).resolves.toBeUndefined();
+		});
+		it("should handle kill followed by close with signal", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			proc.kill("SIGTERM");
+			expect(mockProc.kill).toHaveBeenCalledWith("SIGTERM");
+			mockProc.emit("close", null, "SIGTERM");
+			await expect(promise).rejects.toThrow(
+				"FFmpeg process was terminated by signal: SIGTERM",
+			);
+			expect(proc.isRunning()).toBe(false);
+		});
+		it("should handle empty stderr on failure", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 1, null);
+			await expect(promise).rejects.toThrow("FFmpeg exited with code 1\n");
+		});
+		it("should handle exit code 0 with no stdout or stderr", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			mockProc.emit("close", 0, null);
+			await expect(promise).resolves.toBeUndefined();
+			expect(proc.getStderrData()).toBe("");
 		});
 	});
 });
