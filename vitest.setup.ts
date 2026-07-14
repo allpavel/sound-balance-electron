@@ -12,7 +12,7 @@ vi.mock("ffmpeg-static", () => ({ default: "/fake/ffmpeg" }));
 
 vi.mock("node:fs/promises", async () => {
 	const actual = await vi.importActual("node:fs/promises");
-	return { ...actual, stat: vi.fn() };
+	return { ...actual, stat: vi.fn(), rm: vi.fn() };
 });
 
 vi.mock("node:child_process", async () => {
