@@ -19,3 +19,8 @@ vi.mock("node:child_process", async () => {
 	const actual = await vi.importActual("node:child_process");
 	return { ...actual, spawn: vi.fn() };
 });
+
+vi.mock("node:path", async () => {
+	const actual = await vi.importActual("node:path");
+	return { ...actual, join: vi.fn((...args) => args.join("/")) };
+});
