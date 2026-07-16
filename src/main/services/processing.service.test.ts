@@ -78,7 +78,9 @@ describe("processing.service", () => {
 		activeProcesses.length = 0;
 
 		mockQueue = {
-			add: vi.fn(),
+			add: vi.fn().mockImplementation(async (fn: any) => {
+				await fn();
+			}),
 			onIdle: vi.fn(() => Promise.resolve()),
 		};
 		// biome-ignore-start lint/complexity/useArrowFunction: arrow functions do not have the internal [[Construct]] method
@@ -87,21 +89,23 @@ describe("processing.service", () => {
 		});
 
 		mockProcessManager = {
-			run: vi.fn().mockRejectedValue(undefined),
+			run: vi.fn().mockResolvedValue(undefined),
 			kill: vi.fn(),
 		};
-		vi.mocked(ProcessManager).mockImplementation(function () {
+		vi.mocked(ProcessManager).mockImplementation(function (this: any) {
+			this.run = mockProcessManager.run;
+			this.kill = mockProcessManager.kill;
 			activeProcesses.push(mockProcessManager);
-			return mockProcessManager;
 		});
 
 		mockTwoPassProcessManager = {
-			run: vi.fn().mockRejectedValue(undefined),
+			run: vi.fn().mockResolvedValue(undefined),
 			kill: vi.fn(),
 		};
-		vi.mocked(TwoPassProcessManager).mockImplementation(function () {
+		vi.mocked(TwoPassProcessManager).mockImplementation(function (this: any) {
+			this.run = mockTwoPassProcessManager.run;
+			this.kill = mockTwoPassProcessManager.kill;
 			activeProcesses.push(mockTwoPassProcessManager);
-			return mockTwoPassProcessManager;
 		});
 		// biome-ignore-end lint/complexity/useArrowFunction: arrow functions do not have the internal [[Construct]] method
 
@@ -124,9 +128,6 @@ describe("processing.service", () => {
 		it("should initialize PQueue with concurrency from settings", async () => {
 			const data = createMockData([createMockTrack()]);
 			data.settings.global.concurrency = 5;
-			mockQueue.add.mockImplementation(async (fn: any) => {
-				await fn();
-			});
 			await startProcessing(mockEvent, data as any);
 			expect(PQueue).toHaveBeenCalledTimes(1);
 			expect(PQueue).toHaveBeenCalledWith({ concurrency: 5 });
@@ -151,9 +152,6 @@ describe("processing.service", () => {
 				createMockTrack({ id: "2", status: "failed " }),
 			];
 			const data = createMockData(tracks);
-			mockQueue.add.mockImplementation(async (fn: any) => {
-				await fn();
-			});
 			const result = await startProcessing(mockEvent, data as any);
 			expect(result.total).toBe(1);
 			expect(result.successful).toBe(1);
@@ -165,9 +163,6 @@ describe("processing.service", () => {
 				createMockTrack({ id: "1", filePath: null }),
 			];
 			const data = createMockData(tracks);
-			mockQueue.add.mockImplementation(async (fn: any) => {
-				await fn();
-			});
 			const result = await startProcessing(mockEvent, data as any);
 			expect(result.total).toBe(1);
 			expect(result.successful).toBe(1);
@@ -179,9 +174,6 @@ describe("processing.service", () => {
 				createMockTrack({ id: "2", status: "completed" }),
 			];
 			const data = createMockData(tracks);
-			mockQueue.add.mockImplementation(async (fn: any) => {
-				await fn();
-			});
 			const result = await startProcessing(mockEvent, data as any);
 			expect(result.total).toBe(0);
 			expect(result.successful).toBe(0);
