@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import path from "node:path";
 import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
 import { isDirectory } from "@main/lib/utils";
 import PQueue from "p-queue";
@@ -45,6 +46,12 @@ describe("processing.service", () => {
 	let mockProcessManager: any;
 	let mockTwoPassProcessManager: any;
 	const activeProcesses: any[] = [];
+	const twoPassArgs = {
+		audioFilter: "loudnorm",
+		filterOptions: {
+			linear: true,
+		},
+	};
 
 	function createMockTrack(overrides: Partial<any> = {}) {
 		return {
@@ -179,6 +186,73 @@ describe("processing.service", () => {
 			expect(result.successful).toBe(0);
 			expect(mockProcessManager.run).not.toHaveBeenCalled();
 			expect(mockEvent.sender.send).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("runProcessing - execution", () => {
+		it("should use ProcessManager for standart filters", async () => {
+			const tracks = [createMockTrack()];
+			const data = createMockData(tracks, { audioFilter: "volume" });
+			await startProcessing(mockEvent, data as any);
+			expect(ProcessManager).toHaveBeenCalled();
+			expect(TwoPassProcessManager).not.toHaveBeenCalled();
+		});
+
+		it("should use TwoProcessManager when filter is loudnorm and linear is true", async () => {
+			const tracks = [createMockTrack(), createMockTrack()];
+			const data = createMockData(tracks, twoPassArgs);
+			await startProcessing(mockEvent, data as any);
+			expect(ProcessManager).not.toHaveBeenCalled();
+			expect(TwoPassProcessManager).toHaveBeenCalledTimes(2);
+		});
+
+		it("should use TwoProcessManager when filter is loudnorm and linear is not set", async () => {
+			const tracks = [createMockTrack(), createMockTrack()];
+			const data = createMockData(tracks, {
+				audioFilter: "loudnorm",
+			});
+			await startProcessing(mockEvent, data as any);
+			expect(ProcessManager).not.toHaveBeenCalled();
+			expect(TwoPassProcessManager).toHaveBeenCalledTimes(2);
+		});
+
+		it("should use ProcessManager when filter is loudnorm and linear is false", async () => {
+			const tracks = [createMockTrack()];
+			const data = createMockData(tracks, {
+				audioFilter: "loudnorm",
+				filterOptions: { linear: false },
+			});
+			await startProcessing(mockEvent, data as any);
+			expect(ProcessManager).toHaveBeenCalledTimes(1);
+			expect(TwoPassProcessManager).not.toHaveBeenCalled();
+		});
+
+		it("should call run with correct arguments for single pass process", async () => {
+			const tracks = [createMockTrack()];
+			const data = createMockData(tracks);
+			await startProcessing(mockEvent, data as any);
+			expect(mockProcessManager.run).toHaveBeenCalledWith({
+				input: "/input/track1.flac",
+				output: path.join("/output", "track1.mp3"),
+				globalSettings: ["-y"],
+				trackSettings: [],
+			});
+		});
+
+		it("should call run with correct arguments for two pass process", async () => {
+			const tracks = [createMockTrack()];
+			const data = createMockData(tracks, twoPassArgs);
+			await startProcessing(mockEvent, data as any);
+			expect(mockTwoPassProcessManager.run).toHaveBeenCalledWith({
+				input: "/input/track1.flac",
+				output: path.join("/output", "track1.mp3"),
+				globalSettings: ["-y"],
+				trackSettings: [],
+				filterOptions: {
+					linear: true,
+				},
+				signal: expect.any(AbortSignal),
+			});
 		});
 	});
 });
