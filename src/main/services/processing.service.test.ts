@@ -255,4 +255,88 @@ describe("processing.service", () => {
 			});
 		});
 	});
+
+	describe("runProcessing - events", () => {
+		it("should emit processing and completed events on success", async () => {
+			const tracks = [createMockTrack()];
+			const data = createMockData(tracks, twoPassArgs);
+			await startProcessing(mockEvent, data as any);
+			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
+				id: "track-1",
+				status: "processing",
+			});
+			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
+				id: "track-1",
+				status: "completed",
+			});
+		});
+
+		it("should handle failure and emit failed event", async () => {
+			mockProcessManager.run.mockImplementation(() =>
+				Promise.reject(new Error("FFmpeg crashed")),
+			);
+			const tracks = [createMockTrack()];
+			const data = createMockData(tracks);
+			const result = await startProcessing(mockEvent, data as any);
+			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
+				id: "track-1",
+				status: "failed",
+				message: "FFmpeg crashed",
+			});
+			expect(result.total).toBe(1);
+			expect(result.successful).toBe(0);
+			expect(result.failed).toHaveLength(1);
+			expect(result.failed[0]).toStrictEqual({
+				id: "track-1",
+				title: "Artist - Title",
+				reason: "FFmpeg crashed",
+			});
+		});
+
+		it("should handle failure and emit failed event with non-Error string", async () => {
+			mockProcessManager.run.mockImplementation(() =>
+				Promise.reject("FFmpeg crashed"),
+			);
+			const tracks = [createMockTrack()];
+			const data = createMockData(tracks);
+			const result = await startProcessing(mockEvent, data as any);
+			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
+				id: "track-1",
+				status: "failed",
+				message: "FFmpeg crashed",
+			});
+			expect(result.total).toBe(1);
+			expect(result.successful).toBe(0);
+			expect(result.failed).toHaveLength(1);
+			expect(result.failed[0]).toStrictEqual({
+				id: "track-1",
+				title: "Artist - Title",
+				reason: "FFmpeg crashed",
+			});
+		});
+
+		it("should process multiple tracks independently", async () => {
+			const tracks = [
+				createMockTrack({ id: "0", file: "0.mp3" }),
+				createMockTrack({ id: "1", file: "1.mp3" }),
+				createMockTrack({ id: "2", file: "2.mp3" }),
+			];
+			const data = createMockData(tracks);
+			mockProcessManager.run.mockImplementation((track) => {
+				if (track?.output === "/output/2.mp3") {
+					return Promise.reject(new Error("FFmpeg crashed"));
+				}
+				return Promise.resolve(undefined);
+			});
+			const result = await startProcessing(mockEvent, data as any);
+			expect(result.total).toBe(3);
+			expect(result.successful).toBe(2);
+			expect(result.failed).toHaveLength(1);
+			expect(result.failed[0]).toStrictEqual({
+				id: "2",
+				title: "Artist - Title",
+				reason: "FFmpeg crashed",
+			});
+		});
+	});
 });
