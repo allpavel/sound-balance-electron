@@ -22,7 +22,11 @@ import { isDirectory } from "@main/lib/utils";
 import PQueue from "p-queue";
 import { ProcessManager } from "./ffmpeg/processManager";
 import { TwoPassProcessManager } from "./ffmpeg/twoPassProcessManager";
-import { startProcessing } from "./processing.service";
+import {
+	processingState,
+	startProcessing,
+	stopProcessing,
+} from "./processing.service";
 
 vi.mock("p-queue", () => ({ default: vi.fn() }));
 vi.mock("./ffmpeg/twoPassProcessManager", () => ({
@@ -337,6 +341,214 @@ describe("processing.service", () => {
 				title: "Artist - Title",
 				reason: "FFmpeg crashed",
 			});
+		});
+	});
+});
+
+describe("stopProcessing", () => {
+	const mockEvent = { sender: { send: vi.fn() } } as any;
+
+	beforeEach(() => {
+		vi.resetAllMocks();
+		vi.useFakeTimers();
+		processingState.activeProcesses.clear();
+		processingState.abortController = null;
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const flush = async () => {
+		await vi.advanceTimersByTimeAsync(100);
+	};
+
+	describe("AbortController", () => {
+		it("aborts the abortController and clears the reference when one exists", async () => {
+			const controller = new AbortController();
+			const abortSpy = vi.spyOn(controller, "abort");
+			processingState.abortController = controller;
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			expect(abortSpy).toHaveBeenCalledOnce();
+			expect(controller.signal.aborted).toBe(true);
+			expect(processingState.abortController).toBeNull();
+		});
+
+		it("does not throw when there is no abortController", async () => {
+			processingState.abortController = null;
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			expect(processingState.abortController).toBeNull();
+			expect(mockEvent.sender.send).toHaveBeenLastCalledWith(
+				"response-on-stop",
+				{
+					success: true,
+				},
+			);
+		});
+
+		it("does not call abort on a controller that was already cleared", async () => {
+			processingState.abortController = null;
+			const controller = new AbortController();
+			const abortSpy = vi.spyOn(controller, "abort");
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			expect(abortSpy).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("activeProcesses", () => {
+		it("kills every active precess with SIGINT and removes it from the map", async () => {
+			const procs = Array.from({ length: 5 }, () => ({ kill: vi.fn() }) as any);
+			procs.forEach((p, i) => {
+				processingState.activeProcesses.set(`track-${i}`, p);
+			});
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			for (const p of procs) {
+				expect(p.kill).toHaveBeenCalledWith("SIGINT");
+			}
+			expect(processingState.activeProcesses.size).toBe(0);
+		});
+
+		it("handles an empty activeProcesses map without errors", async () => {
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			expect(processingState.activeProcesses.size).toBe(0);
+			expect(mockEvent.sender.send).toHaveBeenCalledTimes(1);
+		});
+
+		it("kills each process exactly once (no double kills)", async () => {
+			const procs = Array.from({ length: 5 }, () => ({ kill: vi.fn() }) as any);
+			procs.forEach((p, i) => {
+				processingState.activeProcesses.set(`track-${i}`, p);
+			});
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			for (const p of procs) {
+				expect(p.kill).toHaveBeenCalledOnce();
+				expect(p.kill).toHaveBeenCalledWith("SIGINT");
+			}
+			expect(processingState.activeProcesses.size).toBe(0);
+		});
+
+		it("still kills remaining processes if one process's kill throws", async () => {
+			const throwing = {
+				kill: vi.fn(() => {
+					throw new Error("Error");
+				}),
+			} as any;
+			const ok = { kill: vi.fn() } as any;
+			processingState.activeProcesses.set("track-1", throwing);
+			processingState.activeProcesses.set("track-2", ok);
+			const promise = stopProcessing(mockEvent);
+			promise.catch(() => {});
+			await expect(promise).rejects.toThrow("Error");
+			expect(throwing.kill).toHaveBeenCalledWith("SIGINT");
+			expect(ok.kill).not.toHaveBeenCalled();
+			expect(mockEvent.sender.send).not.toHaveBeenCalled();
+			expect(processingState.activeProcesses.size).toBe(2);
+		});
+	});
+
+	describe("timing/order", () => {
+		it("waits 100ms before sending response", async () => {
+			const promise = stopProcessing(mockEvent);
+			await vi.advanceTimersByTimeAsync(99);
+			expect(mockEvent.sender.send).not.toHaveBeenCalled();
+			await flush();
+			await vi.advanceTimersByTimeAsync(1);
+			await promise;
+			expect(mockEvent.sender.send).toHaveBeenCalledTimes(1);
+			expect(mockEvent.sender.send).toHaveBeenCalledWith("response-on-stop", {
+				success: true,
+			});
+		});
+
+		it("aborts the controller before killing processes", async () => {
+			const callOrder: string[] = [];
+			const controller = new AbortController();
+			vi.spyOn(controller, "abort").mockImplementationOnce(() => {
+				callOrder.push("abort");
+			});
+			processingState.abortController = controller;
+			const proc = {
+				kill: vi.fn(() => callOrder.push("kill")),
+			} as any;
+			processingState.activeProcesses.set("track-1", proc);
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			expect(callOrder).toEqual(["abort", "kill"]);
+		});
+	});
+
+	describe("ipc response/reuse", () => {
+		it("sends response-on-stop with success: true exactly once", async () => {
+			const controller = new AbortController();
+			processingState.abortController = controller;
+			const proc = {
+				kill: vi.fn(),
+			} as any;
+			processingState.activeProcesses.set("track-1", proc);
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			expect(mockEvent.sender.send).toHaveBeenCalledTimes(1);
+			expect(mockEvent.sender.send).toHaveBeenCalledWith("response-on-stop", {
+				success: true,
+			});
+		});
+
+		it("reports success: true when there was nothing to stop", async () => {
+			const promise = stopProcessing(mockEvent);
+			await flush();
+			await promise;
+			expect(mockEvent.sender.send).toHaveBeenCalledTimes(1);
+			expect(mockEvent.sender.send).toHaveBeenCalledWith("response-on-stop", {
+				success: true,
+			});
+		});
+
+		it("can be called multiple times in sequence without errors", async () => {
+			const first = stopProcessing(mockEvent);
+			await flush();
+			await first;
+			const second = stopProcessing(mockEvent);
+			await flush();
+			await second;
+			expect(mockEvent.sender.send).toHaveBeenCalledTimes(2);
+			expect(mockEvent.sender.send).toHaveBeenNthCalledWith(
+				2,
+				"response-on-stop",
+				{
+					success: true,
+				},
+			);
+		});
+
+		it("can be called multiple times in sequence without errors", async () => {
+			const first = stopProcessing(mockEvent);
+			await flush();
+			await first;
+			const second = stopProcessing(mockEvent);
+			await flush();
+			await second;
+			expect(mockEvent.sender.send).toHaveBeenCalledTimes(2);
+			expect(mockEvent.sender.send).toHaveBeenNthCalledWith(
+				2,
+				"response-on-stop",
+				{
+					success: true,
+				},
+			);
 		});
 	});
 });
