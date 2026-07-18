@@ -165,4 +165,81 @@ describe("getMetadata", () => {
 		]);
 		expect(ends).toHaveLength(3);
 	});
+
+	it("propagates the error when processMetadata rejects for a single file", async () => {
+		const error = new Error("Failed to parse");
+		vi.mocked(processMetadata).mockRejectedValue(error);
+		await expect(getMetadata([filePaths[0]], mockParser)).rejects.toThrow(
+			error,
+		);
+		expect(processMetadata).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects if any single processMetadata call rejects", async () => {
+		const error = new Error("Failed to parse");
+		vi.mocked(processMetadata).mockResolvedValueOnce({ id: "1" } as any);
+		vi.mocked(processMetadata).mockRejectedValueOnce(error);
+		vi.mocked(processMetadata).mockResolvedValueOnce({ id: "3" } as any);
+		await expect(getMetadata(filePaths, mockParser)).rejects.toThrow(
+			"Failed to parse",
+		);
+	});
+
+	it("propagates non-error rejection value", async () => {
+		const error = "Failed to parse";
+		vi.mocked(processMetadata).mockRejectedValueOnce(error);
+		await expect(getMetadata([filePaths[0]], mockParser)).rejects.toBe(error);
+	});
+
+	it("propagates errors thrown synchronously by processMetadata", async () => {
+		const error = new Error("Failed to parse");
+		vi.mocked(processMetadata).mockImplementationOnce(() => {
+			throw error;
+		});
+		await expect(getMetadata([filePaths[0]], mockParser)).rejects.toThrow(
+			error,
+		);
+	});
+
+	it("handles paths with spaces", async () => {
+		const trackPath = "/music/track with spaces.mp3";
+		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
+		await getMetadata([trackPath], mockParser);
+		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
+	});
+
+	it("handles unicode characters in paths", async () => {
+		const trackPath = "/music/ünïcödé_日本語.mp3";
+		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
+		await getMetadata([trackPath], mockParser);
+		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
+	});
+
+	it("handles paths with parentheses and special chars", async () => {
+		const trackPath = "/music/track(1)[feat. x]&y.mp3";
+		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
+		await getMetadata([trackPath], mockParser);
+		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
+	});
+
+	it("handles Windows-style paths", async () => {
+		const trackPath = "C:\\Users\\Music\\song.mp3";
+		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
+		await getMetadata([trackPath], mockParser);
+		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
+	});
+
+	it("handles a large number of files", async () => {
+		const paths = Array.from({ length: 1000 }, (_, i) => `/file${i}.mp3`);
+		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
+		await getMetadata(paths, mockParser);
+		expect(processMetadata).toHaveBeenCalledTimes(1000);
+	});
+
+	it("handles an empty string path", async () => {
+		const trackPath = "";
+		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
+		await getMetadata([trackPath], mockParser);
+		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
+	});
 });
