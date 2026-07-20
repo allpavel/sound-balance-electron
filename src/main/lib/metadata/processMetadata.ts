@@ -17,7 +17,7 @@
  */
 import { processAlbumCover } from "@main/lib/metadata/processAlbumCover";
 import type { IAudioMetadata } from "music-metadata";
-import { v4 as uuid } from "uuid";
+import { v7 as uuid } from "uuid";
 import type { Metadata } from "@/types";
 
 export const processMetadata = async (
@@ -27,7 +27,7 @@ export const processMetadata = async (
 	try {
 		const data = await parser(filePath);
 		const id = uuid();
-		const fileName = filePath.split("/").at(-1);
+		const fileName = filePath.split(/[\\/]/).at(-1) ?? "";
 		const status = "pending";
 		const processedData = processAlbumCover(data);
 		const selected = 0;
@@ -43,7 +43,7 @@ export const processMetadata = async (
 		} satisfies Metadata;
 	} catch (e) {
 		throw new Error(
-			`Metadata parsing failed for ${filePath}: ${e instanceof Error ? e.message : "Unknown error"}`,
+			`Metadata parsing failed for ${filePath}: ${e instanceof Error ? e : "Unknown error"}`,
 		);
 	}
 };
