@@ -62,17 +62,17 @@ export const processAlbumCover = (data: IAudioMetadata) => {
 
 	const metadata = structuredClone(data);
 	for (const key of ID3_KEYS) {
-		const tags = getTagArray(metadata, key);
-		if (!tags) {
-			continue;
-		}
-		for (const tag of tags) {
-			if (tag.id !== "APIC") {
-				continue;
-			}
-			const value = tag.value;
-			if (isApicValue(value) && isUint8Array(value.data)) {
-				value.data = toBase64(value.data);
+		const originalTags = getTagArray(data, key);
+		const clonedTags = getTagArray(metadata, key);
+		if (!originalTags || !clonedTags) continue;
+		for (let i = 0; i < clonedTags.length; i++) {
+			if (clonedTags[i].id !== "APIC") continue;
+
+			const originalValue = originalTags[i].value;
+			if (isApicValue(originalValue) && isUint8Array(originalValue.data)) {
+				(clonedTags[i].value as ApicValue).data = toBase64(
+					originalValue.data as Uint8Array,
+				);
 			}
 		}
 	}
