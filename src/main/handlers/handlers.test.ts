@@ -311,4 +311,226 @@ describe("handlers", () => {
 			expect(result).toBeUndefined();
 		});
 	});
+
+	describe("OPEN_OUTPUT_DIRECTORY handler", () => {
+		const invoke = (...args: any[]) =>
+			handlers[INVOKE_CHANNELS.OPEN_OUTPUT_FOLDER](...args);
+
+		it("calls openOutputDirectory and returns its result", async () => {
+			const mockResult = { success: true, reason: "" };
+			const folderPath = "/output";
+			mockOpenOutputFolder.mockResolvedValueOnce(mockResult);
+			const result = await invoke(folderPath);
+			expect(mockOpenOutputFolder).toHaveBeenCalledTimes(1);
+			expect(mockOpenOutputFolder).toHaveBeenCalledWith(folderPath);
+			expect(result).toEqual(mockResult);
+		});
+
+		it("returns failure result when folder does not exist", async () => {
+			const mockResult = { success: false, reason: "Folder does not exist" };
+			const folderPath = "/output";
+			mockOpenOutputFolder.mockResolvedValueOnce(mockResult);
+			const result = await invoke(folderPath);
+			expect(result).toEqual(mockResult);
+		});
+
+		it("propagates errors from openOutputFolder", async () => {
+			const error = new Error("Unexpected error");
+			mockOpenOutputFolder.mockRejectedValueOnce(error);
+			await expect(invoke("/folder")).rejects.toThrow("Unexpected error");
+		});
+	});
+
+	describe("START_PROCESSING handler", () => {
+		const invoke = (...args: any[]) =>
+			handlers[INVOKE_CHANNELS.START_PROCESSING](...args);
+
+		it("calls startProcessing and returns its result", async () => {
+			const mockResult = { successful: 5, failed: [], total: 5 };
+			const data = {
+				tracks: [],
+				settings: { global: {}, audio: {} },
+			};
+			mockStartProcessing.mockResolvedValueOnce(mockResult);
+			const result = await invoke(data);
+			expect(mockStartProcessing).toHaveBeenCalledTimes(1);
+			expect(mockStartProcessing).toHaveBeenCalledWith(data);
+			expect(result).toEqual(mockResult);
+		});
+
+		it("propagates error when output folder validation failed", async () => {
+			const error = new Error("Output directory validation failed");
+			mockStartProcessing.mockRejectedValueOnce(error);
+			await expect(invoke({} as any)).rejects.toThrow(error);
+		});
+
+		it("propagates non-Error rejection values", async () => {
+			const error = { code: 500 };
+			mockStartProcessing.mockRejectedValueOnce(error);
+			await expect(invoke({} as any)).rejects.toThrow(error);
+		});
+
+		it("returns the failed array from startProcessing", async () => {
+			const failed = [{ id: "1", title: "A - B", reason: "FFmpeg error" }];
+			mockStartProcessing.mockResolvedValue({
+				successful: 0,
+				failed,
+				total: 1,
+			});
+			const result = await invoke({} as any, {} as any);
+			expect(result.failed).toEqual(failed);
+		});
+
+		it("forwards extra arguments beyond event and data", async () => {
+			const event = {} as any;
+			const data = {} as any;
+			const extra = "extra-arg";
+			mockStartProcessing.mockResolvedValue({} as any);
+			await invoke(event, data, extra);
+			expect(mockStartProcessing).toHaveBeenCalledWith(event, data, extra);
+		});
+	});
+
+	describe("STOP_PROCESSING handler", () => {
+		const invoke = (...args: any[]) =>
+			handlers[INVOKE_CHANNELS.STOP_PROCESSING](...args);
+
+		it("calls stopProcessing and returns its result", async () => {
+			mockStopProcessing.mockResolvedValue(undefined);
+			const event = { sender: { send: vi.fn() } } as any;
+			const result = await invoke(event);
+			expect(mockStopProcessing).toHaveBeenCalledTimes(1);
+			expect(mockStopProcessing).toHaveBeenCalledWith(event);
+			expect(result).toBeUndefined();
+		});
+
+		it("forwards event to stopProcessing", async () => {
+			const event = { sender: { send: vi.fn() } } as any;
+			mockStopProcessing.mockResolvedValue(undefined);
+			await invoke(event);
+			expect(mockStopProcessing).toHaveBeenCalledWith(event);
+		});
+
+		it("propagates errors from stopProcessing", async () => {
+			const err = new Error("Kill error");
+			mockStopProcessing.mockRejectedValue(err);
+			await expect(invoke({} as any)).rejects.toThrow("Kill error");
+		});
+
+		it("propagates non-Error rejection values", async () => {
+			mockStopProcessing.mockRejectedValue(42);
+			await expect(invoke({} as any)).rejects.toBe(42);
+		});
+
+		it("handles being called with no arguments", async () => {
+			mockStopProcessing.mockResolvedValue(undefined);
+			await expect(invoke()).resolves.toBeUndefined();
+			expect(mockStopProcessing).toHaveBeenCalledWith();
+		});
+
+		it("can be invoked multiple times in sequence", async () => {
+			mockStopProcessing.mockResolvedValue(undefined);
+			await invoke({} as any);
+			await invoke({} as any);
+			await invoke({} as any);
+			expect(mockStopProcessing).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	describe("handler isolation", () => {
+		it("does not call unrelated services when invoking SHOW_DIALOG", async () => {
+			mockSelectAudioFiles.mockResolvedValue([]);
+			await handlers[INVOKE_CHANNELS.SHOW_DIALOG]();
+			expect(mockGetOutputDirectoryPath).not.toHaveBeenCalled();
+			expect(mockStartProcessing).not.toHaveBeenCalled();
+			expect(mockStopProcessing).not.toHaveBeenCalled();
+			expect(mockOpenOutputFolder).not.toHaveBeenCalled();
+		});
+
+		it("does not call unrelated services when invoking GET_OUTPUT_DIRECTORY", async () => {
+			mockGetOutputDirectoryPath.mockResolvedValue({
+				canceled: false,
+				filePaths: [],
+			});
+			await handlers[INVOKE_CHANNELS.GET_OUTPUT_DIRECTORY]({} as any);
+			expect(mockSelectAudioFiles).not.toHaveBeenCalled();
+			expect(mockParseMetadata).not.toHaveBeenCalled();
+			expect(mockStartProcessing).not.toHaveBeenCalled();
+			expect(mockStopProcessing).not.toHaveBeenCalled();
+			expect(mockOpenOutputFolder).not.toHaveBeenCalled();
+		});
+
+		it("does not call unrelated services when invoking START_PROCESSING", async () => {
+			mockStartProcessing.mockResolvedValue({
+				successful: 0,
+				failed: [],
+				total: 0,
+			});
+			await handlers[INVOKE_CHANNELS.START_PROCESSING]({} as any, {} as any);
+			expect(mockSelectAudioFiles).not.toHaveBeenCalled();
+			expect(mockParseMetadata).not.toHaveBeenCalled();
+			expect(mockGetOutputDirectoryPath).not.toHaveBeenCalled();
+			expect(mockStopProcessing).not.toHaveBeenCalled();
+			expect(mockOpenOutputFolder).not.toHaveBeenCalled();
+		});
+
+		it("does not call unrelated services when invoking STOP_PROCESSING", async () => {
+			mockStopProcessing.mockResolvedValue(undefined);
+			await handlers[INVOKE_CHANNELS.STOP_PROCESSING]({} as any);
+			expect(mockSelectAudioFiles).not.toHaveBeenCalled();
+			expect(mockParseMetadata).not.toHaveBeenCalled();
+			expect(mockGetOutputDirectoryPath).not.toHaveBeenCalled();
+			expect(mockStartProcessing).not.toHaveBeenCalled();
+			expect(mockOpenOutputFolder).not.toHaveBeenCalled();
+		});
+
+		it("does not call unrelated services when invoking OPEN_OUTPUT_FOLDER", async () => {
+			mockOpenOutputFolder.mockResolvedValue({ success: true, reason: "" });
+			await handlers[INVOKE_CHANNELS.OPEN_OUTPUT_FOLDER]({} as any, "/x");
+			expect(mockSelectAudioFiles).not.toHaveBeenCalled();
+			expect(mockParseMetadata).not.toHaveBeenCalled();
+			expect(mockGetOutputDirectoryPath).not.toHaveBeenCalled();
+			expect(mockStartProcessing).not.toHaveBeenCalled();
+			expect(mockStopProcessing).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("handler function references", () => {
+		it("passes the same function reference for GET_OUTPUT_DIRECTORY", () => {
+			expect(mockIpcMainHandle).toHaveBeenCalledWith(
+				INVOKE_CHANNELS.GET_OUTPUT_DIRECTORY,
+				getOutputDirectoryPath,
+			);
+		});
+
+		it("passes the same function reference for OPEN_OUTPUT_FOLDER", () => {
+			expect(mockIpcMainHandle).toHaveBeenCalledWith(
+				INVOKE_CHANNELS.OPEN_OUTPUT_FOLDER,
+				openOutputFolder,
+			);
+		});
+
+		it("passes the same function reference for START_PROCESSING", () => {
+			expect(mockIpcMainHandle).toHaveBeenCalledWith(
+				INVOKE_CHANNELS.START_PROCESSING,
+				startProcessing,
+			);
+		});
+
+		it("passes the same function reference for STOP_PROCESSING", () => {
+			expect(mockIpcMainHandle).toHaveBeenCalledWith(
+				INVOKE_CHANNELS.STOP_PROCESSING,
+				stopProcessing,
+			);
+		});
+
+		it("passes a new wrapper function (not selectAudioFiles) for SHOW_DIALOG", () => {
+			const calls = mockIpcMainHandle.mock.calls.filter(
+				(c) => c[0] === "showDialog",
+			);
+			expect(calls).toHaveLength(1);
+			expect(calls[0][1]).not.toBe(selectAudioFiles);
+			expect(typeof calls[0][1]).toBe("function");
+		});
+	});
 });
