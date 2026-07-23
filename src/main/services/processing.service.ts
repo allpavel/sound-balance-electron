@@ -26,8 +26,15 @@ import PQueue from "p-queue";
 import type { Failed, ProcessingStatus } from "@/types";
 import { TwoPassProcessManager } from "./ffmpeg/twoPassProcessManager";
 
-const activeProcesses = new Map<string, ProcessManager>();
-let abortController: AbortController | null = null;
+type ProcessingState = {
+	activeProcesses: Map<string, ProcessManager>;
+	abortController: AbortController | null;
+};
+
+export const processingState: ProcessingState = {
+	activeProcesses: new Map(),
+	abortController: null,
+};
 
 export const startProcessing = async (
 	event: IpcMainInvokeEvent,
@@ -42,8 +49,8 @@ export const startProcessing = async (
 	let successful = 0;
 	const failed: Failed[] = [];
 	let total = 0;
-	abortController = new AbortController();
-	const { signal } = abortController;
+	processingState.abortController = new AbortController();
+	const { signal } = processingState.abortController;
 	const queue = new PQueue({ concurrency: +data.settings.global.concurrency });
 
 	const globalSettings = getGlobalSettings(data.settings.global);
@@ -63,7 +70,7 @@ export const startProcessing = async (
 			const proc = isTwoPass
 				? new TwoPassProcessManager()
 				: new ProcessManager();
-			activeProcesses.set(track.id, proc);
+			processingState.activeProcesses.set(track.id, proc);
 
 			try {
 				event.sender.send(EVENT_CHANNELS.PROCESSING_RESULT, {
@@ -118,14 +125,14 @@ export const startProcessing = async (
 					message: errorMessage,
 				} satisfies ProcessingStatus);
 			} finally {
-				activeProcesses.delete(track.id);
+				processingState.activeProcesses.delete(track.id);
 			}
 		});
 	}
 
 	await queue.onIdle();
 
-	abortController = null;
+	processingState.abortController = null;
 
 	return {
 		successful,
@@ -135,14 +142,14 @@ export const startProcessing = async (
 };
 
 export const stopProcessing = async (event: IpcMainInvokeEvent) => {
-	if (abortController) {
-		abortController.abort();
-		abortController = null;
+	if (processingState.abortController) {
+		processingState.abortController.abort();
+		processingState.abortController = null;
 	}
 
-	for (const [id, proc] of activeProcesses.entries()) {
+	for (const [id, proc] of processingState.activeProcesses.entries()) {
 		proc.kill("SIGINT");
-		activeProcesses.delete(id);
+		processingState.activeProcesses.delete(id);
 	}
 
 	await new Promise((resolve) => setTimeout(resolve, 100));

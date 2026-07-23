@@ -25,12 +25,15 @@
 		"noEmitOnError": true,
 		"forceConsistentCasingInFileNames": true,
 		"jsx": "react-jsx",
+		"types": [
+			"vitest/globals"
+		],
 		"paths": {
 			"@renderer/*": [
 				"./src/renderer/src/*"
 			],
 			"@types": [
-				"./src/shared/types/index.ts"
+				"./src/shared/types/index.ts",
 			],
 			"@/*": [
 				"./*"

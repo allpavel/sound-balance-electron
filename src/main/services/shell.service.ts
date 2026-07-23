@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { existsSync, statSync } from "node:fs";
+import fs from "node:fs/promises";
 import type { OpenPathResult } from "@types";
 import { shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron/main";
 
-const isSystemError = (err: unknown): err is Error & { code: string } => {
+const isSystemError = (err: unknown): err is NodeJS.ErrnoException => {
 	return err instanceof Error && "code" in err && typeof err.code === "string";
 };
 
@@ -29,24 +29,31 @@ export async function openOutputFolder(
 	_: IpcMainInvokeEvent,
 	folderPath: string,
 ): Promise<OpenPathResult> {
-	let error = "";
 	try {
-		if (!existsSync(folderPath)) {
-			try {
-				statSync(folderPath);
-			} catch (err) {
-				if (isSystemError(err)) {
-					if (err.code === "EACCES" || err.code === "EPERM") {
-						return {
-							success: false,
-							reason: "Permission denied. You cannot access output folder.",
-						};
-					}
-				}
+		await fs.stat(folderPath);
+	} catch (err) {
+		if (isSystemError(err)) {
+			const code = err.code;
+			if (code === "ENOENT") {
+				return { success: false, reason: "Folder doesn't exist." };
 			}
-			return { success: false, reason: "Folder doesn't exist." };
+			if (code === "EACCES" || code === "EPERM") {
+				return {
+					success: false,
+					reason: "Permission denied. You cannot access output folder.",
+				};
+			}
 		}
-		error = await shell.openPath(folderPath);
+		return {
+			success: false,
+			reason:
+				err instanceof Error
+					? err.message
+					: "Unexpected error verifying folder.",
+		};
+	}
+	try {
+		const error = await shell.openPath(folderPath);
 		if (error) {
 			return { success: false, reason: error };
 		}
@@ -54,7 +61,8 @@ export async function openOutputFolder(
 	} catch (err) {
 		return {
 			success: false,
-			reason: err instanceof Error ? err.message : "Unexpected error",
+			reason:
+				err instanceof Error ? err.message : "Unexpected error opening folder.",
 		};
 	}
 }

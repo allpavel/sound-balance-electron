@@ -17,21 +17,22 @@
  */
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import EventEmitter from "node:events";
-import ffmpegPath from "ffmpeg-static";
+import ffmpegStaticPath from "ffmpeg-static";
 
 export abstract class BaseProcess extends EventEmitter {
 	protected process: ChildProcessWithoutNullStreams | null = null;
 	protected readonly ffmpeg: string;
 	protected stderrData: string;
 
-	constructor() {
+	constructor(ffmpegPath?: string) {
 		super();
-		if (!ffmpegPath) {
+		const path = ffmpegPath ?? ffmpegStaticPath;
+		if (!path) {
 			throw new Error(
 				"FFmpeg binary not found. Please ensure ffmpeg-static is installed correctly.",
 			);
 		}
-		this.ffmpeg = ffmpegPath;
+		this.ffmpeg = path;
 		this.stderrData = "";
 	}
 
@@ -96,12 +97,12 @@ export abstract class BaseProcess extends EventEmitter {
 				resolved = true;
 				cleanup();
 
-				if (code === 0 || code === 255) {
-					resolve();
-				} else if (signal) {
+				if (signal) {
 					reject(
 						new Error(`FFmpeg process was terminated by signal: ${signal}`),
 					);
+				} else if (code === 0 || code === 255) {
+					resolve();
 				} else {
 					reject(
 						new Error(`FFmpeg exited with code ${code}\n${this.stderrData}`),

@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-type Stats = {
+export type Stats = {
 	measured_I: number;
 	measured_LRA: number;
 	measured_TP: number;
@@ -37,7 +37,7 @@ export const buildLoudnormFirstPassOptions = (
 	const optionsArray = Object.entries(options.filterOptions);
 	if (optionsArray.length > 0) {
 		const filterArgs = optionsArray
-			.map(([k, v]) => `${k}=${v === "boolean" ? (v ? "1" : "0") : v}`)
+			.map(([k, v]) => `${k}=${typeof v === "boolean" ? (v ? "1" : "0") : v}`)
 			.join(":");
 		return ["-af", `loudnorm=${filterArgs}:print_format=json`];
 	}

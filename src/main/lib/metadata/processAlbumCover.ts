@@ -15,25 +15,66 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { IAudioMetadata } from "music-metadata";
-import type { NativeValue } from "@/types";
+import type { IAudioMetadata, ITag } from "music-metadata";
+
+const ID3_KEYS = ["ID3v2.3", "ID3v2.4"] as const;
+
+type Id3Key = (typeof ID3_KEYS)[number];
+
+type ApicValue = {
+	data: unknown;
+};
+
+const isApicValue = (value: unknown): value is ApicValue =>
+	typeof value === "object" && value !== null && Object.hasOwn(value, "data");
+
+const isUint8Array = (value: unknown): value is Uint8Array =>
+	value instanceof Uint8Array ||
+	(typeof value === "object" &&
+		value !== null &&
+		Symbol.toStringTag in value &&
+		value[Symbol.toStringTag] === "Uint8Array");
+
+const toBase64 = (data: Uint8Array): string =>
+	Buffer.from(data).toString("base64");
+
+const getTagArray = (
+	metadata: IAudioMetadata,
+	key: Id3Key,
+): ITag[] | undefined => {
+	const tags = metadata.native?.[key];
+	if (!Array.isArray(tags)) return undefined;
+	return tags;
+};
+
+const hasApicFrame = (metadata: IAudioMetadata): boolean =>
+	ID3_KEYS.some((key) => {
+		const tags = getTagArray(metadata, key);
+		if (!tags) {
+			return false;
+		}
+
+		return tags.some((tag) => tag.id === "APIC" && isApicValue(tag.value));
+	});
 
 export const processAlbumCover = (data: IAudioMetadata) => {
-	const id3Tags = data.native?.["ID3v2.3"] || data.native?.["ID3v2.4"] || null;
-	if (!id3Tags) return data;
-
-	const apicFrame = id3Tags.find((item) => item.id === "APIC");
-	if (!apicFrame?.value) return data;
+	if (!hasApicFrame(data)) return data;
 
 	const metadata = structuredClone(data);
-	const nativeData =
-		metadata.native?.["ID3v2.3"] || metadata.native?.["ID3v2.4"];
+	for (const key of ID3_KEYS) {
+		const originalTags = getTagArray(data, key);
+		const clonedTags = getTagArray(metadata, key);
+		if (!originalTags || !clonedTags) continue;
+		for (let i = 0; i < clonedTags.length; i++) {
+			if (clonedTags[i].id !== "APIC") continue;
 
-	const apicValue = nativeData.find((item) => item.id === "APIC")
-		?.value as NativeValue;
-	if (apicValue.data instanceof Uint8Array) {
-		const base64 = Buffer.from(apicValue.data).toString("base64");
-		apicValue.data = base64;
+			const originalValue = originalTags[i].value;
+			if (isApicValue(originalValue) && isUint8Array(originalValue.data)) {
+				(clonedTags[i].value as ApicValue).data = toBase64(
+					originalValue.data as Uint8Array,
+				);
+			}
+		}
 	}
 
 	return metadata;

@@ -52,8 +52,6 @@ const globalBaseSchema = z.object({
 const audioBaseSchema = z.object({
 	audioCodec: z.union([encoderNames, z.literal("copy")]),
 	codecOptions: z.record(z.string(), z.string().or(z.number()).or(z.boolean())),
-	audioQuality: z.enum(["cbr", "vbr", "auto"]),
-	audioQualityValue: z.union([cbrSchema, vbrSchema, z.literal("auto")]),
 	outputExtension: z.string(),
 	audioFilter: z.string(),
 	filterOptions: z.record(

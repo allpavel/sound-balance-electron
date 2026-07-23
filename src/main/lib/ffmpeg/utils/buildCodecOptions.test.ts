@@ -15,24 +15,37 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { OptionMapperKeys } from "@/types";
+import { buildCodecOptions } from "./buildCodecOptions";
 
-const MAPPING: Record<OptionMapperKeys, string> = {
-	overwrite: "-y",
-	noOverwrite: "-n",
-	statsPeriod: "-stats_period",
-	recastMedia: "-recast_media",
-
-	audioCodec: "-codec:a",
-	audioQuality: "-q:a",
-	audioFilter: "-filter:a",
-} as const;
-
-export const optionsMapper = (option: OptionMapperKeys): string => {
-	if (MAPPING[option]) {
-		return MAPPING[option];
-	}
-	throw new Error(
-		`Unexpected setting: ${option}. Valid options are: ${Object.keys(MAPPING).join(", ")}`,
-	);
-};
+describe("buildCodecOptions", () => {
+	it("returns empty array for empty options", () => {
+		expect(buildCodecOptions({})).toEqual([]);
+	});
+	it("handles multiple options", () => {
+		const options = {
+			b: "128k",
+			compression_level: 5,
+			reservoir: true,
+		};
+		expect(buildCodecOptions(options)).toEqual([
+			"-b:a",
+			"128k",
+			"-compression_level:a",
+			"5",
+			"-reservoir:a",
+			"1",
+		]);
+	});
+	it("handles boolean options correctly", () => {
+		const options = {
+			reservoir: true,
+			dual_mono: false,
+		};
+		expect(buildCodecOptions(options)).toEqual([
+			"-reservoir:a",
+			"1",
+			"-dual_mono:a",
+			"0",
+		]);
+	});
+});

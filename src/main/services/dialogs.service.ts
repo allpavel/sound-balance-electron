@@ -18,17 +18,26 @@
 import { dialog } from "electron";
 
 export const showDialog = async () => {
-	const { canceled, filePaths } = await dialog.showOpenDialog({
-		properties: ["multiSelections"],
-		title: "Select files",
-	});
-	return canceled ? [] : filePaths;
+	try {
+		const { canceled, filePaths } = await dialog.showOpenDialog({
+			properties: ["multiSelections"],
+			title: "Select files",
+		});
+		const result = filePaths ?? [];
+		return canceled ? [] : result;
+	} catch {
+		throw new Error("Dialog unexpected error");
+	}
 };
 
 export const getOutputDirectoryPath = async () => {
-	const outputDirectoryPath = await dialog.showOpenDialog({
-		title: "Select directory",
-		properties: ["openDirectory"],
-	});
-	return outputDirectoryPath;
+	try {
+		const outputDirectoryPath = await dialog.showOpenDialog({
+			title: "Select directory",
+			properties: ["openDirectory"],
+		});
+		return outputDirectoryPath;
+	} catch {
+		throw new Error("Dialog unexpected error");
+	}
 };
