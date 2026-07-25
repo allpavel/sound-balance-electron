@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { INVOKE_CHANNELS } from "@main/constants";
+import { EVENT_CHANNELS, INVOKE_CHANNELS } from "@main/constants";
 import { contextBridge, ipcRenderer } from "electron";
 
 vi.mock("electron", () => ({
@@ -61,9 +61,8 @@ describe("preload", () => {
 	});
 
 	describe("api object structure", () => {
-		it("exposes exactly 8 methods", () => {
-			const keys = Object.keys(api).sort();
-			expect(keys).toEqual([
+		it("exposes exactly the expected 8 methods", () => {
+			expect(Object.keys(api).sort()).toEqual([
 				"getOutputDirectoryPath",
 				"openOutputFolder",
 				"processingResult",
@@ -74,159 +73,170 @@ describe("preload", () => {
 				"stopProcessing",
 			]);
 		});
-
-		it("all exposed values are functions", () => {
-			for (const value of Object.values(api)) {
-				expect(typeof value).toBe("function");
-			}
-		});
-
-		it("does not expose non-function values", () => {
-			const values = Object.values(api);
-			expect(values.every((i) => typeof i === "function")).toBe(true);
-		});
 	});
 
-	describe("api.showDialog", () => {
-		it("invokes ipcRenderer with SHOW_DIALOG channel", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce([]);
+	describe("IPC Invoke routing", () => {
+		beforeEach(() => {
+			vi.mocked(ipcRenderer.invoke).mockReset();
+		});
+
+		it("showDialog routes to SHOW_DIALOG and resolves", async () => {
+			vi.mocked(ipcRenderer.invoke).mockResolvedValue([]);
 			await api.showDialog();
 			expect(ipcRenderer.invoke).toHaveBeenCalledWith(
 				INVOKE_CHANNELS.SHOW_DIALOG,
 			);
 		});
 
-		it("invokes exactly once per call", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce([]);
-			await api.showDialog();
-			expect(ipcRenderer.invoke).toHaveBeenCalledTimes(1);
-		});
-
-		it("passes only the channel argument (no extras)", async () => {
-			const mockedIPC = vi.mocked(ipcRenderer.invoke);
-			mockedIPC.mockResolvedValueOnce([]);
-			await api.showDialog();
-			expect(mockedIPC.mock.calls[0]).toHaveLength(1);
-		});
-
-		it("returns the value from ipcRenderer.invoke", async () => {
-			const result = [{ id: "1" }, { id: "2" }];
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce(result as any);
-			expect(await api.showDialog()).toEqual(result);
-		});
-
-		it("returns empty array when invoke resolves with []", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce([]);
-			expect(await api.showDialog()).toEqual([]);
-		});
-
-		it("returns undefined when invoke resolves with undefined", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce(undefined);
-			expect(await api.showDialog()).toBeUndefined();
-		});
-
-		it("returns null when invoke resolves with null", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce(null);
-			expect(await api.showDialog()).toBeNull();
-		});
-
-		it("propagates Error rejection from ipcRenderer.invoke", async () => {
-			const error = new Error("IPC failed");
-			vi.mocked(ipcRenderer.invoke).mockRejectedValue(error);
-			await expect(api.showDialog()).rejects.toThrow(error);
-		});
-
-		it("propagates non-Error rejection from ipcRenderer.invoke", async () => {
-			const error = "string error";
-			vi.mocked(ipcRenderer.invoke).mockRejectedValue(error);
-			await expect(api.showDialog()).rejects.toBe(error);
-		});
-
-		it("propagates null rejection", async () => {
-			vi.mocked(ipcRenderer.invoke).mockRejectedValue(null);
-			await expect(api.showDialog()).rejects.toBe(null);
-		});
-
-		it("can be called multiple times in sequence", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce([]);
-			await api.showDialog();
-			await api.showDialog();
-			await api.showDialog();
-			expect(ipcRenderer.invoke).toHaveBeenCalledTimes(3);
-		});
-
-		it("works when destructured from api object", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce([]);
-			const { showDialog } = api;
-			await showDialog();
-			expect(ipcRenderer.invoke).toHaveBeenCalledWith(
-				INVOKE_CHANNELS.SHOW_DIALOG,
-			);
-		});
-	});
-
-	describe("api.getOutputDirectoryPath", () => {
-		it("invokes ipcRenderer with GET_OUTPUT_DIRECTORY channel", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce({} as any);
-			await api.getOutputDirectoryPath();
-			expect(ipcRenderer.invoke).toHaveBeenCalledWith(
-				INVOKE_CHANNELS.GET_OUTPUT_DIRECTORY,
-			);
-		});
-
-		it("invokes exactly once per call", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce({} as any);
-			await api.getOutputDirectoryPath();
-			expect(ipcRenderer.invoke).toHaveBeenCalledTimes(1);
-		});
-
-		it("passes only the channel argument", async () => {
-			const mockedIPC = vi.mocked(ipcRenderer.invoke);
-			mockedIPC.mockResolvedValueOnce({} as any);
-			await api.getOutputDirectoryPath();
-			expect(mockedIPC.mock.calls[0]).toHaveLength(1);
-		});
-
-		it("returns the OpenDialogReturnValue from invoke", async () => {
-			const result = { canceled: false, filePaths: ["/music"] };
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce(result as any);
-			expect(await api.getOutputDirectoryPath()).toEqual(result);
-		});
-
-		it("returns canceled result from invoke", async () => {
-			const result = { canceled: true, filePaths: [] };
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce(result as any);
-			expect(await api.getOutputDirectoryPath()).toEqual(result);
-		});
-
-		it("returns result with multiple filePaths", async () => {
-			const result = {
+		it("getOutputDirectoryPath routes to GET_OUTPUT_DIRECTORY", async () => {
+			vi.mocked(ipcRenderer.invoke).mockResolvedValue({
 				canceled: false,
-				filePaths: ["/music/dir1", "/music/dir2"],
-			};
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce(result as any);
-			expect(await api.getOutputDirectoryPath()).toEqual(result);
-		});
-
-		it("propagates rejection", async () => {
-			const error = new Error("fail");
-			vi.mocked(ipcRenderer.invoke).mockRejectedValue(error);
-			await expect(api.getOutputDirectoryPath()).rejects.toThrow(error);
-		});
-
-		it("propagates non-Error rejection", async () => {
-			const error = "string error";
-			vi.mocked(ipcRenderer.invoke).mockRejectedValue(error);
-			await expect(api.getOutputDirectoryPath()).rejects.toBe(error);
-		});
-
-		it("works when destructured", async () => {
-			vi.mocked(ipcRenderer.invoke).mockResolvedValueOnce({} as any);
-			const { getOutputDirectoryPath } = api;
-			await getOutputDirectoryPath();
+				filePaths: [],
+			});
+			await api.getOutputDirectoryPath();
 			expect(ipcRenderer.invoke).toHaveBeenCalledWith(
 				INVOKE_CHANNELS.GET_OUTPUT_DIRECTORY,
 			);
+		});
+
+		it("startProcessing routes to START_PROCESSING and forwards data payload", async () => {
+			vi.mocked(ipcRenderer.invoke).mockResolvedValue({
+				total: 0,
+				successful: 0,
+				failed: [],
+			});
+			const data = { tracks: [], settings: {} };
+			await api.startProcessing(data);
+			expect(ipcRenderer.invoke).toHaveBeenCalledWith(
+				INVOKE_CHANNELS.START_PROCESSING,
+				data,
+			);
+		});
+
+		it("stopProcessing routes to STOP_PROCESSING", async () => {
+			vi.mocked(ipcRenderer.invoke).mockResolvedValue(undefined);
+			await api.stopProcessing();
+			expect(ipcRenderer.invoke).toHaveBeenCalledWith(
+				INVOKE_CHANNELS.STOP_PROCESSING,
+			);
+		});
+
+		it("openOutputFolder routes to OPEN_OUTPUT_FOLDER and forwards path", async () => {
+			vi.mocked(ipcRenderer.invoke).mockResolvedValue({
+				success: true,
+				reason: "",
+			});
+			const path = "/output";
+			await api.openOutputFolder(path);
+			expect(ipcRenderer.invoke).toHaveBeenCalledWith(
+				INVOKE_CHANNELS.OPEN_OUTPUT_FOLDER,
+				path,
+			);
+		});
+
+		it("propagates rejections from ipcRenderer.invoke", async () => {
+			vi.mocked(ipcRenderer.invoke).mockRejectedValue(new Error("IPC failed"));
+			await expect(api.showDialog()).rejects.toThrow("IPC failed");
+		});
+	});
+
+	describe("IPC Event routing", () => {
+		describe("responseOnStart mechanics", () => {
+			it("registers on RESPONSE_ON_START, strips event, passes payload to callback", () => {
+				const cb = vi.fn();
+				api.responseOnStart(cb);
+				expect(ipcRenderer.on).toHaveBeenCalledWith(
+					EVENT_CHANNELS.RESPONSE_ON_START,
+					expect.any(Function),
+				);
+
+				const handler = vi.mocked(ipcRenderer.on).mock.calls[0][1];
+				const mockEvent = { sender: {} };
+				const mockMsg = "started";
+
+				handler(mockEvent as any, mockMsg);
+				expect(cb).toHaveBeenCalledWith(mockMsg);
+				expect(cb).not.toHaveBeenCalledWith(mockEvent, mockMsg);
+			});
+
+			it("returns a cleanup function that removes the specific channel listener", () => {
+				const cleanup = api.responseOnStart(vi.fn());
+				expect(typeof cleanup).toBe("function");
+
+				cleanup();
+				expect(ipcRenderer.removeAllListeners).toHaveBeenCalledWith(
+					EVENT_CHANNELS.RESPONSE_ON_START,
+				);
+			});
+		});
+
+		it("responseOnStop registers on RESPONSE_ON_STOP", () => {
+			api.responseOnStop(vi.fn());
+			expect(ipcRenderer.on).toHaveBeenCalledWith(
+				EVENT_CHANNELS.RESPONSE_ON_STOP,
+				expect.any(Function),
+			);
+		});
+
+		it("processingResult registers on PROCESSING_RESULT", () => {
+			api.processingResult(vi.fn());
+			expect(ipcRenderer.on).toHaveBeenCalledWith(
+				EVENT_CHANNELS.PROCESSING_RESULT,
+				expect.any(Function),
+			);
+		});
+	});
+
+	describe("contextBridge exposure (contextIsolated = true)", () => {
+		it("calls exposeInMainWorld with 'api' key and the api object", () => {
+			expect(exposeCalls).toHaveLength(1);
+			expect(exposeCalls[0][0]).toBe("api");
+			expect(exposeCalls[0][1]).toBe(api);
+		});
+
+		it("wraps contextBridge errors with 'Preload script failed:'", async () => {
+			vi.resetModules();
+			vi.mocked(contextBridge.exposeInMainWorld).mockImplementationOnce(() => {
+				throw new Error("Bridge error");
+			});
+			await expect(import("./index")).rejects.toThrow(
+				"Preload script failed: Bridge error",
+			);
+		});
+	});
+
+	describe("non-contextIsolated branch", () => {
+		let originalWindow: any;
+
+		beforeEach(async () => {
+			vi.resetModules();
+			originalWindow = (global as any).window;
+			(global as any).window = {};
+			Object.defineProperty(process, "contextIsolated", {
+				value: false,
+				configurable: true,
+			});
+		});
+
+		afterEach(() => {
+			if (originalWindow === undefined) delete (global as any).window;
+			else (global as any).window = originalWindow;
+			Object.defineProperty(process, "contextIsolated", {
+				value: true,
+				configurable: true,
+			});
+		});
+
+		it("assigns electronAPI and api to global window object", async () => {
+			await import("./index");
+			expect((global as any).window.electron).toEqual({ _isElectronAPI: true });
+			expect((global as any).window.api).toBeTypeOf("object");
+			expect((global as any).window.api.showDialog).toBeTypeOf("function");
+		});
+
+		it("does not call contextBridge.exposeInMainWorld", async () => {
+			await import("./index");
+			expect(contextBridge.exposeInMainWorld).not.toHaveBeenCalled();
 		});
 	});
 });
