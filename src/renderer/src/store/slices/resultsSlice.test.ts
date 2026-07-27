@@ -22,8 +22,15 @@ import type { ProcessingResult } from "@/types";
 import resultsReducer, { setResults } from "./resultsSlice";
 
 describe("resultsSlice", () => {
-	const store = configureStore({
-		reducer: { results: resultsReducer },
+	const createStore = () => {
+		return configureStore({
+			reducer: { results: resultsReducer },
+		});
+	};
+	let store: ReturnType<typeof createStore>;
+
+	beforeEach(() => {
+		store = createStore();
 	});
 
 	it("has the correct initial state", () => {
@@ -42,5 +49,19 @@ describe("resultsSlice", () => {
 		};
 		store.dispatch(setResults(payload));
 		expect(store.getState().results).toEqual(payload);
+	});
+
+	it("setResults with empty values fully clears previous results", () => {
+		const initialState: ProcessingResult = {
+			successful: 5,
+			failed: [{ id: "1", title: "Track1", reason: "error" }],
+			total: 6,
+		};
+		store.dispatch(setResults(initialState));
+		expect(store.getState().results).toEqual(initialState);
+
+		const newState = { successful: 0, failed: [], total: 0 };
+		store.dispatch(setResults(newState));
+		expect(store.getState().results).toEqual(newState);
 	});
 });
