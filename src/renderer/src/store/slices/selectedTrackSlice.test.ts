@@ -18,7 +18,6 @@
 
 import { configureStore, type Middleware } from "@reduxjs/toolkit";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import selectedTracksReducer, {
 	loadSelectedTracks,
 	setAllSelectedTracks,
