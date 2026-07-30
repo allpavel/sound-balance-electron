@@ -17,7 +17,6 @@
  */
 
 import { configureStore } from "@reduxjs/toolkit";
-import { describe, expect, it } from "vitest";
 import type { ProcessingResult } from "@/types";
 import resultsReducer, { setResults } from "./resultsSlice";
 
