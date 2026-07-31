@@ -15,20 +15,26 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { configureStore } from "@reduxjs/toolkit";
+import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import activeCollectionSlice from "@renderer/store/slices/collectionSlice";
 import resultsSlice from "@renderer/store/slices/resultsSlice";
 import selectedTracks from "@renderer/store/slices/selectedTracksSlice";
 import settingsSlice from "@renderer/store/slices/settingsSlice";
 
-export const store = configureStore({
-	reducer: {
-		selectedTracks,
-		settings: settingsSlice,
-		results: resultsSlice,
-		activeCollection: activeCollectionSlice,
-	},
+export const rootReducer = combineReducers({
+	selectedTracks,
+	settings: settingsSlice,
+	results: resultsSlice,
+	activeCollection: activeCollectionSlice,
 });
 
-export type RootState = ReturnType<typeof store.getState>;
+export const createAppStore = (preloadedState?: RootState) =>
+	configureStore({
+		reducer: rootReducer,
+		preloadedState,
+	});
+
+export const store = createAppStore();
+
+export type RootState = ReturnType<typeof rootReducer>;
 export type AppDispatch = typeof store.dispatch;
