@@ -17,7 +17,30 @@
  */
 import { v7 as uuidV7 } from "uuid";
 import type { CollectionType } from "@/types";
-import { db } from "../db";
+
+const SYSTEM_COLLECTION_ID = "all";
+
+function normalizeTitle(title: string): string {
+	const normalized = title.trim();
+
+	if (normalized.length === 0) {
+		throw new Error("Collection title must not be empty");
+	}
+
+	return normalized;
+}
+
+function removeCollectionIdFromTrack(
+	collectionIds: string[],
+	collectionId: string,
+): string[] {
+	const uniqueIds = new Set(collectionIds);
+
+	uniqueIds.delete(collectionId);
+	uniqueIds.delete(SYSTEM_COLLECTION_ID);
+
+	return [SYSTEM_COLLECTION_ID, ...uniqueIds];
+}
 
 export const collectionsRepository = {
 	async getAllCollections(): Promise<CollectionType[]> {
