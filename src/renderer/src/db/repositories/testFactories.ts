@@ -26,6 +26,7 @@ let seq = 0;
 
 export function configureUuidMock(): void {
 	uuidSeq = 0;
+	seq = 0;
 	// biome-ignore lint/suspicious/noExplicitAny: for tests only
 	vi.mocked(uuidV7).mockImplementation(() => `mock-uuid-${++uuidSeq}` as any);
 }

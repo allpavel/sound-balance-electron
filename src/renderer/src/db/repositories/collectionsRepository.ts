@@ -78,7 +78,7 @@ export const collectionsRepository = {
 		deleteFromAllCollections = false,
 	}: {
 		id: string;
-		deleteFromAllCollections: boolean;
+		deleteFromAllCollections?: boolean;
 	}): Promise<void> {
 		if (id === SYSTEM_COLLECTION_ID) {
 			throw new Error(
