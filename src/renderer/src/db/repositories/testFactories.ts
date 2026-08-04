@@ -18,15 +18,14 @@
 
 import { db } from "@renderer/db/db";
 import { v7 as uuidV7 } from "uuid";
-import { vi } from "vitest";
 import type { CollectionType, Metadata } from "@/types";
 
 let uuidSeq = 0;
-let seq = 0;
+let collectionSeq = 0;
+let trackSeq = 0;
 
 export function configureUuidMock(): void {
 	uuidSeq = 0;
-	seq = 0;
 	// biome-ignore lint/suspicious/noExplicitAny: for tests only
 	vi.mocked(uuidV7).mockImplementation(() => `mock-uuid-${++uuidSeq}` as any);
 }
@@ -38,18 +37,34 @@ export async function resetDatabase(): Promise<void> {
 	await db.collections.add({ id: "all", title: "All" });
 }
 
+export function resetSequences() {
+	uuidSeq = 0;
+	collectionSeq = 0;
+	trackSeq = 0;
+}
+
+export async function resetTestState() {
+	resetSequences();
+	await resetDatabase();
+	configureUuidMock();
+}
+
 export function makeCollection(
 	overrides: Partial<CollectionType> = {},
 ): CollectionType {
-	seq += 1;
-	return { id: `col-${seq}`, title: `Collection ${seq}`, ...overrides };
+	collectionSeq += 1;
+	return {
+		id: `col-${collectionSeq}`,
+		title: `Collection ${collectionSeq}`,
+		...overrides,
+	};
 }
 
 export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
-	seq += 1;
+	trackSeq += 1;
 	return {
-		id: `track-${seq}`,
-		filePath: `/music/track-${seq}.mp3`,
+		id: `track-${trackSeq}`,
+		filePath: `/music/track-${trackSeq}.mp3`,
 		collectionIds: ["all"],
 		selected: 0,
 		...overrides,
