@@ -19,7 +19,7 @@
 import { db } from "@renderer/db/db";
 import { collectionsRepository } from "@renderer/db/repositories/collectionsRepository";
 import { v7 as uuidV7 } from "uuid";
-import { configureUuidMock, makeTrack, resetDatabase } from "./testFactories";
+import { configureUuidMock, makeTrack, resetTestState } from "./testFactories";
 
 const SYSTEM_COLLECTION_ID = "all";
 const TITLE_VALIDATION_ERROR = /title.*empty/;
@@ -27,7 +27,7 @@ const TITLE_VALIDATION_ERROR = /title.*empty/;
 describe("collectionsRepository", () => {
 	beforeEach(async () => {
 		configureUuidMock();
-		await resetDatabase();
+		await resetTestState();
 	});
 
 	describe("getAllCollections", () => {
