@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import type { Metadata } from "@/types";
 
@@ -30,7 +32,7 @@ export const tracksRepository = {
 		tracks: Metadata[],
 		{
 			allKeys = true,
-			targetCollectionId = "all",
+			targetCollectionId = SYSTEM_COLLECTION_ID,
 		}: { allKeys?: boolean; targetCollectionId: string },
 	): Promise<string | string[]> {
 		const filePaths = tracks.map((track) => track.filePath);
@@ -59,8 +61,8 @@ export const tracksRepository = {
 					});
 				}
 			} else {
-				if (targetCollectionId !== "all") {
-					track.collectionIds.push("all", targetCollectionId);
+				if (targetCollectionId !== SYSTEM_COLLECTION_ID) {
+					track.collectionIds.push(SYSTEM_COLLECTION_ID, targetCollectionId);
 				} else {
 					track.collectionIds.push(targetCollectionId);
 				}

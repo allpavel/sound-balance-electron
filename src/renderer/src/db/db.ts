@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import Dexie, { type EntityTable } from "dexie";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 import type { CollectionType, Metadata } from "@/types";
@@ -61,7 +62,7 @@ db.version(6).stores({
 
 db.on("populate", (tx) => {
 	tx.table("collections").add({
-		id: "all",
+		id: SYSTEM_COLLECTION_ID,
 		title: "All",
 	});
 });
