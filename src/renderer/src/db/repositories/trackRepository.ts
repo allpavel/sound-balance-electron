@@ -18,16 +18,34 @@
 
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
+import {
+	isNonEmptyString,
+	isPlainObject,
+	uniqueTracks,
+} from "@renderer/db/utils/trackRepositoryUtils";
 import type { Metadata } from "@/types";
+
+type TrackUpdate = {
+	id: string;
+	changes: Partial<Metadata>;
+};
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
-		return await db.tracks.where("collectionIds").equals(id).toArray();
+		if (!isNonEmptyString(id)) {
+			return [];
+		}
+		const tracks = await db.tracks.where("collectionIds").equals(id).toArray();
+		return uniqueTracks(tracks);
 	},
+
 	async getById(id: string) {
-		const tracks = await db.tracks.where("id").equals(id).toArray();
-		return tracks.length > 0 ? tracks[0] : undefined;
+		if (!isNonEmptyString(id)) {
+			return undefined;
+		}
+		return await db.tracks.get(id);
 	},
+
 	async addMany(
 		tracks: Metadata[],
 		{
@@ -84,10 +102,45 @@ export const tracksRepository = {
 
 		return resultIds;
 	},
+
 	async update(id: string, changes: Partial<Metadata>): Promise<number> {
+		if (!isNonEmptyString(id)) {
+			throw new Error("ID must be a non-empty string");
+		}
+		if (!isPlainObject(changes)) {
+			throw new Error("Changes must be an object");
+		}
 		return await db.tracks.update(id, changes);
 	},
+
 	async updateMany(updates: { id: string; changes: Partial<Metadata> }[]) {
+		if (!Array.isArray(updates)) {
+			throw new Error("Updates must be an array");
+		}
+		if (updates.length === 0) {
+			return 0;
+		}
+
+		const seenIds = new Set<string>();
+
+		for (const [index, update] of updates.entries()) {
+			const context = `updates[${index}]`;
+			if (!isPlainObject(update)) {
+				throw new Error(`${context} must be an object`);
+			}
+			const candidate = update as Partial<TrackUpdate>;
+			if (!isNonEmptyString(candidate.id)) {
+				throw new Error(`${context}.id must be a non-empty string`);
+			}
+			if (!isPlainObject(candidate.changes)) {
+				throw new Error(`${context}.changes must be an object`);
+			}
+			if (seenIds.has(candidate.id)) {
+				throw new Error(`updates contains duplicate id: ${candidate.id}`);
+			}
+			seenIds.add(candidate.id);
+		}
+
 		let total = 0;
 		await db.transaction("rw", db.tracks, async () => {
 			for (const { id, changes } of updates) {
@@ -97,18 +150,26 @@ export const tracksRepository = {
 		return total;
 	},
 	async remove(id: string): Promise<void> {
+		if (!isNonEmptyString(id)) {
+			throw new Error("ID must be a non-empty string");
+		}
 		await db.tracks.delete(id);
 	},
+
 	async getSelectedTracks(): Promise<Metadata[]> {
-		return await db.tracks.where("selected").equals(1).toArray();
+		const tracks = await db.tracks.where("selected").equals(1).toArray();
+		return uniqueTracks(tracks);
 	},
+
 	async removeMany(): Promise<void> {
 		await db.transaction("rw", db.tracks, async () => {
 			const selectedTracksIds = await db.tracks
 				.where("selected")
 				.equals(1)
 				.primaryKeys();
-			await db.tracks.bulkDelete(selectedTracksIds);
+			if (selectedTracksIds.length > 0) {
+				await db.tracks.bulkDelete(selectedTracksIds);
+			}
 		});
 	},
 };
