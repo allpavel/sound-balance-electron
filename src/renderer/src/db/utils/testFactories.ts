@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import { v7 as uuidV7 } from "uuid";
 import type { CollectionType, Metadata } from "@/types";
@@ -64,9 +65,11 @@ export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
 	trackSeq += 1;
 	return {
 		id: `track-${trackSeq}`,
+		file: `track-${trackSeq}.mp3`,
 		filePath: `/music/track-${trackSeq}.mp3`,
-		collectionIds: ["all"],
+		status: "pending",
 		selected: 0,
+		collectionIds: [SYSTEM_COLLECTION_ID],
 		...overrides,
 	} as Metadata;
 }

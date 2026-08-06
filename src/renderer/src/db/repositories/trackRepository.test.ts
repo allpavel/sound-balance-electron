@@ -17,7 +17,7 @@
  */
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { makeTrack, resetDatabase } from "./testFactories";
+import { makeTrack, resetDatabase } from "@renderer/db/utils/testFactories";
 
 describe("tracksRepository", () => {
 	beforeEach(async () => {

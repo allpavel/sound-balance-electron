@@ -22,7 +22,7 @@ import {
 	settingsRepository,
 } from "@renderer/db/repositories/settingsRepository";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
-import { resetDatabase } from "./testFactories";
+import { resetDatabase } from "../utils/testFactories";
 
 function getValidSettings({
 	concurrency = 4,

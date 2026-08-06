@@ -22,6 +22,7 @@ import {
 	type SettingsForm,
 	settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
+import { SYSTEM_COLLECTION_ID } from "../constants/constants";
 import {
 	configureUuidMock,
 	makeCollection,
@@ -109,8 +110,10 @@ describe("testFactories", () => {
 			});
 			expect(makeTrack()).toEqual({
 				id: "track-1",
+				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
-				collectionIds: ["all"],
+				status: "pending",
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
 			});
 		});
@@ -133,7 +136,7 @@ describe("testFactories", () => {
 			await resetDatabase();
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.collections.toArray()).toEqual([
-				{ id: "all", title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: "All" },
 			]);
 			expect(await db.settings.count()).toBe(0);
 		});
@@ -142,7 +145,7 @@ describe("testFactories", () => {
 			await resetDatabase();
 			await expect(resetDatabase()).resolves.toBeUndefined();
 			expect(await db.collections.toArray()).toEqual([
-				{ id: "all", title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: "All" },
 			]);
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.settings.count()).toBe(0);
@@ -182,12 +185,14 @@ describe("testFactories", () => {
 			});
 			expect(makeTrack()).toEqual({
 				id: "track-1",
+				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
-				collectionIds: ["all"],
+				status: "pending",
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
 			});
 			expect(await db.collections.toArray()).toEqual([
-				{ id: "all", title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: "All" },
 			]);
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.settings.count()).toBe(0);
@@ -254,14 +259,18 @@ describe("testFactories", () => {
 		it("produces deterministic defaults after a sequence reset", () => {
 			expect(makeTrack()).toEqual({
 				id: "track-1",
+				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
-				collectionIds: ["all"],
+				status: "pending",
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
 			});
 			expect(makeTrack()).toEqual({
 				id: "track-2",
+				file: "track-2.mp3",
 				filePath: "/music/track-2.mp3",
-				collectionIds: ["all"],
+				status: "pending",
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
 			});
 		});
@@ -278,14 +287,18 @@ describe("testFactories", () => {
 			expect(
 				makeTrack({
 					id: "explicit",
+					file: "explicit.mp3",
 					filePath: "/other/path.mp3",
-					collectionIds: ["all", "mix1"],
+					status: "completed",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 					selected: 1,
 				}),
 			).toEqual({
 				id: "explicit",
+				file: "explicit.mp3",
 				filePath: "/other/path.mp3",
-				collectionIds: ["all", "mix1"],
+				status: "completed",
+				collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				selected: 1,
 			});
 		});
@@ -293,17 +306,34 @@ describe("testFactories", () => {
 		it("applies partial selected override while preserving generated defaults", () => {
 			expect(makeTrack({ selected: 1 })).toEqual({
 				id: "track-1",
+				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
-				collectionIds: ["all"],
+				status: "pending",
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 1,
 			});
 		});
 
 		it("applies partial collectionIds override while preserving generated defaults", () => {
-			expect(makeTrack({ collectionIds: ["all", "mix1"] })).toEqual({
+			expect(
+				makeTrack({ collectionIds: [SYSTEM_COLLECTION_ID, "mix1"] }),
+			).toEqual({
 				id: "track-1",
+				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
-				collectionIds: ["all", "mix1"],
+				status: "pending",
+				collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				selected: 0,
+			});
+		});
+
+		it("applies partial status override while preserving generated defaults", () => {
+			expect(makeTrack({ status: "failed" })).toEqual({
+				id: "track-1",
+				file: "track-1.mp3",
+				filePath: "/music/track-1.mp3",
+				status: "failed",
+				collectionIds: ["all"],
 				selected: 0,
 			});
 		});
@@ -318,8 +348,10 @@ describe("testFactories", () => {
 		it("preserves generated id when filePath is overridden", () => {
 			expect(makeTrack({ filePath: "/other/path.mp3" })).toEqual({
 				id: "track-1",
+				file: "track-1.mp3",
 				filePath: "/other/path.mp3",
-				collectionIds: ["all"],
+				status: "pending",
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
 			});
 		});
@@ -328,8 +360,8 @@ describe("testFactories", () => {
 			const first = makeTrack();
 			first.collectionIds.push("modified");
 			const second = makeTrack();
-			expect(first.collectionIds).toEqual(["all", "modified"]);
-			expect(second.collectionIds).toEqual(["all"]);
+			expect(first.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "modified"]);
+			expect(second.collectionIds).toEqual([SYSTEM_COLLECTION_ID]);
 		});
 	});
 });
