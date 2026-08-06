@@ -16,14 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
+import {
+	STATUS_VALUES,
+	SYSTEM_COLLECTION_ID,
+} from "@renderer/db/constants/constants";
 import type { Metadata } from "@/types";
 import {
 	areCollectionIdsEqual,
 	assertCollectionIds,
 	assertTargetCollectionId,
 	assertTrackInput,
-	isNonEmptyString,
 	isPlainObject,
 	normalizeCollectionIds,
 	uniqueTracks,
@@ -32,42 +34,22 @@ import {
 function createTrack(overrides: Record<string, unknown> = {}): Metadata {
 	return {
 		id: "track-1",
+		file: "track-1.mp3",
 		filePath: "/music/track-1.mp3",
-		collectionIds: [SYSTEM_COLLECTION_ID],
+		status: "pending",
 		selected: 0,
+		collectionIds: [SYSTEM_COLLECTION_ID],
 		...overrides,
 	} as unknown as Metadata;
 }
 
+function createTrackWithoutField(field: string): Record<string, unknown> {
+	const track = createTrack() as any;
+	delete track[field];
+	return track as any;
+}
+
 describe("trackRepositoryUtils", () => {
-	describe("isNonEmptyString", () => {
-		it("returns true for non-empty strings", () => {
-			expect(isNonEmptyString("all")).toBe(true);
-			expect(isNonEmptyString("mix-1")).toBe(true);
-			expect(isNonEmptyString("  mix-1  ")).toBe(true);
-		});
-
-		it("returns false for empty strings", () => {
-			expect(isNonEmptyString("")).toBe(false);
-		});
-
-		it("returns false for whitespace-only strings", () => {
-			expect(isNonEmptyString("   ")).toBe(false);
-			expect(isNonEmptyString("\t\n")).toBe(false);
-		});
-
-		it("returns false for non-string values", () => {
-			expect(isNonEmptyString(null)).toBe(false);
-			expect(isNonEmptyString(undefined)).toBe(false);
-			expect(isNonEmptyString(0)).toBe(false);
-			expect(isNonEmptyString(123)).toBe(false);
-			expect(isNonEmptyString(true)).toBe(false);
-			expect(isNonEmptyString([])).toBe(false);
-			expect(isNonEmptyString({})).toBe(false);
-			expect(isNonEmptyString(() => {})).toBe(false);
-		});
-	});
-
 	describe("isPlainObject", () => {
 		it("returns true for plain objects", () => {
 			expect(isPlainObject({})).toBe(true);
@@ -127,10 +109,6 @@ describe("trackRepositoryUtils", () => {
 		const errorMsg = "test.collectionIds must be an array of strings";
 		const testIdErrorMsg = "test.collectionIds[1] must be a non-empty string";
 
-		it("accepts undefined", () => {
-			expect(() => assertCollectionIds(undefined, "test")).not.toThrow();
-		});
-
 		it("accepts an empty array", () => {
 			expect(() => assertCollectionIds([], "test")).not.toThrow();
 		});
@@ -139,6 +117,14 @@ describe("trackRepositoryUtils", () => {
 			expect(() =>
 				assertCollectionIds([SYSTEM_COLLECTION_ID, "mix-1"], "test"),
 			).not.toThrow();
+		});
+
+		it("rejects undefined because collectionIds is required in Metadata", () => {
+			expect(() => assertCollectionIds(undefined, "test")).toThrow(errorMsg);
+		});
+
+		it("rejects null", () => {
+			expect(() => assertCollectionIds(null, "test")).toThrow(errorMsg);
 		});
 
 		it("rejects a non-array value", () => {
@@ -176,46 +162,53 @@ describe("trackRepositoryUtils", () => {
 	});
 
 	describe("assertTrackInput", () => {
-		const nonObjErrorMsg = "tracks[0] must be an object";
-		const nonEmptyStringErrMsg = "tracks[0].id must be a non-empty string";
-		const filePathErrMsg = "tracks[0].filePath must be a non-empty string";
+		const objectErrorMessage = "tracks[0] must be an object";
+		const idErrorMessage = "tracks[0].id must be a non-empty string";
+		const fileErrorMessage = "tracks[0].file must be a non-empty string";
+		const filePathErrorMessage =
+			"tracks[0].filePath must be a non-empty string";
+		const statusErrorMessage =
+			"tracks[0].status must be one of: pending, processing, completed, failed";
+		const selectedErrorMessage = "tracks[0].selected must be 0 or 1";
+		const collectionIdsArrayErrorMessage =
+			"tracks[0].collectionIds must be an array of strings";
+		const collectionIdsItemErrorMessage =
+			"tracks[0].collectionIds[1] must be a non-empty string";
 
 		it("accepts a valid track", () => {
 			expect(() => assertTrackInput(createTrack(), 0)).not.toThrow();
 		});
-
-		it("accepts a track without collectionIds", () => {
-			expect(() =>
-				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: "/music/track-1.mp3",
-					},
-					0,
-				),
-			).not.toThrow();
+		it("accepts every valid Status value", () => {
+			for (const status of STATUS_VALUES) {
+				expect(() =>
+					assertTrackInput(createTrack({ status }), 0),
+				).not.toThrow();
+			}
 		});
 
-		it("accepts a track with undefined collectionIds", () => {
+		it("accepts unknown IAudioMetadata fields", () => {
 			expect(() =>
 				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: "/music/track-1.mp3",
-						collectionIds: undefined,
-					},
+					createTrack({
+						format: {
+							duration: 123,
+						},
+						common: {
+							title: "Song",
+						},
+					}),
 					0,
 				),
 			).not.toThrow();
 		});
 
 		it("rejects a non-object track", () => {
-			expect(() => assertTrackInput(null, 0)).toThrow(nonObjErrorMsg);
-			expect(() => assertTrackInput(undefined, 0)).toThrow(nonObjErrorMsg);
-			expect(() => assertTrackInput("track", 0)).toThrow(nonObjErrorMsg);
-			expect(() => assertTrackInput(123, 0)).toThrow(nonObjErrorMsg);
-			expect(() => assertTrackInput(true, 0)).toThrow(nonObjErrorMsg);
-			expect(() => assertTrackInput([], 0)).toThrow(nonObjErrorMsg);
+			expect(() => assertTrackInput(null, 0)).toThrow(objectErrorMessage);
+			expect(() => assertTrackInput(undefined, 0)).toThrow(objectErrorMessage);
+			expect(() => assertTrackInput("track", 0)).toThrow(objectErrorMessage);
+			expect(() => assertTrackInput(123, 0)).toThrow(objectErrorMessage);
+			expect(() => assertTrackInput(true, 0)).toThrow(objectErrorMessage);
+			expect(() => assertTrackInput([], 0)).toThrow(objectErrorMessage);
 		});
 
 		it("includes the provided index in the error context", () => {
@@ -225,110 +218,151 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects an empty id", () => {
-			expect(() =>
-				assertTrackInput(
-					{
-						id: "",
-						filePath: "/music/track-1.mp3",
-					},
-					0,
-				),
-			).toThrow(nonEmptyStringErrMsg);
+			expect(() => assertTrackInput(createTrack({ id: "" }), 0)).toThrow(
+				idErrorMessage,
+			);
 		});
 
 		it("rejects a whitespace-only id", () => {
-			expect(() =>
-				assertTrackInput(
-					{
-						id: "   ",
-						filePath: "/music/track-1.mp3",
-					},
-					0,
-				),
-			).toThrow(nonEmptyStringErrMsg);
+			expect(() => assertTrackInput(createTrack({ id: "   " }), 0)).toThrow(
+				idErrorMessage,
+			);
 		});
 
 		it("rejects a non-string id", () => {
+			expect(() => assertTrackInput(createTrack({ id: 123 }), 0)).toThrow(
+				idErrorMessage,
+			);
+		});
+
+		it("rejects a missing id", () => {
+			expect(() => assertTrackInput(createTrackWithoutField("id"), 0)).toThrow(
+				idErrorMessage,
+			);
+		});
+
+		it("rejects an empty file", () => {
+			expect(() => assertTrackInput(createTrack({ file: "" }), 0)).toThrow(
+				fileErrorMessage,
+			);
+		});
+
+		it("rejects a whitespace-only file", () => {
+			expect(() => assertTrackInput(createTrack({ file: "   " }), 0)).toThrow(
+				fileErrorMessage,
+			);
+		});
+
+		it("rejects a missing file", () => {
 			expect(() =>
-				assertTrackInput(
-					{
-						id: 123,
-						filePath: "/music/track-1.mp3",
-					},
-					0,
-				),
-			).toThrow(nonEmptyStringErrMsg);
+				assertTrackInput(createTrackWithoutField("file"), 0),
+			).toThrow(fileErrorMessage);
 		});
 
 		it("rejects an empty filePath", () => {
-			expect(() =>
-				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: "",
-					},
-					0,
-				),
-			).toThrow(filePathErrMsg);
+			expect(() => assertTrackInput(createTrack({ filePath: "" }), 0)).toThrow(
+				filePathErrorMessage,
+			);
 		});
 
 		it("rejects a whitespace-only filePath", () => {
 			expect(() =>
-				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: "   ",
-					},
-					0,
-				),
-			).toThrow(filePathErrMsg);
+				assertTrackInput(createTrack({ filePath: "   " }), 0),
+			).toThrow(filePathErrorMessage);
 		});
 
-		it("rejects a non-string filePath", () => {
+		it("rejects a missing filePath", () => {
 			expect(() =>
-				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: 123,
-					},
-					0,
-				),
-			).toThrow(filePathErrMsg);
+				assertTrackInput(createTrackWithoutField("filePath"), 0),
+			).toThrow(filePathErrorMessage);
+		});
+
+		it("rejects a missing status", () => {
+			expect(() =>
+				assertTrackInput(createTrackWithoutField("status"), 0),
+			).toThrow(statusErrorMessage);
+		});
+
+		it("rejects undefined status", () => {
+			expect(() =>
+				assertTrackInput(createTrack({ status: undefined }), 0),
+			).toThrow(statusErrorMessage);
+		});
+
+		it("rejects invalid status values", () => {
+			expect(() =>
+				assertTrackInput(createTrack({ status: "done" }), 0),
+			).toThrow(statusErrorMessage);
+
+			expect(() => assertTrackInput(createTrack({ status: "" }), 0)).toThrow(
+				statusErrorMessage,
+			);
+
+			expect(() => assertTrackInput(createTrack({ status: "   " }), 0)).toThrow(
+				statusErrorMessage,
+			);
+
+			expect(() => assertTrackInput(createTrack({ status: 123 }), 0)).toThrow(
+				statusErrorMessage,
+			);
+
+			expect(() => assertTrackInput(createTrack({ status: null }), 0)).toThrow(
+				statusErrorMessage,
+			);
+		});
+
+		it("rejects invalid selected values", () => {
+			expect(() => assertTrackInput(createTrack({ selected: 2 }), 0)).toThrow(
+				selectedErrorMessage,
+			);
+
+			expect(() =>
+				assertTrackInput(createTrack({ selected: true }), 0),
+			).toThrow(selectedErrorMessage);
+
+			expect(() => assertTrackInput(createTrack({ selected: "1" }), 0)).toThrow(
+				selectedErrorMessage,
+			);
+
+			expect(() =>
+				assertTrackInput(createTrack({ selected: null }), 0),
+			).toThrow(selectedErrorMessage);
+
+			expect(() =>
+				assertTrackInput(createTrack({ selected: undefined }), 0),
+			).toThrow(selectedErrorMessage);
+		});
+
+		it("rejects a missing selected value", () => {
+			expect(() =>
+				assertTrackInput(createTrackWithoutField("selected"), 0),
+			).toThrow(selectedErrorMessage);
 		});
 
 		it("rejects invalid collectionIds", () => {
 			expect(() =>
 				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: "/music/track-1.mp3",
-						collectionIds: SYSTEM_COLLECTION_ID,
-					},
+					createTrack({ collectionIds: SYSTEM_COLLECTION_ID }),
 					0,
 				),
-			).toThrow("tracks[0].collectionIds must be an array of strings");
+			).toThrow(collectionIdsArrayErrorMessage);
+
+			expect(() =>
+				assertTrackInput(createTrack({ collectionIds: null }), 0),
+			).toThrow(collectionIdsArrayErrorMessage);
 
 			expect(() =>
 				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: "/music/track-1.mp3",
-						collectionIds: null,
-					},
+					createTrack({ collectionIds: [SYSTEM_COLLECTION_ID, ""] }),
 					0,
 				),
-			).toThrow("tracks[0].collectionIds must be an array of strings");
+			).toThrow(collectionIdsItemErrorMessage);
+		});
 
+		it("rejects a missing collectionIds value", () => {
 			expect(() =>
-				assertTrackInput(
-					{
-						id: "track-1",
-						filePath: "/music/track-1.mp3",
-						collectionIds: [SYSTEM_COLLECTION_ID, ""],
-					},
-					0,
-				),
-			).toThrow("tracks[0].collectionIds[1] must be a non-empty string");
+				assertTrackInput(createTrackWithoutField("collectionIds"), 0),
+			).toThrow(collectionIdsArrayErrorMessage);
 		});
 	});
 
