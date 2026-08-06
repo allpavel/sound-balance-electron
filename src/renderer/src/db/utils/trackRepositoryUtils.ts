@@ -17,6 +17,11 @@
  */
 
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
+import {
+	collectionIdsSchema,
+	targetCollectionIdSchema,
+	trackInputSchema,
+} from "@renderer/db/schemas/track.schema";
 import type { Metadata } from "@/types";
 
 function isNonEmptyString(value: unknown): value is string {
@@ -28,25 +33,24 @@ function isPlainObject(value: unknown): boolean {
 }
 
 function assertTargetCollectionId(value: unknown): void {
-	if (!isNonEmptyString(value)) {
+	const result = targetCollectionIdSchema.safeParse(value);
+	if (!result.success) {
 		throw new Error("targetCollectionId must be a non-empty string");
 	}
 }
 
 function assertCollectionIds(value: unknown, context: string): void {
-	if (value === undefined) {
+	const result = collectionIdsSchema.safeParse(value);
+	if (result.success) {
 		return;
 	}
-	if (!Array.isArray(value)) {
+	const path = result.error.issues[0]?.path ?? [];
+	if (path.length === 0) {
 		throw new Error(`${context}.collectionIds must be an array of strings`);
 	}
-	for (const [index, collectionId] of value.entries()) {
-		if (!isNonEmptyString(collectionId)) {
-			throw new Error(
-				`${context}.collectionIds[${index}] must be a non-empty string`,
-			);
-		}
-	}
+	throw new Error(
+		`${context}.collectionIds[${String(path[0])}] must be a non-empty string`,
+	);
 }
 
 function assertTrackInput(track: unknown, index: number): void {
@@ -54,14 +58,40 @@ function assertTrackInput(track: unknown, index: number): void {
 	if (!isPlainObject(track)) {
 		throw new Error(`${context} must be an object`);
 	}
-	const candidate = track as Partial<Metadata>;
-	if (!isNonEmptyString(candidate.id)) {
+
+	const result = trackInputSchema.safeParse(track);
+	if (result.success) {
+		return;
+	}
+
+	const [field, collectionIndex] = result.error.issues[0]?.path ?? [];
+
+	if (field === "id") {
 		throw new Error(`${context}.id must be a non-empty string`);
 	}
-	if (!isNonEmptyString(candidate.filePath)) {
+	if (field === "file") {
+		throw new Error(`${context}.file must be a non-empty string`);
+	}
+	if (field === "filePath") {
 		throw new Error(`${context}.filePath must be a non-empty string`);
 	}
-	assertCollectionIds(candidate.collectionIds, context);
+	if (field === "status") {
+		throw new Error(
+			`${context}.status must be one of: pending, processing, completed, failed`,
+		);
+	}
+	if (field === "selected") {
+		throw new Error(`${context}.selected must be 0 or 1`);
+	}
+	if (field === "collectionIds") {
+		if (collectionIndex === undefined) {
+			throw new Error(`${context}.collectionIds must be an array of strings`);
+		}
+		throw new Error(
+			`${context}.collectionIds[${String(collectionIndex)}] must be a non-empty string`,
+		);
+	}
+	throw new Error(`${context} is invalid`);
 }
 
 function normalizeCollectionIds(
