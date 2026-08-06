@@ -19,8 +19,12 @@
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import {
+	areCollectionIdsEqual,
+	assertTargetCollectionId,
+	assertTrackInput,
 	isNonEmptyString,
 	isPlainObject,
+	normalizeCollectionIds,
 	uniqueTracks,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import type { Metadata } from "@/types";
@@ -48,59 +52,98 @@ export const tracksRepository = {
 
 	async addMany(
 		tracks: Metadata[],
-		{
-			allKeys = true,
-			targetCollectionId = SYSTEM_COLLECTION_ID,
-		}: { allKeys?: boolean; targetCollectionId: string },
-	): Promise<string | string[]> {
-		const filePaths = tracks.map((track) => track.filePath);
-		const existingTracks = await db.tracks
-			.where("filePath")
-			.anyOf(filePaths)
-			.toArray();
-		const existingMap = new Map(
-			existingTracks.map((track) => [track.filePath, track]),
-		);
+		{ targetCollectionId = SYSTEM_COLLECTION_ID } = {},
+	): Promise<string[]> {
+		assertTargetCollectionId(targetCollectionId);
 
-		const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
-		const toAdd: Metadata[] = [];
-
-		for (const track of tracks) {
-			const existingTrack = existingMap.get(track.filePath);
-
-			if (existingTrack) {
-				if (!existingTrack.collectionIds.includes(targetCollectionId)) {
-					const newIds = [...existingTrack.collectionIds, targetCollectionId];
-					toUpdate.push({
-						key: existingTrack.id,
-						changes: {
-							collectionIds: newIds,
-						},
-					});
-				}
-			} else {
-				if (targetCollectionId !== SYSTEM_COLLECTION_ID) {
-					track.collectionIds.push(SYSTEM_COLLECTION_ID, targetCollectionId);
-				} else {
-					track.collectionIds.push(targetCollectionId);
-				}
-				toAdd.push(track);
-			}
+		if (!Array.isArray(tracks)) {
+			throw new Error("Tracks must be an array");
+		}
+		if (tracks.length === 0) {
+			return [];
 		}
 
-		const resultIds: string[] = [];
+		const seenFilePaths = new Set<string>();
 
-		await db.transaction("rw", db.tracks, async () => {
-			if (toAdd.length > 0) {
-				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys });
-				resultIds.push(...addedIds);
+		for (const [index, track] of tracks.entries()) {
+			assertTrackInput(track, index);
+			const filePath = (track as Metadata).filePath;
+			if (seenFilePaths.has(filePath)) {
+				throw new Error(`tracks contains duplicate filePath: ${filePath}`);
 			}
+			seenFilePaths.add(filePath);
+		}
+
+		const filePaths = tracks.map((track) => track.filePath);
+
+		return await db.transaction("rw", db.tracks, async () => {
+			const existingTracks = await db.tracks
+				.where("filePath")
+				.anyOf(filePaths)
+				.toArray();
+
+			const existingByFilePath = new Map<string, Metadata[]>();
+
+			for (const existingTrack of existingTracks) {
+				if (!isNonEmptyString(existingTrack.filePath)) {
+					continue;
+				}
+				const group = existingByFilePath.get(existingTrack.filePath) ?? [];
+				group.push(existingTrack);
+				existingByFilePath.set(existingTrack.filePath, group);
+			}
+
+			const toAdd: Metadata[] = [];
+			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
+
+			for (const track of tracks) {
+				const existingRows = existingByFilePath.get(track.filePath) ?? [];
+
+				if (existingRows.length > 0) {
+					for (const existingRow of existingRows) {
+						const nextCollectionIds = normalizeCollectionIds(
+							existingRow.collectionIds,
+							targetCollectionId,
+						);
+
+						if (
+							!areCollectionIdsEqual(
+								existingRow.collectionIds,
+								nextCollectionIds,
+							)
+						) {
+							toUpdate.push({
+								key: existingRow.id,
+								changes: {
+									collectionIds: nextCollectionIds,
+								},
+							});
+						}
+					}
+				} else {
+					toAdd.push({
+						...track,
+						collectionIds: normalizeCollectionIds(
+							track.collectionIds,
+							targetCollectionId,
+						),
+					});
+				}
+			}
+
+			const resultIds: string[] = [];
+
+			if (toAdd.length > 0) {
+				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys: true });
+				const addedIdArray = Array.isArray(addedIds) ? addedIds : [addedIds];
+				resultIds.push(...(addedIdArray as string[]));
+			}
+
 			if (toUpdate.length > 0) {
 				await db.tracks.bulkUpdate(toUpdate);
 			}
+			return resultIds;
 		});
-
-		return resultIds;
 	},
 
 	async update(id: string, changes: Partial<Metadata>): Promise<number> {
