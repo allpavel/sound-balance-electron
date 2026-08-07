@@ -82,43 +82,34 @@ export const tracksRepository = {
 				.anyOf(filePaths)
 				.toArray();
 
-			const existingByFilePath = new Map<string, Metadata[]>();
+			const existingByFilePath = new Map<string, Metadata>();
 
 			for (const existingTrack of existingTracks) {
-				if (!isNonEmptyString(existingTrack.filePath)) {
-					continue;
+				if (isNonEmptyString(existingTrack.filePath)) {
+					existingByFilePath.set(existingTrack.filePath, existingTrack);
 				}
-				const group = existingByFilePath.get(existingTrack.filePath) ?? [];
-				group.push(existingTrack);
-				existingByFilePath.set(existingTrack.filePath, group);
 			}
 
 			const toAdd: Metadata[] = [];
 			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
 
 			for (const track of tracks) {
-				const existingRows = existingByFilePath.get(track.filePath) ?? [];
+				const existingRow = existingByFilePath.get(track.filePath);
 
-				if (existingRows.length > 0) {
-					for (const existingRow of existingRows) {
-						const nextCollectionIds = normalizeCollectionIds(
-							existingRow.collectionIds,
-							targetCollectionId,
-						);
-
-						if (
-							!areCollectionIdsEqual(
-								existingRow.collectionIds,
-								nextCollectionIds,
-							)
-						) {
-							toUpdate.push({
-								key: existingRow.id,
-								changes: {
-									collectionIds: nextCollectionIds,
-								},
-							});
-						}
+				if (existingRow) {
+					const nextCollectionIds = normalizeCollectionIds(
+						existingRow.collectionIds,
+						targetCollectionId,
+					);
+					if (
+						!areCollectionIdsEqual(existingRow.collectionIds, nextCollectionIds)
+					) {
+						toUpdate.push({
+							key: existingRow.id,
+							changes: {
+								collectionIds: nextCollectionIds,
+							},
+						});
 					}
 				} else {
 					toAdd.push({
