@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+export const DATABASE_NAME = "AudioDB";
 export const SYSTEM_COLLECTION_ID = "all";
 export const STATUS_VALUES = [
 	"pending",

@@ -16,46 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
+import {
+	DATABASE_NAME,
+	SYSTEM_COLLECTION_ID,
+} from "@renderer/db/constants/constants";
 import Dexie, { type EntityTable } from "dexie";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 import type { CollectionType, Metadata } from "@/types";
 
-const db = new Dexie("AudioDB") as Dexie & {
+const db = new Dexie(DATABASE_NAME) as Dexie & {
 	tracks: EntityTable<Metadata, "id">;
 	settings: EntityTable<{ id: string; settings: SettingsForm }, "id">;
 	collections: EntityTable<CollectionType, "id">;
 };
 
 db.version(1).stores({
-	tracks: "id, *collectionIds",
-});
-
-db.version(2).stores({
-	tracks: "id, *collectionIds",
-	settings: "id",
-});
-
-db.version(3).stores({
-	tracks: "id, *collectionIds",
-	settings: "id",
-	collections: "++id",
-});
-
-db.version(4).stores({
-	tracks: "id, *collectionIds, selected",
-	settings: "id",
-	collections: "++id",
-});
-
-db.version(5).stores({
-	tracks: "id, *collectionIds, selected",
-	settings: "id",
-	collections: "id",
-});
-
-db.version(6).stores({
-	tracks: "id, filePath, *collectionIds, selected",
+	tracks: "id, &filePath, *collectionIds, selected",
 	settings: "id",
 	collections: "id",
 });
