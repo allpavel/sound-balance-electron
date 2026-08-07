@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { configureStore, type Middleware } from "@reduxjs/toolkit";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import type { ProcessingResult } from "@/types";
@@ -33,12 +32,7 @@ import {
 	saveSettings,
 	setSettings,
 } from "./slices/settingsSlice";
-import {
-	type AppDispatch,
-	createAppStore,
-	type RootState,
-	rootReducer,
-} from "./store";
+import { type AppDispatch, createAppStore, type RootState } from "./store";
 
 vi.mock("@renderer/db/repositories/trackRepository", () => ({
 	tracksRepository: {
@@ -68,10 +62,6 @@ type SaveSettingsResult = Awaited<
 	ReturnType<typeof settingsRepository.saveSettings>
 >;
 type GetAllTracksResult = Awaited<ReturnType<typeof tracksRepository.getAll>>;
-
-function createDeferred<T>() {
-	return Promise.withResolvers<T>();
-}
 
 const customSettings: SettingsState = {
 	...initialSettings,
@@ -164,29 +154,7 @@ const expectNoRepositoryCalls = (): void => {
 	expectNoSettingsRepositoryCalls();
 };
 
-const createLoggingStore = (preloadedState?: RootState) => {
-	const actionLog: Array<{ type: string }> = [];
-
-	const logMiddleware: Middleware = () => (next) => (action) => {
-		actionLog.push(action as { type: string });
-		return next(action);
-	};
-
-	const store = configureStore({
-		reducer: rootReducer,
-		preloadedState,
-		middleware: (getDefaultMiddleware) =>
-			getDefaultMiddleware().concat(logMiddleware),
-	});
-
-	return {
-		store,
-		actionLog,
-		dispatch: store.dispatch as AppDispatch,
-	};
-};
-
-describe("store - shape and initialization", () => {
+describe("Store shape and initialization", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 	});
@@ -229,12 +197,12 @@ describe("store - shape and initialization", () => {
 	});
 });
 
-describe("store - synchronous slice isolation", () => {
+describe("Synchronous slice isolation", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 	});
 
-	it("setResults replaces results and leaves other slices unchanged", () => {
+	it("replaces the results and leaves the other slices unchanged when setResults is dispatched", () => {
 		const payload: ProcessingResult = {
 			successful: 3,
 			failed: [
@@ -260,7 +228,7 @@ describe("store - synchronous slice isolation", () => {
 		expect(() => structuredClone(after)).not.toThrow();
 	});
 
-	it("setActiveCollection replaces activeCollection and leaves other slices unchanged", () => {
+	it("replaces the active collection and leaves the other slices unchanged when setActiveCollection is dispatched", () => {
 		const nextCollection: ActiveCollectionState = {
 			id: "favs",
 			title: "Favs",
@@ -279,7 +247,7 @@ describe("store - synchronous slice isolation", () => {
 		expect(() => structuredClone(after)).not.toThrow();
 	});
 
-	it("setSelectedTrack updates selectedTracks and leaves other slices unchanged", () => {
+	it("updates the selected tracks and leaves the other slices unchanged when setSelectedTrack is dispatched", () => {
 		const store = createAppStore(getPreloadedState());
 		const before = store.getState();
 		store.dispatch(setSelectedTrack({ id: "t1", selected: false }));
@@ -299,7 +267,7 @@ describe("store - synchronous slice isolation", () => {
 		expect(() => structuredClone(after)).not.toThrow();
 	});
 
-	it("setAllSelectedTracks replaces the entire selectedTracks map", () => {
+	it("replaces the entire selected tracks map when setAllSelectedTracks is dispatched", () => {
 		const store = createAppStore(getPreloadedState());
 		const before = store.getState();
 		store.dispatch(setAllSelectedTracks({ only: true }));
@@ -315,7 +283,7 @@ describe("store - synchronous slice isolation", () => {
 		expectNoRepositoryCalls();
 	});
 
-	it("setSettings replaces settings, forces loading:false, and leaves other slices unchanged", () => {
+	it("replaces the settings, forces loading to false, and leaves the other slices unchanged when setSettings is dispatched", () => {
 		const preloaded = getPreloadedState();
 		preloaded.settings = {
 			...customSettings,
@@ -370,12 +338,12 @@ describe("store - synchronous slice isolation", () => {
 	});
 });
 
-describe("store - thunk integration smoke", () => {
+describe("Thunk integration smoke tests", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 	});
 
-	it("getSettings updates only the settings slice", async () => {
+	it("updates only the settings slice when the getSettings thunk is dispatched", async () => {
 		vi.mocked(settingsRepository.getSettings).mockResolvedValue(
 			storedSettings as GetSettingsResult,
 		);
@@ -399,7 +367,7 @@ describe("store - thunk integration smoke", () => {
 		expectNoTrackRepositoryCalls();
 	});
 
-	it("saveSettings updates only the settings slice", async () => {
+	it("updates only the settings slice when the saveSettings thunk is dispatched", async () => {
 		vi.mocked(settingsRepository.saveSettings).mockResolvedValue(
 			undefined as SaveSettingsResult,
 		);
@@ -424,7 +392,7 @@ describe("store - thunk integration smoke", () => {
 		expectNoTrackRepositoryCalls();
 	});
 
-	it("loadSelectedTracks updates only the selectedTracks slice", async () => {
+	it("updates only the selected tracks slice when the loadSelectedTracks thunk is dispatched", async () => {
 		const tracks = [
 			{ id: "a", selected: 1 },
 			{ id: "b", selected: 0 },

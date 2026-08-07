@@ -15,36 +15,81 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
+import { db } from "@renderer/db/db";
 import { v7 as uuidV7 } from "uuid";
 import type { CollectionType } from "@/types";
-import { db } from "../db";
+
+function normalizeTitle(title: string): string {
+	const normalized = title.trim();
+
+	if (normalized.length === 0) {
+		throw new Error("Collection title must not be empty");
+	}
+
+	return normalized;
+}
+
+function removeCollectionIdFromTrack(
+	collectionIds: string[],
+	collectionId: string,
+): string[] {
+	const uniqueIds = new Set(collectionIds);
+
+	uniqueIds.delete(collectionId);
+	uniqueIds.delete(SYSTEM_COLLECTION_ID);
+
+	return [SYSTEM_COLLECTION_ID, ...uniqueIds];
+}
 
 export const collectionsRepository = {
 	async getAllCollections(): Promise<CollectionType[]> {
 		return await db.collections.toArray();
 	},
+
 	async getCollectionById(id: string): Promise<CollectionType | undefined> {
 		return await db.collections.get(id);
 	},
+
 	async addCollection(collection: Omit<CollectionType, "id">): Promise<string> {
+		const title = normalizeTitle(collection.title);
 		const newCollection: CollectionType = {
 			id: uuidV7(),
-			title: collection.title,
+			title,
 		};
 		return await db.collections.add(newCollection);
 	},
+
 	async updateCollection(id: string, changes: Partial<CollectionType>) {
+		if (changes.title !== undefined) {
+			changes = {
+				...changes,
+				title: normalizeTitle(changes.title),
+			};
+		}
+
 		return await db.collections.update(id, changes);
 	},
+
 	async deleteCollection({
 		id,
 		deleteFromAllCollections = false,
 	}: {
 		id: string;
-		deleteFromAllCollections: boolean;
+		deleteFromAllCollections?: boolean;
 	}): Promise<void> {
-		if (deleteFromAllCollections) {
-			await db.transaction("readwrite", db.collections, db.tracks, async () => {
+		if (id === SYSTEM_COLLECTION_ID) {
+			throw new Error(
+				"The 'all' collection is protected and cannot be deleted",
+			);
+		}
+		await db.transaction("readwrite", db.collections, db.tracks, async () => {
+			const collection = await db.collections.get(id);
+			if (!collection) {
+				return;
+			}
+			if (deleteFromAllCollections) {
 				const trackIds = await db.tracks
 					.where("collectionIds")
 					.equals(id)
@@ -53,19 +98,18 @@ export const collectionsRepository = {
 					await db.tracks.bulkDelete(trackIds);
 				}
 				await db.collections.delete(id);
-			});
-		} else {
-			await db.transaction("readwrite", db.collections, db.tracks, async () => {
+			} else {
 				await db.tracks
 					.where("collectionIds")
 					.equals(id)
 					.modify((track) => {
-						track.collectionIds = track.collectionIds.filter(
-							(collectionId) => collectionId !== id,
+						track.collectionIds = removeCollectionIdFromTrack(
+							track.collectionIds,
+							id,
 						);
 					});
 				await db.collections.delete(id);
-			});
-		}
+			}
+		});
 	},
 };

@@ -17,16 +17,35 @@
  */
 
 import { db } from "@renderer/db/db";
-import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
+import {
+	type SettingsForm,
+	settingsSchema,
+} from "@/src/shared/schemas/settings.schema";
 
-const SETTINGS_ID = "globalSettings";
+export const SETTINGS_ID = "globalSettings";
+
+function parseSettings(input: SettingsForm) {
+	return settingsSchema.safeParse(input);
+}
 
 export const settingsRepository = {
 	async getSettings(): Promise<SettingsForm | null> {
 		const result = await db.settings.get(SETTINGS_ID);
-		return result?.settings ?? null;
+		if (!result || result.settings === undefined || result.settings === null) {
+			return null;
+		}
+		const parsedData = parseSettings(result.settings);
+		if (!parsedData.success) {
+			return null;
+		}
+		return parsedData.data;
 	},
+
 	async saveSettings(settings: SettingsForm): Promise<void> {
+		const parsedData = parseSettings(settings);
+		if (!parsedData.success) {
+			throw new Error(`Invalid settings: ${parsedData.error}`);
+		}
 		await db.settings.put({ id: SETTINGS_ID, settings });
 	},
 };

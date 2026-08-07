@@ -20,6 +20,7 @@ export default defineConfig({
 				"**/*.config.*",
 				"tests/**",
 				"**/__tests__/**",
+				"**/testFactories.ts",
 			],
 		},
 	},

@@ -15,77 +15,166 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
+import {
+	areCollectionIdsEqual,
+	assertTargetCollectionId,
+	assertTrackInput,
+	isNonEmptyString,
+	isPlainObject,
+	normalizeCollectionIds,
+	uniqueTracks,
+} from "@renderer/db/utils/trackRepositoryUtils";
 import type { Metadata } from "@/types";
+
+type TrackUpdate = {
+	id: string;
+	changes: Partial<Metadata>;
+};
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
-		return await db.tracks.where("collectionIds").equals(id).toArray();
+		if (!isNonEmptyString(id)) {
+			return [];
+		}
+		const tracks = await db.tracks.where("collectionIds").equals(id).toArray();
+		return uniqueTracks(tracks);
 	},
+
 	async getById(id: string) {
-		const tracks = await db.tracks.where("id").equals(id).toArray();
-		return tracks.length > 0 ? tracks[0] : undefined;
+		if (!isNonEmptyString(id)) {
+			return undefined;
+		}
+		return await db.tracks.get(id);
 	},
+
 	async addMany(
 		tracks: Metadata[],
-		{
-			allKeys = true,
-			targetCollectionId = "all",
-		}: { allKeys?: boolean; targetCollectionId: string },
-	): Promise<string | string[]> {
-		const filePaths = tracks.map((track) => track.filePath);
-		const existingTracks = await db.tracks
-			.where("filePath")
-			.anyOf(filePaths)
-			.toArray();
-		const existingMap = new Map(
-			existingTracks.map((track) => [track.filePath, track]),
-		);
+		{ targetCollectionId = SYSTEM_COLLECTION_ID } = {},
+	): Promise<string[]> {
+		assertTargetCollectionId(targetCollectionId);
 
-		const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
-		const toAdd: Metadata[] = [];
-
-		for (const track of tracks) {
-			const existingTrack = existingMap.get(track.filePath);
-
-			if (existingTrack) {
-				if (!existingTrack.collectionIds.includes(targetCollectionId)) {
-					const newIds = [...existingTrack.collectionIds, targetCollectionId];
-					toUpdate.push({
-						key: existingTrack.id,
-						changes: {
-							collectionIds: newIds,
-						},
-					});
-				}
-			} else {
-				if (targetCollectionId !== "all") {
-					track.collectionIds.push("all", targetCollectionId);
-				} else {
-					track.collectionIds.push(targetCollectionId);
-				}
-				toAdd.push(track);
-			}
+		if (!Array.isArray(tracks)) {
+			throw new Error("Tracks must be an array");
+		}
+		if (tracks.length === 0) {
+			return [];
 		}
 
-		const resultIds: string[] = [];
+		const seenFilePaths = new Set<string>();
 
-		await db.transaction("rw", db.tracks, async () => {
-			if (toAdd.length > 0) {
-				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys });
-				resultIds.push(...addedIds);
+		for (const [index, track] of tracks.entries()) {
+			assertTrackInput(track, index);
+			const filePath = (track as Metadata).filePath;
+			if (seenFilePaths.has(filePath)) {
+				throw new Error(`tracks contains duplicate filePath: ${filePath}`);
 			}
+			seenFilePaths.add(filePath);
+		}
+
+		const filePaths = tracks.map((track) => track.filePath);
+
+		return await db.transaction("rw", db.tracks, async () => {
+			const existingTracks = await db.tracks
+				.where("filePath")
+				.anyOf(filePaths)
+				.toArray();
+
+			const existingByFilePath = new Map<string, Metadata>();
+
+			for (const existingTrack of existingTracks) {
+				if (isNonEmptyString(existingTrack.filePath)) {
+					existingByFilePath.set(existingTrack.filePath, existingTrack);
+				}
+			}
+
+			const toAdd: Metadata[] = [];
+			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
+
+			for (const track of tracks) {
+				const existingRow = existingByFilePath.get(track.filePath);
+
+				if (existingRow) {
+					const nextCollectionIds = normalizeCollectionIds(
+						existingRow.collectionIds,
+						targetCollectionId,
+					);
+					if (
+						!areCollectionIdsEqual(existingRow.collectionIds, nextCollectionIds)
+					) {
+						toUpdate.push({
+							key: existingRow.id,
+							changes: {
+								collectionIds: nextCollectionIds,
+							},
+						});
+					}
+				} else {
+					toAdd.push({
+						...track,
+						collectionIds: normalizeCollectionIds(
+							track.collectionIds,
+							targetCollectionId,
+						),
+					});
+				}
+			}
+
+			const resultIds: string[] = [];
+
+			if (toAdd.length > 0) {
+				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys: true });
+				const addedIdArray = Array.isArray(addedIds) ? addedIds : [addedIds];
+				resultIds.push(...(addedIdArray as string[]));
+			}
+
 			if (toUpdate.length > 0) {
 				await db.tracks.bulkUpdate(toUpdate);
 			}
+			return resultIds;
 		});
-
-		return resultIds;
 	},
+
 	async update(id: string, changes: Partial<Metadata>): Promise<number> {
+		if (!isNonEmptyString(id)) {
+			throw new Error("ID must be a non-empty string");
+		}
+		if (!isPlainObject(changes)) {
+			throw new Error("Changes must be an object");
+		}
 		return await db.tracks.update(id, changes);
 	},
+
 	async updateMany(updates: { id: string; changes: Partial<Metadata> }[]) {
+		if (!Array.isArray(updates)) {
+			throw new Error("Updates must be an array");
+		}
+		if (updates.length === 0) {
+			return 0;
+		}
+
+		const seenIds = new Set<string>();
+
+		for (const [index, update] of updates.entries()) {
+			const context = `updates[${index}]`;
+			if (!isPlainObject(update)) {
+				throw new Error(`${context} must be an object`);
+			}
+			const candidate = update as Partial<TrackUpdate>;
+			if (!isNonEmptyString(candidate.id)) {
+				throw new Error(`${context}.id must be a non-empty string`);
+			}
+			if (!isPlainObject(candidate.changes)) {
+				throw new Error(`${context}.changes must be an object`);
+			}
+			if (seenIds.has(candidate.id)) {
+				throw new Error(`updates contains duplicate id: ${candidate.id}`);
+			}
+			seenIds.add(candidate.id);
+		}
+
 		let total = 0;
 		await db.transaction("rw", db.tracks, async () => {
 			for (const { id, changes } of updates) {
@@ -95,18 +184,26 @@ export const tracksRepository = {
 		return total;
 	},
 	async remove(id: string): Promise<void> {
+		if (!isNonEmptyString(id)) {
+			throw new Error("ID must be a non-empty string");
+		}
 		await db.tracks.delete(id);
 	},
+
 	async getSelectedTracks(): Promise<Metadata[]> {
-		return await db.tracks.where("selected").equals(1).toArray();
+		const tracks = await db.tracks.where("selected").equals(1).toArray();
+		return uniqueTracks(tracks);
 	},
+
 	async removeMany(): Promise<void> {
 		await db.transaction("rw", db.tracks, async () => {
 			const selectedTracksIds = await db.tracks
 				.where("selected")
 				.equals(1)
 				.primaryKeys();
-			await db.tracks.bulkDelete(selectedTracksIds);
+			if (selectedTracksIds.length > 0) {
+				await db.tracks.bulkDelete(selectedTracksIds);
+			}
 		});
 	},
 };
