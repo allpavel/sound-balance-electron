@@ -225,8 +225,8 @@ describe("tracksRepository", () => {
 			expect(ids).toEqual([]);
 			const rows = await db.tracks.toArray();
 			expect(rows).toHaveLength(1);
-			// expect(rows[0].id).toBe("orig");
-			// expect(rows[0].collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
+			expect(rows[0]?.id).toBe("orig");
+			expect(rows[0]?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
 		});
 
 		it("returns an empty array for an empty input and writes nothing", async () => {
@@ -249,6 +249,20 @@ describe("tracksRepository", () => {
 		it("returns 0 when the track does not exist", async () => {
 			expect(await tracksRepository.update("missing", { selected: 1 })).toBe(0);
 		});
+
+		it("rejects updating filePath to an existing one with a ConstraintError", async () => {
+			await db.tracks.add(makeTrack({ id: "t1", filePath: "/music/a.mp3" }));
+			await db.tracks.add(makeTrack({ id: "t2", filePath: "/music/b.mp3" }));
+			await expect(
+				tracksRepository.update("t2", { filePath: "/music/a.mp3" }),
+			).rejects.toThrow(
+				expect.objectContaining({
+					failures: expect.arrayContaining([
+						expect.objectContaining({ name: "ConstraintError" }),
+					]),
+				}),
+			);
+		});
 	});
 
 	describe("updateMany", () => {
@@ -269,6 +283,24 @@ describe("tracksRepository", () => {
 
 		it("returns 0 for an empty update list", async () => {
 			expect(await tracksRepository.updateMany([])).toBe(0);
+		});
+
+		it("rejects updating filePath to an existing one with a ConstraintError", async () => {
+			await db.tracks.add(makeTrack({ id: "t1", filePath: "/music/a.mp3" }));
+			await db.tracks.add(makeTrack({ id: "t2", filePath: "/music/b.mp3" }));
+			await db.tracks.add(makeTrack({ id: "t3", filePath: "/music/c.mp3" }));
+			await expect(
+				tracksRepository.updateMany([
+					{ id: "t2", changes: { filePath: "/music/a.mp3" } },
+					{ id: "t3", changes: { filePath: "/music/a.mp3" } },
+				]),
+			).rejects.toThrow(
+				expect.objectContaining({
+					failures: expect.arrayContaining([
+						expect.objectContaining({ name: "ConstraintError" }),
+					]),
+				}),
+			);
 		});
 	});
 
