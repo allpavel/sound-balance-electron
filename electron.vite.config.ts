@@ -45,6 +45,7 @@ export default defineConfig({
 	},
 	renderer: {
 		resolve: {
+			tsconfigPaths: true,
 			alias: {
 				"@renderer": resolve("src/renderer/src"),
 			},
