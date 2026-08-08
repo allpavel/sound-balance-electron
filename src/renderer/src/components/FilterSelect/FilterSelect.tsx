@@ -20,12 +20,13 @@ import type { Column } from "@tanstack/react-table";
 import { Funnel } from "lucide-react";
 import { useMemo } from "react";
 import type { Metadata } from "@/types";
+import type { AppTableFeatures } from "../Table/Table";
 
 export default function FilterSelect({
 	column,
 	values,
 }: {
-	column: Column<Metadata, unknown>;
+	column: Column<AppTableFeatures, Metadata>;
 	values: ReturnType<typeof column.getFacetedUniqueValues>;
 }) {
 	const filterValue = column.getFilterValue()?.toString();

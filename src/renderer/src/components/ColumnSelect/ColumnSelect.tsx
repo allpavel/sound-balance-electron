@@ -24,7 +24,7 @@ import {
 	PillsInput,
 	useCombobox,
 } from "@mantine/core";
-import type { VisibilityState } from "@tanstack/react-table";
+import type { ColumnVisibilityState } from "@tanstack/react-table";
 import { useMemo } from "react";
 
 type ColumnSelectProps = {
@@ -32,8 +32,8 @@ type ColumnSelectProps = {
 		id: string;
 		header: string;
 	}[];
-	columnVisibility: VisibilityState;
-	onColumnVisibilityChange: (newVisibility: VisibilityState) => void;
+	columnVisibility: ColumnVisibilityState;
+	onColumnVisibilityChange: (newVisibility: ColumnVisibilityState) => void;
 };
 
 export default function ColumnSelect({
