@@ -28,10 +28,10 @@ import ColumnSelect from "@renderer/components/ColumnSelect/ColumnSelect";
 import FilterSelect from "@renderer/components/FilterSelect/FilterSelect";
 import InfoModal from "@renderer/components/InfoModal/InfoModal";
 import StatusIcon from "@renderer/components/StatusIcon/StatusIcon";
-import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
+import { useCreateAtom, useSelector } from "@tanstack/react-store";
 import {
 	type ColumnVisibilityState,
 	columnFacetingFeature,
@@ -44,6 +44,7 @@ import {
 	createSortedRowModel,
 	flexRender,
 	globalFilteringFeature,
+	type RowSelectionState,
 	rowSelectionFeature,
 	rowSortingFeature,
 	type SortingState,
@@ -69,9 +70,7 @@ const features = tableFeatures({
 export type AppTableFeatures = typeof features;
 
 export default function TableComponent() {
-	const selectedRows = useAppSelector((state) => state.selectedTracks);
 	const activeCollection = useAppSelector((state) => state.activeCollection);
-	const dispatch = useAppDispatch();
 	const {
 		tracks: files,
 		updateManyTracks,
@@ -83,7 +82,10 @@ export default function TableComponent() {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [globalFilter, setGlobalFilter] = useState("");
 
+	const rowSelectionAtom = useCreateAtom<RowSelectionState>({});
+	const rowSelection = useSelector(rowSelectionAtom);
 	const columnHelper = createColumnHelper<AppTableFeatures, Metadata>();
+
 	const columns = columnHelper.columns([
 		{
 			id: "select",
@@ -148,34 +150,14 @@ export default function TableComponent() {
 		columns,
 		features,
 		state: {
-			// rowSelection: selectedRows,
 			columnVisibility,
 			sorting,
 			globalFilter,
 		},
-		// onRowSelectionChange: (updater) => {
-		// 	const newSelection =
-		// 		typeof updater === "function" ? updater(selectedRows) : updater;
-		// 	const changedRowIds = Object.keys(newSelection).filter(
-		// 		(id) => newSelection[id] !== selectedRows[id],
-		// 	);
-
-		// 	Object.keys(selectedRows).forEach((id) => {
-		// 		if (!(id in newSelection) && selectedRows[id] === true) {
-		// 			changedRowIds.push(id);
-		// 		}
-		// 	});
-		// 	dispatch(setAllSelectedTracks(newSelection));
-
-		// 	if (changedRowIds.length > 0) {
-		// 		updateManyTracks(
-		// 			changedRowIds.map((id) => ({
-		// 				id,
-		// 				changes: { selected: newSelection[id] ? 1 : 0 },
-		// 			})),
-		// 		);
-		// 	}
-		// },
+		atoms: {
+			rowSelection: rowSelectionAtom,
+		},
+		enableRowSelection: true,
 		onSortingChange: setSorting,
 		onColumnVisibilityChange: setColumnVisibility,
 		onGlobalFilterChange: setGlobalFilter,
@@ -280,11 +262,11 @@ export default function TableComponent() {
 						table.getRowModel().rows.map((row) => (
 							<Table.Tr
 								key={row.id}
-								bg={
-									selectedRows[row.id]
-										? "var(--mantine-color-blue-light)"
-										: undefined
-								}
+								// bg={
+								// 	selectedRows[row.id]
+								// 		? "var(--mantine-color-blue-light)"
+								// 		: undefined
+								// }
 							>
 								{row.getVisibleCells().map((cell) => (
 									<Table.Td key={cell.id} miw={150}>
