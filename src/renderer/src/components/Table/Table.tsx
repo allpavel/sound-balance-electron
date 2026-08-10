@@ -268,11 +268,11 @@ export default function TableComponent() {
 						table.getRowModel().rows.map((row) => (
 							<Table.Tr
 								key={row.id}
-								// bg={
-								// 	selectedRows[row.id]
-								// 		? "var(--mantine-color-blue-light)"
-								// 		: undefined
-								// }
+								bg={
+									table.state.rowSelection[row.id]
+										? "var(--mantine-color-blue-light)"
+										: undefined
+								}
 							>
 								{row.getVisibleCells().map((cell) => (
 									<Table.Td key={cell.id} miw={150}>
