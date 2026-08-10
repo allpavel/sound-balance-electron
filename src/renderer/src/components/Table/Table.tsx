@@ -31,7 +31,6 @@ import StatusIcon from "@renderer/components/StatusIcon/StatusIcon";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
-import { useCreateAtom, useSelector } from "@tanstack/react-store";
 import {
 	type ColumnVisibilityState,
 	columnFacetingFeature,
@@ -44,7 +43,6 @@ import {
 	createSortedRowModel,
 	flexRender,
 	globalFilteringFeature,
-	type RowSelectionState,
 	rowSelectionFeature,
 	rowSortingFeature,
 	type SortingState,
@@ -73,8 +71,9 @@ export default function TableComponent() {
 	const activeCollection = useAppSelector((state) => state.activeCollection);
 	const {
 		tracks: files,
-		updateManyTracks,
 		isLoading,
+		updateTrack,
+		updateManyTracks,
 	} = useTracks(activeCollection.id);
 
 	const [columnVisibility, setColumnVisibility] =
@@ -82,8 +81,6 @@ export default function TableComponent() {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [globalFilter, setGlobalFilter] = useState("");
 
-	const rowSelectionAtom = useCreateAtom<RowSelectionState>({});
-	const rowSelection = useSelector(rowSelectionAtom);
 	const columnHelper = createColumnHelper<AppTableFeatures, Metadata>();
 
 	const columns = columnHelper.columns([
@@ -93,14 +90,26 @@ export default function TableComponent() {
 				<Checkbox
 					type="checkbox"
 					checked={table.getIsAllRowsSelected()}
-					onChange={(e) => table.getToggleAllRowsSelectedHandler()(e)}
+					onChange={(e) => {
+						table.getToggleAllRowsSelectedHandler()(e);
+						const isAllSelected: 0 | 1 = table.getIsAllRowsSelected() ? 1 : 0;
+						const selectedIds = table.getSelectedRowIds().map((id) => ({
+							id,
+							changes: { selected: isAllSelected },
+						}));
+						updateManyTracks(selectedIds);
+					}}
 				/>
 			),
 			cell: ({ row }) => (
 				<Checkbox
 					type="checkbox"
 					checked={row.getIsSelected()}
-					onChange={(e) => row.getToggleSelectedHandler()(e)}
+					onChange={(e) => {
+						row.getToggleSelectedHandler()(e);
+						const updates = row.getIsSelected() ? 1 : 0;
+						updateTrack({ id: row.id, changes: { selected: updates } });
+					}}
 				/>
 			),
 			enableSorting: false,
@@ -153,9 +162,6 @@ export default function TableComponent() {
 			columnVisibility,
 			sorting,
 			globalFilter,
-		},
-		atoms: {
-			rowSelection: rowSelectionAtom,
 		},
 		enableRowSelection: true,
 		onSortingChange: setSorting,
