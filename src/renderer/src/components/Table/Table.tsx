@@ -28,150 +28,164 @@ import ColumnSelect from "@renderer/components/ColumnSelect/ColumnSelect";
 import FilterSelect from "@renderer/components/FilterSelect/FilterSelect";
 import InfoModal from "@renderer/components/InfoModal/InfoModal";
 import StatusIcon from "@renderer/components/StatusIcon/StatusIcon";
-import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
-import { setAllSelectedTracks } from "@renderer/store/slices/selectedTracksSlice";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
+import { useCreateAtom } from "@tanstack/react-store";
 import {
-	type ColumnDef,
+	type ColumnVisibilityState,
+	columnFacetingFeature,
+	columnFilteringFeature,
+	columnVisibilityFeature,
+	createColumnHelper,
+	createFacetedRowModel,
+	createFacetedUniqueValues,
+	createFilteredRowModel,
+	createSortedRowModel,
 	flexRender,
-	getCoreRowModel,
-	getFacetedRowModel,
-	getFacetedUniqueValues,
-	getFilteredRowModel,
-	getSortedRowModel,
-	type Table as ITable,
-	type Row,
+	globalFilteringFeature,
+	type RowSelectionState,
+	rowSelectionFeature,
+	rowSortingFeature,
 	type SortingState,
-	useReactTable,
-	type VisibilityState,
+	tableFeatures,
+	useTable,
 } from "@tanstack/react-table";
 import { Search } from "lucide-react";
-import { type ChangeEvent, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import type { Metadata } from "@/types";
 
+const features = tableFeatures({
+	rowSortingFeature,
+	rowSelectionFeature,
+	columnFilteringFeature,
+	columnFacetingFeature,
+	columnVisibilityFeature,
+	globalFilteringFeature,
+	sortedRowModel: createSortedRowModel(),
+	facetedRowModel: createFacetedRowModel(),
+	filteredRowModel: createFilteredRowModel(),
+	facetedUniqueValues: createFacetedUniqueValues(),
+});
+export type AppTableFeatures = typeof features;
+
 export default function TableComponent() {
-	const selectedRows = useAppSelector((state) => state.selectedTracks);
 	const activeCollection = useAppSelector((state) => state.activeCollection);
-	const dispatch = useAppDispatch();
 	const {
 		tracks: files,
-		updateManyTracks,
 		isLoading,
+		updateTrack,
+		updateManyTracks,
 	} = useTracks(activeCollection.id);
 
-	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+	const [columnVisibility, setColumnVisibility] =
+		useState<ColumnVisibilityState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [globalFilter, setGlobalFilter] = useState("");
+	const rowSelectionAtom = useCreateAtom<RowSelectionState>({});
 
-	const columns = useMemo<ColumnDef<Metadata>[]>(
-		() => [
-			{
-				id: "select",
-				header: ({ table }: { table: ITable<Metadata> }) => (
-					<Checkbox
-						type="checkbox"
-						checked={table.getIsAllRowsSelected()}
-						onChange={(e) => table.getToggleAllRowsSelectedHandler()(e)}
-					/>
-				),
-				cell: ({ row }: { row: Row<Metadata> }) => (
-					<Checkbox
-						type="checkbox"
-						checked={row.getIsSelected()}
-						onChange={(e) => row.getToggleSelectedHandler()(e)}
-					/>
-				),
-				enableSorting: false,
-				enableColumnFilter: false,
-			},
-			{
-				id: "artist",
-				header: "Artist",
-				accessorKey: "common.artist",
-				enableSorting: true,
-				enableFacetedFilter: true,
-			},
-			{
-				id: "header",
-				header: "Title",
-				accessorKey: "common.title",
-				enableSorting: true,
-			},
-			{
-				id: "album",
-				header: "Album",
-				accessorKey: "common.album",
-				enableSorting: true,
-				enableFacetedFilter: true,
-			},
-			{
-				id: "year",
-				header: "Year",
-				accessorFn: (row) => row.common.year?.toString(),
-				enableSorting: true,
-				enableFacetedFilter: true,
-			},
-			{
-				id: "info",
-				header: "Info",
-				cell: ({ row }: { row: Row<Metadata> }) => (
-					<InfoModal trackData={row.original} />
-				),
-				enableSorting: false,
-				enableColumnFilter: false,
-			},
-			{
-				id: "status",
-				header: "Status",
-				accessorKey: "status",
-				enableFacetedFilter: true,
-				cell: ({ row }: { row: Row<Metadata> }) => (
-					<StatusIcon status={row.original.status} />
-				),
-			},
-		],
-		[],
-	);
+	const rowSelectionFromDb = useMemo<RowSelectionState>(() => {
+		return files.reduce<RowSelectionState>((acc, track) => {
+			if (track.selected === 1) {
+				acc[track.id] = true;
+			}
+			return acc;
+		}, {});
+	}, [files]);
 
-	const table = useReactTable({
+	useEffect(() => {
+		if (isLoading) {
+			return;
+		}
+		rowSelectionAtom.set(rowSelectionFromDb);
+	}, [isLoading, rowSelectionFromDb, rowSelectionAtom]);
+
+	const columnHelper = createColumnHelper<AppTableFeatures, Metadata>();
+
+	const columns = columnHelper.columns([
+		{
+			id: "select",
+			header: ({ table }) => (
+				<Checkbox
+					type="checkbox"
+					checked={table.getIsAllRowsSelected()}
+					onChange={(e) => {
+						table.getToggleAllRowsSelectedHandler()(e);
+						const isAllSelected: 0 | 1 = e.currentTarget.checked ? 1 : 0;
+						const selectedIds = table.getSelectedRowIds().map((id) => ({
+							id,
+							changes: { selected: isAllSelected },
+						}));
+						updateManyTracks(selectedIds);
+					}}
+				/>
+			),
+			cell: ({ row }) => (
+				<Checkbox
+					type="checkbox"
+					checked={row.getIsSelected()}
+					onChange={(e) => {
+						row.getToggleSelectedHandler()(e);
+						const updates = e.currentTarget.checked ? 1 : 0;
+						updateTrack({ id: row.id, changes: { selected: updates } });
+					}}
+				/>
+			),
+			enableSorting: false,
+			enableColumnFilter: false,
+		},
+		{
+			id: "artist",
+			header: "Artist",
+			accessorKey: "common.artist",
+			enableSorting: true,
+		},
+		{
+			id: "header",
+			header: "Title",
+			accessorKey: "common.title",
+			enableSorting: true,
+		},
+		{
+			id: "album",
+			header: "Album",
+			accessorKey: "common.album",
+			enableSorting: true,
+		},
+		{
+			id: "year",
+			header: "Year",
+			accessorFn: (row) => row.common.year?.toString(),
+			enableSorting: true,
+		},
+		{
+			id: "info",
+			header: "Info",
+			cell: ({ row }) => <InfoModal trackData={row.original} />,
+			enableSorting: false,
+			enableColumnFilter: false,
+		},
+		{
+			id: "status",
+			header: "Status",
+			accessorKey: "status",
+			cell: ({ row }) => <StatusIcon status={row.original.status} />,
+		},
+	]);
+
+	const table = useTable({
 		data: files,
 		columns,
+		features,
+		atoms: {
+			rowSelection: rowSelectionAtom,
+		},
 		state: {
-			rowSelection: selectedRows,
 			columnVisibility,
 			sorting,
 			globalFilter,
 		},
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-		getFilteredRowModel: getFilteredRowModel(),
-		getFacetedRowModel: getFacetedRowModel(),
-		getFacetedUniqueValues: getFacetedUniqueValues(),
-		onRowSelectionChange: (updater) => {
-			const newSelection =
-				typeof updater === "function" ? updater(selectedRows) : updater;
-			const changedRowIds = Object.keys(newSelection).filter(
-				(id) => newSelection[id] !== selectedRows[id],
-			);
-
-			Object.keys(selectedRows).forEach((id) => {
-				if (!(id in newSelection) && selectedRows[id] === true) {
-					changedRowIds.push(id);
-				}
-			});
-			dispatch(setAllSelectedTracks(newSelection));
-
-			if (changedRowIds.length > 0) {
-				updateManyTracks(
-					changedRowIds.map((id) => ({
-						id,
-						changes: { selected: newSelection[id] ? 1 : 0 },
-					})),
-				);
-			}
-		},
+		enableRowSelection: true,
 		onSortingChange: setSorting,
 		onColumnVisibilityChange: setColumnVisibility,
 		onGlobalFilterChange: setGlobalFilter,
@@ -277,7 +291,7 @@ export default function TableComponent() {
 							<Table.Tr
 								key={row.id}
 								bg={
-									selectedRows[row.id]
+									table.state.rowSelection[row.id]
 										? "var(--mantine-color-blue-light)"
 										: undefined
 								}
