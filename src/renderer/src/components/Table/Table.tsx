@@ -31,6 +31,7 @@ import StatusIcon from "@renderer/components/StatusIcon/StatusIcon";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
+import { useCreateAtom } from "@tanstack/react-store";
 import {
 	type ColumnVisibilityState,
 	columnFacetingFeature,
@@ -43,6 +44,7 @@ import {
 	createSortedRowModel,
 	flexRender,
 	globalFilteringFeature,
+	type RowSelectionState,
 	rowSelectionFeature,
 	rowSortingFeature,
 	type SortingState,
@@ -50,7 +52,7 @@ import {
 	useTable,
 } from "@tanstack/react-table";
 import { Search } from "lucide-react";
-import { type ChangeEvent, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import type { Metadata } from "@/types";
 
 const features = tableFeatures({
@@ -80,6 +82,23 @@ export default function TableComponent() {
 		useState<ColumnVisibilityState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [globalFilter, setGlobalFilter] = useState("");
+	const rowSelectionAtom = useCreateAtom<RowSelectionState>({});
+
+	const rowSelectionFromDb = useMemo<RowSelectionState>(() => {
+		return files.reduce<RowSelectionState>((acc, track) => {
+			if (track.selected === 1) {
+				acc[track.id] = true;
+			}
+			return acc;
+		}, {});
+	}, [files]);
+
+	useEffect(() => {
+		if (isLoading) {
+			return;
+		}
+		rowSelectionAtom.set(rowSelectionFromDb);
+	}, [isLoading, rowSelectionFromDb, rowSelectionAtom]);
 
 	const columnHelper = createColumnHelper<AppTableFeatures, Metadata>();
 
@@ -92,7 +111,7 @@ export default function TableComponent() {
 					checked={table.getIsAllRowsSelected()}
 					onChange={(e) => {
 						table.getToggleAllRowsSelectedHandler()(e);
-						const isAllSelected: 0 | 1 = table.getIsAllRowsSelected() ? 1 : 0;
+						const isAllSelected: 0 | 1 = e.currentTarget.checked ? 1 : 0;
 						const selectedIds = table.getSelectedRowIds().map((id) => ({
 							id,
 							changes: { selected: isAllSelected },
@@ -107,7 +126,7 @@ export default function TableComponent() {
 					checked={row.getIsSelected()}
 					onChange={(e) => {
 						row.getToggleSelectedHandler()(e);
-						const updates = row.getIsSelected() ? 1 : 0;
+						const updates = e.currentTarget.checked ? 1 : 0;
 						updateTrack({ id: row.id, changes: { selected: updates } });
 					}}
 				/>
@@ -158,6 +177,9 @@ export default function TableComponent() {
 		data: files,
 		columns,
 		features,
+		atoms: {
+			rowSelection: rowSelectionAtom,
+		},
 		state: {
 			columnVisibility,
 			sorting,
