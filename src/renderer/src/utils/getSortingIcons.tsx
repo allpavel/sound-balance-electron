@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { ActionIcon } from "@mantine/core";
+import type { AppTableFeatures } from "@renderer/components/Table/Table";
 import type { Column } from "@tanstack/react-table";
 import { ArrowDown, ArrowDownUp, ArrowUp } from "lucide-react";
 import type { Metadata } from "@/types";
 
-export function getSortingIcon(column: Column<Metadata>) {
+export function getSortingIcon(column: Column<AppTableFeatures, Metadata>) {
 	if (!column.getCanSort()) {
 		return null;
 	}
