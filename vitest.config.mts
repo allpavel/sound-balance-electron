@@ -26,11 +26,11 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
-			"@main": path.resolve(__dirname, "src/main"),
-			"@renderer": path.resolve(__dirname, "src/renderer/src"),
-			"@shared": path.resolve(__dirname, "src/shared"),
-			"@types": path.resolve(__dirname, "src/shared/types/index.ts"),
-			"@": path.resolve(__dirname, "."),
+			"@main": path.resolve(import.meta.dirname, "src/main"),
+			"@renderer": path.resolve(import.meta.dirname, "src/renderer/src"),
+			"@shared": path.resolve(import.meta.dirname, "src/shared"),
+			"@types": path.resolve(import.meta.dirname, "src/shared/types/index.ts"),
+			"@": path.resolve(import.meta.dirname, "."),
 		},
 	},
 });
