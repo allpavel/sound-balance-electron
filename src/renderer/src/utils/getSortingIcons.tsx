@@ -17,45 +17,60 @@
  */
 import { ActionIcon } from "@mantine/core";
 import type { AppTableFeatures } from "@renderer/components/Table/Table";
-import type { Column } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownUp, ArrowUp } from "lucide-react";
+import type { Column, SortDirection } from "@tanstack/react-table";
+import { ArrowDown, ArrowDownUp, ArrowUp, type LucideIcon } from "lucide-react";
 import type { Metadata } from "@/types";
+
+export type SortableColumn = {
+	getCanSort: () => boolean;
+	getIsSorted: () => false | SortDirection;
+	columnDef: { header?: unknown };
+};
+
+type SortState = "asc" | "desc" | "unsorted";
+
+const SORT_ICON_SIZE = 16;
+const FALLBACK_HEADER_TEXT = "column";
+
+const SORT_ICONS: Record<SortState, LucideIcon> = {
+	asc: ArrowUp,
+	desc: ArrowDown,
+	unsorted: ArrowDownUp,
+};
+
+const SORT_ARIA_LABELS: Record<SortState, (headerText: string) => string> = {
+	asc: (headerText) => `Sort ${headerText} in ascending order`,
+	desc: (headerText) => `Sort ${headerText} in descending order`,
+	unsorted: (headerText) => `Default ${headerText} Sorting`,
+};
+
+function getSortState(sortDirection: false | SortDirection): SortState {
+	return sortDirection === false ? "unsorted" : sortDirection;
+}
+
+function getHeaderText(header: unknown): string {
+	if (typeof header === "string" && header.trim().length > 0) {
+		return header.trim();
+	}
+	return FALLBACK_HEADER_TEXT;
+}
 
 export function getSortingIcon(column: Column<AppTableFeatures, Metadata>) {
 	if (!column.getCanSort()) {
 		return null;
 	}
-	const dir = column.getIsSorted();
-	const header = column.columnDef.header;
-	if (dir === "asc") {
-		return (
-			<ActionIcon
-				variant="subtle"
-				color="dark"
-				aria-label={`Sort ${header} in ascending order`}
-			>
-				<ArrowUp size={16} />
-			</ActionIcon>
-		);
-	} else if (dir === "desc") {
-		return (
-			<ActionIcon
-				variant="subtle"
-				color="dark"
-				aria-label={`Sort ${header} in descending order`}
-			>
-				<ArrowDown size={16} />
-			</ActionIcon>
-		);
-	} else {
-		return (
-			<ActionIcon
-				variant="subtle"
-				color="dark"
-				aria-label={`Default ${header} Sorting`}
-			>
-				<ArrowDownUp size={16} />
-			</ActionIcon>
-		);
-	}
+
+	const sortState = getSortState(column.getIsSorted());
+	const headerText = getHeaderText(column.columnDef.header);
+	const Icon = SORT_ICONS[sortState];
+
+	return (
+		<ActionIcon
+			variant="subtle"
+			color="dark"
+			aria-label={SORT_ARIA_LABELS[sortState](headerText)}
+		>
+			<Icon size={SORT_ICON_SIZE} />
+		</ActionIcon>
+	);
 }
