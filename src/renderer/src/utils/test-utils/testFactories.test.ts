@@ -22,7 +22,7 @@ import {
 	type SettingsForm,
 	settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
-import { SYSTEM_COLLECTION_ID } from "../constants/constants";
+import { SYSTEM_COLLECTION_ID } from "../../db/constants/constants";
 import {
 	configureUuidMock,
 	makeCollection,

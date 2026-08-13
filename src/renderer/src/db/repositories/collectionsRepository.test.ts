@@ -19,12 +19,12 @@
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import { collectionsRepository } from "@renderer/db/repositories/collectionsRepository";
-import { v7 as uuidV7 } from "uuid";
 import {
 	configureUuidMock,
 	makeTrack,
 	resetTestState,
-} from "../utils/testFactories";
+} from "@renderer/utils/test-utils/testFactories";
+import { v7 as uuidV7 } from "uuid";
 
 const TITLE_VALIDATION_ERROR = /title.*empty/;
 

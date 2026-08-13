@@ -19,7 +19,10 @@
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { makeTrack, resetDatabase } from "@renderer/db/utils/testFactories";
+import {
+	makeTrack,
+	resetDatabase,
+} from "@renderer/utils/test-utils/testFactories";
 import type { Metadata } from "@/types";
 
 describe("tracksRepository", () => {

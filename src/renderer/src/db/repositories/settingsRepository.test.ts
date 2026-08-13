@@ -21,8 +21,8 @@ import {
 	SETTINGS_ID,
 	settingsRepository,
 } from "@renderer/db/repositories/settingsRepository";
+import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
-import { resetDatabase } from "../utils/testFactories";
 
 function getValidSettings({
 	concurrency = 4,
