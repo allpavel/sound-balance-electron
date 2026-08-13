@@ -18,7 +18,10 @@
 
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
-import { makeTrack, resetDatabase } from "@renderer/db/utils/testFactories";
+import {
+	makeTrack,
+	resetDatabase,
+} from "@renderer/utils/test-utils/testFactories";
 
 describe("AudioDB", () => {
 	describe("database initialization and populate hook", () => {
