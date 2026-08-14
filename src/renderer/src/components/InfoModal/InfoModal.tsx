@@ -33,7 +33,7 @@ export default function InfoModal({ trackData }: InfoModalProps) {
 			</Button>
 			<Modal.Root opened={opened} onClose={close}>
 				<Modal.Overlay blur={5} />
-				<Modal.Content>
+				<Modal.Content className="allow-text-select">
 					<Modal.Header bg={"cyan"}>
 						<Modal.Title fw={"bold"}>{trackData.file}</Modal.Title>
 						<Modal.CloseButton aria-label="Close modal" />

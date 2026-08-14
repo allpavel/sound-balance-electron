@@ -40,6 +40,7 @@ export default function ErrorModal({
 					<Text>{title}</Text>
 				</Flex>
 			}
+			className="allow-text-select"
 			{...props}
 		>
 			<Text>{message}</Text>

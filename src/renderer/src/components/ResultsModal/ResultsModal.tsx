@@ -60,7 +60,13 @@ export default function ResultModal() {
 
 	return (
 		<>
-			<Modal opened={opened} onClose={close} title="Results:" centered>
+			<Modal
+				opened={opened}
+				onClose={close}
+				title="Results:"
+				centered
+				className="allow-text-select"
+			>
 				<Stack>
 					<Text>Total processed: {results.total}.</Text>
 					<Text>Successful: {results.successful}.</Text>
