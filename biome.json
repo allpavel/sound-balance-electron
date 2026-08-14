@@ -25,7 +25,7 @@
 				"useSingleJsDocAsterisk": "error"
 			},
 			"nursery": {
-				"useBaseline": "error"
+				"useBaseline": "off"
 			}
 		}
 	},
