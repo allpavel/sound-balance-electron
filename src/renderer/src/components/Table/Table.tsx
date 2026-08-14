@@ -53,6 +53,7 @@ import {
 } from "@tanstack/react-table";
 import { Search } from "lucide-react";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { Metadata } from "@/types";
 
 const features = tableFeatures({
@@ -74,8 +75,8 @@ export default function TableComponent() {
 	const {
 		tracks: files,
 		isLoading,
-		updateTrack,
-		updateManyTracks,
+		updateTrackAsync,
+		updateManyTracksAsync,
 	} = useTracks(activeCollection.id);
 
 	const [columnVisibility, setColumnVisibility] =
@@ -109,14 +110,25 @@ export default function TableComponent() {
 				<Checkbox
 					type="checkbox"
 					checked={table.getIsAllRowsSelected()}
-					onChange={(e) => {
-						table.getToggleAllRowsSelectedHandler()(e);
+					onChange={async (e) => {
 						const isAllSelected: 0 | 1 = e.currentTarget.checked ? 1 : 0;
+						const previousRowSelection = { ...rowSelectionAtom.get() };
+						table.getToggleAllRowsSelectedHandler()(e);
 						const selectedIds = table.getSelectedRowIds().map((id) => ({
 							id,
 							changes: { selected: isAllSelected },
 						}));
-						updateManyTracks(selectedIds);
+						if (selectedIds.length === 0) return;
+						try {
+							await updateManyTracksAsync(selectedIds);
+						} catch (error) {
+							toast.error(
+								error instanceof Error
+									? error.message
+									: "Failed to update bulk selection.",
+							);
+							rowSelectionAtom.set(previousRowSelection);
+						}
 					}}
 				/>
 			),
@@ -124,10 +136,23 @@ export default function TableComponent() {
 				<Checkbox
 					type="checkbox"
 					checked={row.getIsSelected()}
-					onChange={(e) => {
+					onChange={async (e) => {
+						const isChecked = e.currentTarget.checked ? 1 : 0;
+						const previousRowSelection = { ...rowSelectionAtom.get() };
 						row.getToggleSelectedHandler()(e);
-						const updates = e.currentTarget.checked ? 1 : 0;
-						updateTrack({ id: row.id, changes: { selected: updates } });
+						try {
+							await updateTrackAsync({
+								id: row.id,
+								changes: { selected: isChecked },
+							});
+						} catch (error) {
+							toast.error(
+								error instanceof Error
+									? error.message
+									: "Failed to update track selection.",
+							);
+							rowSelectionAtom.set(previousRowSelection);
+						}
 					}}
 				/>
 			),

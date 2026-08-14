@@ -19,24 +19,36 @@ import { Button } from "@mantine/core";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { Upload } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AddButton() {
 	const activeCollection = useAppSelector((state) => state.activeCollection);
-	const { addTracks } = useTracks();
+	const { addTracksAsync, addTracksState } = useTracks();
 
 	const loadFiles = async () => {
-		const result = await window.api.showDialog();
-		// if (result.length > 0) {
-		// 	result.map((item) => item.collectionIds.push(activeCollection.id));
-		// }
-		addTracks({
-			tracks: result,
-			options: { targetCollectionId: activeCollection.id },
-		});
+		try {
+			const result = await window.api.showDialog();
+			if (!Array.isArray(result) || result.length === 0) {
+				return;
+			}
+			await addTracksAsync({
+				tracks: result,
+				options: { targetCollectionId: activeCollection.id },
+			});
+			toast.success("Tracks were added.");
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to add tracks.",
+			);
+		}
 	};
 
 	return (
-		<Button leftSection={<Upload size={14} />} onClick={loadFiles}>
+		<Button
+			leftSection={<Upload size={14} />}
+			onClick={loadFiles}
+			loading={addTracksState.isPending}
+		>
 			Add
 		</Button>
 	);

@@ -18,20 +18,33 @@
 import { Button, useMantineTheme } from "@mantine/core";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function DeleteButton() {
 	const theme = useMantineTheme();
-	const { removeManyTracks } = useTracks();
+	const { removeManyTracksAsync, removeManyTracksState, selectedTracks } =
+		useTracks();
 
-	const deleteSelectedTracks = () => {
-		removeManyTracks();
+	const deleteSelectedTracks = async () => {
+		if (selectedTracks.length === 0) {
+			return;
+		}
+		try {
+			await removeManyTracksAsync();
+			toast.success("Selected tracks were deleted.");
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to delete tracks.",
+			);
+		}
 	};
 
 	return (
 		<Button
 			leftSection={<Trash2 size={14} />}
 			color={theme.colors.red[8]}
-			// disabled={selectedTracksIds.length === 0}
+			disabled={selectedTracks.length === 0 || removeManyTracksState.isPending}
+			loading={removeManyTracksState.isPending}
 			onClick={deleteSelectedTracks}
 		>
 			Delete
