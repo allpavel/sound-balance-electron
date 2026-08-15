@@ -266,6 +266,71 @@ describe("tracksRepository", () => {
 				}),
 			);
 		});
+
+		it("normalizes collectionIds changes and removes duplicate system collection ids", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "t1",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			await tracksRepository.update("t1", {
+				collectionIds: [SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID, "mix1"],
+			});
+			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+		});
+
+		it("adds the system collection id when collectionIds changes omit it", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "t1",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			await tracksRepository.update("t1", {
+				collectionIds: ["mix1"],
+			});
+			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+				"mix1",
+				SYSTEM_COLLECTION_ID,
+			]);
+		});
+
+		it("does not modify collectionIds when changes do not include collectionIds", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "t1",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+			);
+			await tracksRepository.update("t1", {
+				selected: 1,
+			});
+			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+		});
+
+		it("rejects invalid collectionIds values in update changes", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "t1",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			await expect(
+				tracksRepository.update("t1", {
+					collectionIds: [SYSTEM_COLLECTION_ID, ""],
+				}),
+			).rejects.toThrow("changes.collectionIds[1] must be a non-empty string");
+			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+			]);
+		});
 	});
 
 	describe("updateMany", () => {
@@ -304,6 +369,98 @@ describe("tracksRepository", () => {
 					]),
 				}),
 			);
+		});
+
+		it("normalizes collectionIds changes and removes duplicate system collection ids", async () => {
+			await db.tracks.bulkAdd([
+				makeTrack({
+					id: "t1",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+				makeTrack({
+					id: "t2",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			]);
+			await tracksRepository.updateMany([
+				{
+					id: "t1",
+					changes: {
+						collectionIds: [SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID, "mix1"],
+					},
+				},
+				{
+					id: "t2",
+					changes: {
+						collectionIds: ["mix2", "mix2"],
+					},
+				},
+			]);
+			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+			expect((await db.tracks.get("t2"))?.collectionIds).toEqual([
+				"mix2",
+				SYSTEM_COLLECTION_ID,
+			]);
+		});
+
+		it("does not modify collectionIds when updateMany changes do not include collectionIds", async () => {
+			await db.tracks.bulkAdd([
+				makeTrack({
+					id: "t1",
+					selected: 0,
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+				makeTrack({
+					id: "t2",
+					selected: 0,
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix2"],
+				}),
+			]);
+			await tracksRepository.updateMany([
+				{
+					id: "t1",
+					changes: { selected: 1 },
+				},
+				{
+					id: "t2",
+					changes: { selected: 1 },
+				},
+			]);
+			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+			expect((await db.tracks.get("t2"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix2",
+			]);
+		});
+
+		it("rejects invalid collectionIds values in updateMany changes", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "t1",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			await expect(
+				tracksRepository.updateMany([
+					{
+						id: "t1",
+						changes: {
+							collectionIds: [SYSTEM_COLLECTION_ID, ""],
+						},
+					},
+				]),
+			).rejects.toThrow(
+				"updates[0].changes.collectionIds[1] must be a non-empty string",
+			);
+			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+			]);
 		});
 	});
 

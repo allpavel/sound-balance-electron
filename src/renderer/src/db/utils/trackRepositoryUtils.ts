@@ -150,6 +150,23 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
 	return [...byId.values()];
 }
 
+function normalizeTrackChanges(
+	changes: Partial<Metadata>,
+	context: string,
+): Partial<Metadata> {
+	if (changes.collectionIds === undefined) {
+		return changes;
+	}
+	assertCollectionIds(changes.collectionIds, context);
+	return {
+		...changes,
+		collectionIds: normalizeCollectionIds(
+			changes.collectionIds,
+			SYSTEM_COLLECTION_ID,
+		),
+	};
+}
+
 export {
 	areCollectionIdsEqual,
 	assertCollectionIds,
@@ -158,5 +175,6 @@ export {
 	isNonEmptyString,
 	isPlainObject,
 	normalizeCollectionIds,
+	normalizeTrackChanges,
 	uniqueTracks,
 };

@@ -28,6 +28,7 @@ import {
 	assertTrackInput,
 	isPlainObject,
 	normalizeCollectionIds,
+	normalizeTrackChanges,
 	uniqueTracks,
 } from "./trackRepositoryUtils";
 
@@ -586,6 +587,63 @@ describe("trackRepositoryUtils", () => {
 
 		it("returns an empty array for empty input", () => {
 			expect(uniqueTracks([])).toEqual([]);
+		});
+	});
+
+	describe("normalizeTrackChanges", () => {
+		it("returns changes unchanged when collectionIds is undefined", () => {
+			const changes = { selected: 1 } as any;
+			expect(normalizeTrackChanges(changes, "changes")).toBe(changes);
+		});
+
+		it("removes duplicate system collection ids", () => {
+			expect(
+				normalizeTrackChanges(
+					{
+						collectionIds: [SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID, "mix1"],
+					},
+					"changes",
+				),
+			).toEqual({
+				collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+			});
+		});
+
+		it("adds the system collection id when missing", () => {
+			expect(
+				normalizeTrackChanges(
+					{
+						collectionIds: ["mix1"],
+					},
+					"changes",
+				),
+			).toEqual({
+				collectionIds: ["mix1", SYSTEM_COLLECTION_ID],
+			});
+		});
+
+		it("normalizes an empty collectionIds array to the system collection", () => {
+			expect(
+				normalizeTrackChanges(
+					{
+						collectionIds: [],
+					},
+					"changes",
+				),
+			).toEqual({
+				collectionIds: [SYSTEM_COLLECTION_ID],
+			});
+		});
+
+		it("rejects invalid collection ids", () => {
+			expect(() =>
+				normalizeTrackChanges(
+					{
+						collectionIds: [SYSTEM_COLLECTION_ID, ""],
+					},
+					"changes",
+				),
+			).toThrow("changes.collectionIds[1] must be a non-empty string");
 		});
 	});
 });
