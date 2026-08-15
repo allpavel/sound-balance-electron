@@ -25,6 +25,7 @@ import {
 	isNonEmptyString,
 	isPlainObject,
 	normalizeCollectionIds,
+	normalizeTrackChanges,
 	uniqueTracks,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import type { Metadata } from "@/types";
@@ -144,7 +145,10 @@ export const tracksRepository = {
 		if (!isPlainObject(changes)) {
 			throw new Error("Changes must be an object");
 		}
-		return await db.tracks.update(id, changes);
+		return await db.tracks.update(
+			id,
+			normalizeTrackChanges(changes, "changes"),
+		);
 	},
 
 	async updateMany(updates: { id: string; changes: Partial<Metadata> }[]) {
@@ -156,6 +160,10 @@ export const tracksRepository = {
 		}
 
 		const seenIds = new Set<string>();
+		const normalizedUpdates: {
+			id: string;
+			changes: Partial<Metadata>;
+		}[] = [];
 
 		for (const [index, update] of updates.entries()) {
 			const context = `updates[${index}]`;
@@ -173,6 +181,13 @@ export const tracksRepository = {
 				throw new Error(`updates contains duplicate id: ${candidate.id}`);
 			}
 			seenIds.add(candidate.id);
+			normalizedUpdates.push({
+				id: candidate.id,
+				changes: normalizeTrackChanges(
+					candidate.changes as Partial<Metadata>,
+					`${context}.changes`,
+				),
+			});
 		}
 
 		let total = 0;
