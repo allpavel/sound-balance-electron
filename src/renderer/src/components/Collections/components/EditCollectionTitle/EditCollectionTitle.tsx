@@ -39,7 +39,7 @@ const collectionTitleSchema = z.object({
 });
 
 export default function EditCollectionTitle() {
-	const { updateCollection } = useCollections();
+	const { updateCollectionAsync, updateCollectionState } = useCollections();
 	const collection = useAppSelector((state) => state.activeCollection);
 
 	const dispatch = useAppDispatch();
@@ -65,10 +65,14 @@ export default function EditCollectionTitle() {
 		close();
 	};
 
-	const handleSubmit = form.onSubmit((values) => {
+	const handleSubmit = form.onSubmit(async (values) => {
+		if (updateCollectionState.isPending) {
+			return;
+		}
+
 		if (values.title !== collection.title) {
 			try {
-				updateCollection({
+				await updateCollectionAsync({
 					id: collection.id,
 					changes: { title: values.title },
 				});
@@ -103,7 +107,13 @@ export default function EditCollectionTitle() {
 						{...form.getInputProps("title")}
 					/>
 					<Flex justify={"center"} mt={"md"}>
-						<Button type="submit">Submit</Button>
+						<Button
+							type="submit"
+							loading={updateCollectionState.isPending}
+							disabled={updateCollectionState.isPending}
+						>
+							Submit
+						</Button>
 					</Flex>
 				</form>
 			</Modal>

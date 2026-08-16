@@ -37,7 +37,7 @@ import { toast } from "sonner";
 
 export default function DeleteCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
-	const { deleteCollection } = useCollections();
+	const { deleteCollectionAsync } = useCollections();
 	const activeCollection = useAppSelector((state) => state.activeCollection);
 	const dispatch = useAppDispatch();
 
@@ -52,7 +52,7 @@ export default function DeleteCollection() {
 
 	const handleSubmit = form.onSubmit((values) => {
 		try {
-			deleteCollection({
+			deleteCollectionAsync({
 				id: activeCollection.id,
 				deleteFromAllCollections: values.check,
 			});
@@ -60,9 +60,11 @@ export default function DeleteCollection() {
 			toast.success(`${activeCollection.title} was successfully removed.`);
 			form.reset();
 			close();
-		} catch {
+		} catch (error) {
 			toast.error(
-				"There was an error deleting the collection. Please try again.",
+				error instanceof Error
+					? error.message
+					: "There was an error deleting the collection. Please try again.",
 			);
 		}
 	});

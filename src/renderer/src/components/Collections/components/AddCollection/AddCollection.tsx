@@ -28,6 +28,7 @@ import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import z from "zod";
 import type { CollectionType } from "@/types";
 
@@ -37,7 +38,7 @@ const addCollectionSchema = z.object({
 
 export default function AddCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
-	const { addCollection } = useCollections();
+	const { addCollectionAsync, addCollectionState } = useCollections();
 
 	const initialValues: Omit<CollectionType, "id"> = {
 		title: "",
@@ -57,10 +58,23 @@ export default function AddCollection() {
 				centered
 			>
 				<form
-					onSubmit={form.onSubmit((values) => {
-						addCollection({ title: values.title });
-						form.reset();
-						close();
+					onSubmit={form.onSubmit(async (values) => {
+						if (addCollectionState.isPending) {
+							return;
+						}
+
+						try {
+							await addCollectionAsync({ title: values.title });
+							form.reset();
+							close();
+							toast.success("Collection was successfully added.");
+						} catch (error) {
+							toast.error(
+								error instanceof Error
+									? error.message
+									: "Failed to add collection. Please try again.",
+							);
+						}
 					})}
 				>
 					<TextInput
@@ -69,7 +83,13 @@ export default function AddCollection() {
 						{...form.getInputProps("title")}
 					/>
 					<Flex justify={"center"} mt={"md"}>
-						<Button type="submit">Submit</Button>
+						<Button
+							type="submit"
+							loading={addCollectionState.isPending}
+							disabled={addCollectionState.isPending}
+						>
+							Submit
+						</Button>
 					</Flex>
 				</form>
 			</Modal>
