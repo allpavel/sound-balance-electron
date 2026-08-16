@@ -20,6 +20,44 @@ import { useMutation } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { CollectionType } from "@/types";
 
+export type AddCollectionPayload = Omit<CollectionType, "id">;
+
+export type UpdateCollectionPayload = {
+	id: string;
+	changes: Omit<CollectionType, "id">;
+};
+
+export type DeleteCollectionPayload = {
+	id: string;
+	deleteFromAllCollections?: boolean;
+};
+
+export type CollectionMutationState = {
+	isPending: boolean;
+	isSuccess: boolean;
+	isError: boolean;
+	error: Error | null;
+};
+
+function createMutationState(mutation: {
+	isPending: boolean;
+	isSuccess: boolean;
+	isError: boolean;
+	error: unknown;
+}): CollectionMutationState {
+	return {
+		isPending: mutation.isPending,
+		isSuccess: mutation.isSuccess,
+		isError: mutation.isError,
+		error:
+			mutation.error instanceof Error
+				? mutation.error
+				: mutation.error
+					? new Error(String(mutation.error))
+					: null,
+	};
+}
+
 export function useCollections() {
 	const collections = useLiveQuery(
 		() => collectionsRepository.getAllCollections(),
@@ -27,35 +65,32 @@ export function useCollections() {
 	);
 
 	const addMutation = useMutation({
-		mutationFn: (collection: Omit<CollectionType, "id">) =>
+		mutationFn: (collection: AddCollectionPayload) =>
 			collectionsRepository.addCollection(collection),
 	});
 
 	const updateMutation = useMutation({
-		mutationFn: ({
-			id,
-			changes,
-		}: {
-			id: string;
-			changes: Omit<CollectionType, "id">;
-		}) => collectionsRepository.updateCollection(id, changes),
+		mutationFn: ({ id, changes }: UpdateCollectionPayload) =>
+			collectionsRepository.updateCollection(id, changes),
 	});
 
 	const deleteMutation = useMutation({
-		mutationFn: ({
-			id,
-			deleteFromAllCollections,
-		}: {
-			id: string;
-			deleteFromAllCollections: boolean;
-		}) =>
+		mutationFn: ({ id, deleteFromAllCollections }: DeleteCollectionPayload) =>
 			collectionsRepository.deleteCollection({ id, deleteFromAllCollections }),
 	});
 
 	return {
 		collections: collections ?? [],
+		isLoading: collections === undefined,
+		addCollectionState: createMutationState(addMutation),
+		updateCollectionState: createMutationState(updateMutation),
+		deleteCollectionState: createMutationState(deleteMutation),
+
 		addCollection: addMutation.mutate,
 		updateCollection: updateMutation.mutate,
 		deleteCollection: deleteMutation.mutate,
+		addCollectionAsync: addMutation.mutateAsync,
+		updateCollectionAsync: updateMutation.mutateAsync,
+		deleteCollectionAsync: deleteMutation.mutateAsync,
 	};
 }
