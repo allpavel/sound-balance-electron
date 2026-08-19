@@ -168,9 +168,7 @@ describe("BaseProcess", () => {
 			const promise = proc.run([]);
 			mockProc.stderr.emit("data", Buffer.from("Some warning"));
 			mockProc.emit("close", 1, null);
-			await expect(promise).rejects.toThrow(
-				"FFmpeg exited with code 1\nSome warning",
-			);
+			await expect(promise).rejects.toThrow("Some warning");
 		});
 		it("should reject when process exits with code 137 (SIGKILL)", async () => {
 			const { mockProc, proc } = createProcess();
@@ -183,9 +181,7 @@ describe("BaseProcess", () => {
 			const promise = proc.run([]);
 			mockProc.stderr.emit("data", Buffer.from("Another warning"));
 			mockProc.emit("close", null, null);
-			await expect(promise).rejects.toThrow(
-				"FFmpeg exited with code null\nAnother warning",
-			);
+			await expect(promise).rejects.toThrow("Another warning");
 		});
 		it("should reject when process exits with signal SIGTERM", async () => {
 			const { mockProc, proc } = createProcess();
@@ -235,15 +231,13 @@ describe("BaseProcess", () => {
 				"FFmpeg process was terminated by signal: SIGTERM",
 			);
 		});
-		it("should include full stderr on non-zero exit", async () => {
+		it("should include clean reason on non-zero exit", async () => {
 			const { mockProc, proc } = createProcess();
 			const promise = proc.run([]);
 			mockProc.stderr.emit("data", Buffer.from("Error: codec not found"));
 			mockProc.stderr.emit("data", Buffer.from("\nAt line 42"));
 			mockProc.emit("close", 1, null);
-			await expect(promise).rejects.toThrow(
-				"FFmpeg exited with code 1\nError: codec not found\nAt line 42",
-			);
+			await expect(promise).rejects.toThrow("Error: codec not found");
 		});
 	});
 
@@ -403,9 +397,7 @@ describe("BaseProcess", () => {
 			const promise = proc.run([]);
 			mockProc.stderr.emit("data", Buffer.from(chars));
 			mockProc.emit("close", 1, null);
-			await expect(promise).rejects.toThrow(
-				`FFmpeg exited with code 1\n${chars}`,
-			);
+			await expect(promise).rejects.toThrow(chars);
 		});
 		it("should handle binary data in stderr", async () => {
 			const { mockProc, proc } = createProcess();
@@ -607,9 +599,7 @@ describe("BaseProcess", () => {
 			mockProc.stderr.emit("data", Buffer.from("stderr2\n"));
 			mockProc.stderr.emit("data", Buffer.from("stderr3\n"));
 			mockProc.emit("close", 1, null);
-			await expect(promise).rejects.toThrow(
-				"FFmpeg exited with code 1\nstderr1\nstderr2\nstderr3\n",
-			);
+			await expect(promise).rejects.toThrow("stderr1\nstderr2\nstderr3");
 		});
 		it("should work with a realistic ffmpeg invocation flow", async () => {
 			const { mockProc, proc } = createProcess();
@@ -657,7 +647,26 @@ describe("BaseProcess", () => {
 			const { mockProc, proc } = createProcess();
 			const promise = proc.run([]);
 			mockProc.emit("close", 1, null);
-			await expect(promise).rejects.toThrow("FFmpeg exited with code 1\n");
+			await expect(promise).rejects.toThrow("FFmpeg exited with code 1");
+		});
+		it("should strip FFmpeg banner from error reason on failure", async () => {
+			const { mockProc, proc } = createProcess();
+			const promise = proc.run([]);
+			const banner = [
+				"ffmpeg version 7.0.2-static https://johnvansickle.com/ffmpeg/",
+				"  built with gcc 8 (Debian 8.3.0-6)",
+				"  configuration: --enable-gpl --enable-version3",
+				"  libavutil      59.  8.100 / 59.  8.100",
+			].join("\n");
+			mockProc.stderr.emit("data", Buffer.from(`${banner}\n`));
+			mockProc.stderr.emit(
+				"data",
+				Buffer.from("Error opening input files: No such file or directory"),
+			);
+			mockProc.emit("close", 254, null);
+			await expect(promise).rejects.toThrow(
+				"Error opening input files: No such file or directory",
+			);
 		});
 		it("should handle exit code 0 with no stdout or stderr", async () => {
 			const { mockProc, proc } = createProcess();
