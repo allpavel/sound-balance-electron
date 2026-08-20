@@ -17,3 +17,12 @@
  */
 export { buildCodecOptions } from "./buildCodecOptions";
 export { buildFilter } from "./buildFilter";
+export {
+	buildLoudnormFirstPassOptions,
+	buildLoudnormSecondPassOptions,
+} from "./buildLoudnormOptions";
+export {
+	normalizeFfmpegInput,
+	normalizeFfmpegLine,
+} from "./normalizeFfmpegOutput";
+export { truncateParsedFfmpegOutput } from "./truncateParsedFfmpegOutput";

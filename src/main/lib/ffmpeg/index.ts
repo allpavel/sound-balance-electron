@@ -17,3 +17,4 @@
  */
 export { getGlobalSettings } from "./getGlobalSettings";
 export { getTrackSettings } from "./getTrackSettings";
+export { parseFfmpegError } from "./parseFfmpegError";
