@@ -17,7 +17,7 @@
  */
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import EventEmitter from "node:events";
-import { parseFfmpegError } from "@main/lib/ffmpeg/parseFfmpegError";
+import { parseFfmpegError } from "@main/lib/ffmpeg";
 import ffmpegStaticPath from "ffmpeg-static";
 
 export abstract class BaseProcess extends EventEmitter {

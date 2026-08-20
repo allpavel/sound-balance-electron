@@ -592,14 +592,14 @@ describe("BaseProcess", () => {
 			mockProc.emit("close", 0, null);
 			await promise;
 		});
-		it("should preserve stderrData in error message when process fails", async () => {
+		it("should use the concise last stderr line in error message when process fails", async () => {
 			const { mockProc, proc } = createProcess();
 			const promise = proc.run([]);
 			mockProc.stderr.emit("data", Buffer.from("stderr1\n"));
 			mockProc.stderr.emit("data", Buffer.from("stderr2\n"));
 			mockProc.stderr.emit("data", Buffer.from("stderr3\n"));
 			mockProc.emit("close", 1, null);
-			await expect(promise).rejects.toThrow("stderr1\nstderr2\nstderr3");
+			await expect(promise).rejects.toThrow("stderr3");
 		});
 		it("should work with a realistic ffmpeg invocation flow", async () => {
 			const { mockProc, proc } = createProcess();
