@@ -50,3 +50,22 @@ export const INVOKE_CHANNELS = {
 	STOP_PROCESSING: "stopProcessing",
 	OPEN_OUTPUT_FOLDER: "openOutputFolder",
 } as const;
+
+const ESC_CONTROL = String.fromCharCode(0x1b);
+const CSI_CONTROL = String.fromCharCode(0x9b);
+export const BANNER_PATTERNS = [
+	/^ffmpeg version\b/i,
+	/^\s*built with\b/i,
+	/^\s*configuration:/i,
+	/^\s*lib\w+\s+\d+\.\s*\d+\.\s*\d+/i,
+] as const;
+export const BOM_PATTERN = /^\uFEFF+/;
+export const LINE_ENDING_PATTERN = /\r\n|\r|\n/;
+export const LEADING_BRACKET_PREFIX_PATTERN = /^(?:\[[^\]]*\]\s*)+/;
+export const ERROR_PREFIX_PATTERN = /^Error\b/i;
+export const ANSI_ESCAPE_PATTERN = new RegExp(
+	`${ESC_CONTROL}\\[[0-9;?]*[a-zA-Z]|${CSI_CONTROL}[0-9;?]*[a-zA-Z]`,
+	"g",
+);
+export const DIAGNOSTIC_HINT_PATTERN =
+	/\b(?:error|fail(?:ed|ure)?|cannot|denied|invalid|not found|no such file|unable to)\b/i;

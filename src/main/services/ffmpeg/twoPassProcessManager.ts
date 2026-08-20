@@ -19,7 +19,7 @@ import fs from "node:fs/promises";
 import {
 	buildLoudnormFirstPassOptions,
 	buildLoudnormSecondPassOptions,
-} from "@main/lib/ffmpeg/utils/buildLoudnormOptions";
+} from "@main/lib/ffmpeg/utils";
 import { BaseProcess } from "./baseProcess";
 
 export type LoudnormTwoPassOptions = {

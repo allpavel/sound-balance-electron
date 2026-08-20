@@ -17,6 +17,7 @@
  */
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import EventEmitter from "node:events";
+import { parseFfmpegError } from "@main/lib/ffmpeg";
 import ffmpegStaticPath from "ffmpeg-static";
 
 export abstract class BaseProcess extends EventEmitter {
@@ -104,9 +105,10 @@ export abstract class BaseProcess extends EventEmitter {
 				} else if (code === 0 || code === 255) {
 					resolve();
 				} else {
-					reject(
-						new Error(`FFmpeg exited with code ${code}\n${this.stderrData}`),
-					);
+					const reason =
+						parseFfmpegError(this.stderrData) ||
+						`FFmpeg exited with code ${code}`;
+					reject(new Error(reason));
 				}
 			};
 

@@ -192,7 +192,7 @@ export const tracksRepository = {
 
 		let total = 0;
 		await db.transaction("rw", db.tracks, async () => {
-			for (const { id, changes } of updates) {
+			for (const { id, changes } of normalizedUpdates) {
 				total += await db.tracks.update(id, changes);
 			}
 		});

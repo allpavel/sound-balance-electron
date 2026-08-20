@@ -15,6 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-export { getGlobalSettings } from "./getGlobalSettings";
-export { getTrackSettings } from "./getTrackSettings";
-export { parseFfmpegError } from "./parseFfmpegError";
+const ESC_CONTROL = String.fromCharCode(0x1b);
+const CSI_CONTROL = String.fromCharCode(0x9b);
+const BOM_PATTERN = /^\uFEFF+/;
+const LEADING_BRACKET_PREFIX_PATTERN = /^(?:\[[^\]]*\][^\S\r\n]*)+/;
+const ANSI_ESCAPE_PATTERN = new RegExp(
+	`${ESC_CONTROL}\\[[0-9;?]*[a-zA-Z]|${CSI_CONTROL}[0-9;?]*[a-zA-Z]`,
+	"g",
+);
+
+export const normalizeFfmpegInput = (data: string): string =>
+	data.replace(BOM_PATTERN, "").replace(ANSI_ESCAPE_PATTERN, "").trim();
+
+export const normalizeFfmpegLine = (line: string): string =>
+	normalizeFfmpegInput(line).replace(LEADING_BRACKET_PREFIX_PATTERN, "").trim();

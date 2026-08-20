@@ -71,6 +71,7 @@ export const startProcessing = async (
 				? new TwoPassProcessManager()
 				: new ProcessManager();
 			processingState.activeProcesses.set(track.id, proc);
+			total++;
 
 			try {
 				event.sender.send(EVENT_CHANNELS.PROCESSING_RESULT, {
@@ -80,7 +81,6 @@ export const startProcessing = async (
 
 				const inputFile = track.filePath;
 				const outputFile = path.join(dirPath, track.file);
-				total++;
 
 				if (proc instanceof TwoPassProcessManager) {
 					await proc.run({
@@ -108,7 +108,6 @@ export const startProcessing = async (
 			} catch (error) {
 				const errorMessage =
 					error instanceof Error ? error.message : String(error);
-
 				failed.push({
 					id: track.id,
 					title: getTrackTitle(

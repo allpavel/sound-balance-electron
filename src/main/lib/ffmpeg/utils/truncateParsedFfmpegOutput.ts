@@ -15,6 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-export { getGlobalSettings } from "./getGlobalSettings";
-export { getTrackSettings } from "./getTrackSettings";
-export { parseFfmpegError } from "./parseFfmpegError";
+const MAX_MESSAGE_LENGTH = 300;
+const ELLIPSIS = "…";
+
+export const truncateParsedFfmpegOutput = (message: string): string => {
+	if (message.length <= MAX_MESSAGE_LENGTH) {
+		return message;
+	}
+	return `${message.slice(0, MAX_MESSAGE_LENGTH - ELLIPSIS.length)}${ELLIPSIS}`;
+};
