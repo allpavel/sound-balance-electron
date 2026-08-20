@@ -15,29 +15,55 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-const BANNER_PATTERNS: readonly RegExp[] = [
+import {
+	normalizeFfmpegInput,
+	normalizeFfmpegLine,
+	truncateParsedFfmpegOutput,
+} from "@main/lib/ffmpeg/utils";
+
+const BANNER_PATTERNS = [
 	/^ffmpeg version\b/i,
 	/^\s*built with\b/i,
 	/^\s*configuration:/i,
 	/^\s*lib\w+\s+\d+\.\s*\d+\.\s*\d+/i,
-];
+] as const;
+const LINE_ENDING_PATTERN = /\r\n|\r|\n/;
+const ERROR_PREFIX_PATTERN = /^Error\b/i;
+const DIAGNOSTIC_HINT_PATTERN =
+	/\b(?:error|fail(?:ed|ure)?|cannot|denied|invalid|not found|no such file|unable to)\b/i;
 
-export function parseFfmpegError(data: string) {
-	if (!data) return "";
+export function parseFfmpegError(data: unknown): string | null {
+	if (typeof data !== "string" || data.length === 0) {
+		return null;
+	}
 
-	const lines = data.split(/\r?\n/);
+	const normalizedInput = normalizeFfmpegInput(data);
+	if (normalizedInput === "") return null;
+
+	const lines = normalizedInput
+		.split(LINE_ENDING_PATTERN)
+		.map((line) => normalizeFfmpegLine(line));
+
 	for (let i = lines.length - 1; i >= 0; i--) {
-		const line = lines[i].trim();
-		if (line && /^Error\b/i.test(line)) {
-			return line;
+		const line = lines[i];
+		if (line && ERROR_PREFIX_PATTERN.test(line)) {
+			return truncateParsedFfmpegOutput(line);
 		}
 	}
 
-	return lines
-		.map((l) => l.trim())
-		.filter(
-			(line) =>
-				line !== "" && !BANNER_PATTERNS.some((pattern) => pattern.test(line)),
-		)
-		.join("\n");
+	const meaningfulLines = lines.filter((line) => {
+		if (!line) {
+			return false;
+		}
+		if (DIAGNOSTIC_HINT_PATTERN.test(line)) {
+			return true;
+		}
+		return !BANNER_PATTERNS.some((pattern) => pattern.test(line));
+	});
+
+	if (meaningfulLines.length === 0) {
+		return null;
+	}
+	const conciseFallback = meaningfulLines.at(-1);
+	return conciseFallback ? truncateParsedFfmpegOutput(conciseFallback) : null;
 }
