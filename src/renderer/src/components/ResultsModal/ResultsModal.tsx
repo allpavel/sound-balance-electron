@@ -26,7 +26,7 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
-import { Fragment, useEffect } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 export default function ResultModal() {
@@ -80,9 +80,14 @@ export default function ResultModal() {
 								<Accordion.Panel>
 									<List type="ordered">
 										{results.failed.map((item) => (
-											<Fragment key={item.id}>
-												<ListItem>{item.title}</ListItem>
-											</Fragment>
+											<ListItem key={item.id} mb={"xs"}>
+												<Stack justify="start" gap={0}>
+													<Text size="sm">{item.title}</Text>
+													<Text size="xs" c={"red.7"}>
+														{item.reason}
+													</Text>
+												</Stack>
+											</ListItem>
 										))}
 									</List>
 								</Accordion.Panel>
