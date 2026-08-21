@@ -28,7 +28,7 @@ import {
 	normalizeTrackChanges,
 	uniqueTracks,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import type { Metadata } from "@/types";
+import type { Metadata } from "@shared/schemas/track.schema";
 
 type TrackUpdate = {
 	id: string;

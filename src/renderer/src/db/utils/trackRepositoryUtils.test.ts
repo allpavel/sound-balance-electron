@@ -20,7 +20,7 @@ import {
 	STATUS_VALUES,
 	SYSTEM_COLLECTION_ID,
 } from "@renderer/db/constants/constants";
-import type { Metadata } from "@/types";
+import type { Metadata } from "@shared/schemas/track.schema";
 import {
 	areCollectionIdsEqual,
 	assertCollectionIds,

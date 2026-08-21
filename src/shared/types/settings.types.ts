@@ -1,4 +1,4 @@
-import type { Metadata } from "@/types";
+import type { Metadata } from "@shared/schemas/track.schema";
 import type { CBR, VBR } from "./bitrate.types";
 import type { AUDIO_ENCODER_NAMES } from "./encoders.types";
 

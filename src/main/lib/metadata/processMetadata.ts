@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { processAlbumCover } from "@main/lib/metadata/processAlbumCover";
+import type { Metadata } from "@shared/schemas/track.schema";
 import type { IAudioMetadata } from "music-metadata";
 import { v7 as uuid } from "uuid";
-import type { Metadata } from "@/types";
 
 export const processMetadata = async (
 	filePath: string,

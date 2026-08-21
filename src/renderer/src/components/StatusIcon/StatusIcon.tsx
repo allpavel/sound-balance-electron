@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { Loader, Tooltip, useMantineTheme } from "@mantine/core";
+import type { Metadata } from "@shared/schemas/track.schema";
 import { CircleAlert, CircleCheck, CircleX, Clock } from "lucide-react";
-import type { Metadata } from "@/types";
 
 type Status = Pick<Metadata, "status">;
 

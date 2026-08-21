@@ -17,12 +17,13 @@
  */
 
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
+
 import {
 	collectionIdsSchema,
+	type Metadata,
 	targetCollectionIdSchema,
 	trackInputSchema,
-} from "@renderer/db/schemas/track.schema";
-import type { Metadata } from "@/types";
+} from "@shared/schemas/track.schema";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;

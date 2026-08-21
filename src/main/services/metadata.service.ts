@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { getMetadata } from "@main/lib/metadata";
+import type { Metadata } from "@shared/schemas/track.schema";
 import { parseFile } from "music-metadata";
-import type { Metadata } from "@/types";
 
 export async function parseMetadata(filePaths: string[]): Promise<Metadata[]> {
 	try {

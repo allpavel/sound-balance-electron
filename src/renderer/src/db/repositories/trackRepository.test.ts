@@ -23,7 +23,7 @@ import {
 	makeTrack,
 	resetDatabase,
 } from "@renderer/utils/test-utils/testFactories";
-import type { Metadata } from "@/types";
+import type { Metadata } from "@shared/schemas/track.schema";
 
 describe("tracksRepository", () => {
 	beforeEach(async () => {
