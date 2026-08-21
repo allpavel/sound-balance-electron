@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { STATUS_VALUES } from "@renderer/db/constants/constants";
+import { STATUS_VALUES } from "@shared/constants";
 import {
 	collectionIdsSchema,
 	selectedSchema,
