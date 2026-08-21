@@ -15,6 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-export const DATABASE_NAME = "AudioDB";
-export const SYSTEM_COLLECTION_ID = "all";
+export const STATUS_VALUES = [
+	"pending",
+	"processing",
+	"completed",
+	"failed",
+] as const;
