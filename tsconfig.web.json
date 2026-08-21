@@ -32,6 +32,9 @@
 			"@renderer/*": [
 				"./src/renderer/src/*"
 			],
+			"@shared/*": [
+				"./src/shared/*"
+			],
 			"@types": [
 				"./src/shared/types/index.ts",
 			],
