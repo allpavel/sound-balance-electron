@@ -33,13 +33,24 @@ export const processMetadata = async (
 		const selected = 0;
 		const collectionIds = [];
 		return {
-			...processedData,
-			file: fileName ?? "",
-			filePath,
 			id,
+			file: fileName,
+			filePath,
 			status,
 			selected,
 			collectionIds,
+			common: {
+				...processedData.common,
+				picture: processedData.common.picture?.map((p) => ({
+					format: p.format,
+					data: p.data,
+					description: p.description,
+					name: p.name,
+				})),
+			},
+			format: {
+				...processedData.format,
+			},
 		} satisfies Metadata;
 	} catch (e) {
 		throw new Error(
