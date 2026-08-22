@@ -28,11 +28,11 @@ import {
 	normalizeTrackChanges,
 	uniqueTracks,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import type { Metadata } from "@shared/schemas/track.schema";
+import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
 
 type TrackUpdate = {
 	id: string;
-	changes: Partial<Metadata>;
+	changes: TrackChanges;
 };
 
 export const tracksRepository = {
@@ -138,7 +138,7 @@ export const tracksRepository = {
 		});
 	},
 
-	async update(id: string, changes: Partial<Metadata>): Promise<number> {
+	async update(id: string, changes: TrackChanges): Promise<number> {
 		if (!isNonEmptyString(id)) {
 			throw new Error("ID must be a non-empty string");
 		}
@@ -151,7 +151,7 @@ export const tracksRepository = {
 		);
 	},
 
-	async updateMany(updates: { id: string; changes: Partial<Metadata> }[]) {
+	async updateMany(updates: { id: string; changes: TrackChanges }[]) {
 		if (!Array.isArray(updates)) {
 			throw new Error("Updates must be an array");
 		}
