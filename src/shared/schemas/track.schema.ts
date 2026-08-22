@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { STATUS_VALUES } from "@shared/constants";
-import type { IAudioMetadata } from "music-metadata";
 import z from "zod";
 
 export const nonEmptyStringSchema = z
@@ -28,6 +27,34 @@ export const targetCollectionIdSchema = nonEmptyStringSchema;
 export const selectedSchema = z.union([z.literal(0), z.literal(1)]);
 export const statusSchema = z.enum(STATUS_VALUES);
 
+const pictureSchema = z.object({
+	format: z.string(),
+	data: z.string(),
+	description: z.string().optional(),
+	name: z.string().optional(),
+});
+
+const commonSchema = z
+	.object({
+		artist: z.string().optional(),
+		title: z.string().optional(),
+		album: z.string().optional(),
+		year: z.number().optional(),
+		track: z
+			.object({ no: z.number().nullable(), of: z.number().nullable() })
+			.optional(),
+		picture: z.array(pictureSchema).optional(),
+	})
+	.partial();
+
+const formatSchema = z
+	.object({
+		duration: z.number().optional(),
+		bitrate: z.number().optional(),
+		codec: z.string().optional(),
+	})
+	.partial();
+
 const trackBaseSchema = z
 	.object({
 		id: nonEmptyStringSchema,
@@ -35,6 +62,8 @@ const trackBaseSchema = z
 		filePath: nonEmptyStringSchema,
 		selected: selectedSchema,
 		collectionIds: collectionIdsSchema,
+		common: commonSchema,
+		format: formatSchema,
 	})
 	.loose();
 
@@ -50,7 +79,7 @@ export const trackInputSchema = z.discriminatedUnion("status", [
 
 type TrackInput = z.infer<typeof trackInputSchema>;
 
-export type Metadata = IAudioMetadata & TrackInput;
+export type Metadata = TrackInput;
 
 export type TrackChanges =
 	| Partial<Pick<TrackInput, "filePath" | "selected" | "collectionIds">>
