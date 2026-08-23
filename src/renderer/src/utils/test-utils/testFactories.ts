@@ -71,6 +71,8 @@ export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
 		status: "pending",
 		selected: 0,
 		collectionIds: [SYSTEM_COLLECTION_ID],
+		common: {},
+		format: {},
 		...overrides,
 	} as Metadata;
 }

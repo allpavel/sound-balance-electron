@@ -35,6 +35,8 @@ function createValidTrackInput(
 		status: "pending",
 		selected: 0,
 		collectionIds: ["all"],
+		common: {},
+		format: {},
 		...overrides,
 	};
 }

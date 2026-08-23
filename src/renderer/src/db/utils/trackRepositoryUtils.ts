@@ -21,6 +21,7 @@ import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import {
 	collectionIdsSchema,
 	type Metadata,
+	type TrackChanges,
 	targetCollectionIdSchema,
 	trackInputSchema,
 } from "@shared/schemas/track.schema";
@@ -152,10 +153,10 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
 }
 
 function normalizeTrackChanges(
-	changes: Partial<Metadata>,
+	changes: TrackChanges,
 	context: string,
-): Partial<Metadata> {
-	if (changes.collectionIds === undefined) {
+): TrackChanges {
+	if (!("collectionIds" in changes) || changes.collectionIds === undefined) {
 		return changes;
 	}
 	assertCollectionIds(changes.collectionIds, context);

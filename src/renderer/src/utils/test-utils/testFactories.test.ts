@@ -115,6 +115,8 @@ describe("testFactories", () => {
 				status: "pending",
 				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
+				common: {},
+				format: {},
 			});
 		});
 	});
@@ -190,6 +192,8 @@ describe("testFactories", () => {
 				status: "pending",
 				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
+				common: {},
+				format: {},
 			});
 			expect(await db.collections.toArray()).toEqual([
 				{ id: SYSTEM_COLLECTION_ID, title: "All" },
@@ -264,6 +268,8 @@ describe("testFactories", () => {
 				status: "pending",
 				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
+				common: {},
+				format: {},
 			});
 			expect(makeTrack()).toEqual({
 				id: "track-2",
@@ -272,6 +278,8 @@ describe("testFactories", () => {
 				status: "pending",
 				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
+				common: {},
+				format: {},
 			});
 		});
 
@@ -292,6 +300,8 @@ describe("testFactories", () => {
 					status: "completed",
 					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 					selected: 1,
+					common: {},
+					format: {},
 				}),
 			).toEqual({
 				id: "explicit",
@@ -300,6 +310,8 @@ describe("testFactories", () => {
 				status: "completed",
 				collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				selected: 1,
+				common: {},
+				format: {},
 			});
 		});
 
@@ -311,6 +323,8 @@ describe("testFactories", () => {
 				status: "pending",
 				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 1,
+				common: {},
+				format: {},
 			});
 		});
 
@@ -324,6 +338,8 @@ describe("testFactories", () => {
 				status: "pending",
 				collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				selected: 0,
+				common: {},
+				format: {},
 			});
 		});
 
@@ -335,6 +351,8 @@ describe("testFactories", () => {
 				status: "failed",
 				collectionIds: ["all"],
 				selected: 0,
+				common: {},
+				format: {},
 			});
 		});
 
@@ -353,6 +371,8 @@ describe("testFactories", () => {
 				status: "pending",
 				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
+				common: {},
+				format: {},
 			});
 		});
 
