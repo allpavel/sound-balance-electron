@@ -194,7 +194,14 @@ export default function TableComponent() {
 			id: "status",
 			header: "Status",
 			accessorKey: "status",
-			cell: ({ row }) => <StatusIcon status={row.original.status} />,
+			cell: ({ row }) => (
+				<StatusIcon
+					status={row.original.status}
+					reason={
+						row.original.status === "failed" ? row.original.reason : undefined
+					}
+				/>
+			),
 		},
 	]);
 
