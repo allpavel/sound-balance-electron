@@ -17,8 +17,8 @@
  */
 import { Button, Image, Modal, Table } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import type { Metadata } from "@shared/schemas/track.schema";
 import { ChevronRight } from "lucide-react";
-import type { Metadata } from "@/types";
 
 export type InfoModalProps = {
 	trackData: Metadata;

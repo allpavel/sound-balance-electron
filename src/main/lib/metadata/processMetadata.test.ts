@@ -35,7 +35,7 @@ describe("processMetadata", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 		vi.mocked(uuid).mockReturnValue("uuid1234" as any);
-		vi.mocked(processAlbumCover).mockImplementation((data) => data);
+		vi.mocked(processAlbumCover).mockImplementation((data) => data as any);
 		mockParser.mockResolvedValue(mockParsedData);
 	});
 
@@ -92,13 +92,15 @@ describe("processMetadata", () => {
 			});
 		});
 
-		it("should preserve extra properties returned by processAlbumCover", async () => {
+		it("should drop extra properties returned by processAlbumCover", async () => {
 			vi.mocked(processAlbumCover).mockReturnValueOnce({
 				...mockParsedData,
 				customProperty: "mock-value",
+				native: { "ID3v2.3": [{ id: "TIT2", value: "test" }] },
 			} as any);
 			const result = await processMetadata(mockFilePath, mockParser);
-			expect(result).toHaveProperty("customProperty", "mock-value");
+			expect(result).not.toHaveProperty("customProperty");
+			expect(result).not.toHaveProperty("native");
 		});
 	});
 

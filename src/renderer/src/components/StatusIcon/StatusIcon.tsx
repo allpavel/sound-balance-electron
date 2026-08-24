@@ -17,11 +17,13 @@
  */
 import { Loader, Tooltip, useMantineTheme } from "@mantine/core";
 import { CircleAlert, CircleCheck, CircleX, Clock } from "lucide-react";
-import type { Metadata } from "@/types";
 
-type Status = Pick<Metadata, "status">;
+type Status = {
+	status: "pending" | "processing" | "completed" | "failed";
+	reason?: string;
+};
 
-export default function StatusIcon({ status }: Status) {
+export default function StatusIcon({ status, reason }: Status) {
 	const theme = useMantineTheme();
 
 	switch (status) {
@@ -48,7 +50,7 @@ export default function StatusIcon({ status }: Status) {
 		}
 		case "failed": {
 			return (
-				<Tooltip label="Failed">
+				<Tooltip label={reason || "Failed"}>
 					<CircleX color={theme.colors.red[8]} />
 				</Tooltip>
 			);

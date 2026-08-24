@@ -15,17 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { getMetadata } from "@main/lib/metadata";
-import type { Metadata } from "@shared/schemas/track.schema";
-import { parseFile } from "music-metadata";
-
-export async function parseMetadata(filePaths: string[]): Promise<Metadata[]> {
-	try {
-		return await getMetadata(filePaths, parseFile);
-	} catch (error) {
-		throw new Error(
-			`Metadata parsing failed: ${error instanceof Error ? error.message : String(error)}`,
-			{ cause: error },
-		);
-	}
-}
+export const STATUS_VALUES = [
+	"pending",
+	"processing",
+	"completed",
+	"failed",
+] as const;

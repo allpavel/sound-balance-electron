@@ -24,6 +24,7 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
+import type { TrackChanges } from "@shared/schemas/track.schema";
 import type { Data } from "@types";
 import { useEffect, useState } from "react";
 import type { ProcessingStatus, StoppingStatus } from "@/types";
@@ -48,7 +49,11 @@ export default function StartProcessing() {
 	useEffect(() => {
 		const unsubscribe = window.api.processingResult(
 			(data: ProcessingStatus) => {
-				updateTrack({ id: data.id, changes: { status: data.status } });
+				const trackChanges: TrackChanges =
+					data.status === "failed"
+						? { status: "failed", reason: data.message ?? "Unknown error" }
+						: { status: data.status, reason: undefined };
+				updateTrack({ id: data.id, changes: trackChanges });
 			},
 		);
 		return () => unsubscribe();

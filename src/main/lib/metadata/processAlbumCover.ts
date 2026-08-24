@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { IAudioMetadata, ITag } from "music-metadata";
+import type { IAudioMetadata, IPicture, ITag } from "music-metadata";
 
 const ID3_KEYS = ["ID3v2.3", "ID3v2.4"] as const;
 
@@ -23,6 +23,15 @@ type Id3Key = (typeof ID3_KEYS)[number];
 
 type ApicValue = {
 	data: unknown;
+};
+
+type ProcessedPicture = Omit<IPicture, "data"> & { data: string };
+type ProcessedCommon = Omit<IAudioMetadata["common"], "picture"> & {
+	picture?: ProcessedPicture[];
+};
+
+export type ProcessedMetadata = Omit<IAudioMetadata, "common"> & {
+	common: ProcessedCommon;
 };
 
 const isApicValue = (value: unknown): value is ApicValue =>
@@ -57,8 +66,8 @@ const hasApicFrame = (metadata: IAudioMetadata): boolean =>
 		return tags.some((tag) => tag.id === "APIC" && isApicValue(tag.value));
 	});
 
-export const processAlbumCover = (data: IAudioMetadata) => {
-	if (!hasApicFrame(data)) return data;
+export const processAlbumCover = (data: IAudioMetadata): ProcessedMetadata => {
+	if (!hasApicFrame(data)) return data as ProcessedMetadata;
 
 	const metadata = structuredClone(data);
 	for (const key of ID3_KEYS) {
@@ -77,5 +86,5 @@ export const processAlbumCover = (data: IAudioMetadata) => {
 		}
 	}
 
-	return metadata;
+	return metadata as ProcessedMetadata;
 };

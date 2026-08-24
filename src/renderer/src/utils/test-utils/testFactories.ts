@@ -18,8 +18,9 @@
 
 import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
+import type { Metadata } from "@shared/schemas/track.schema";
 import { v7 as uuidV7 } from "uuid";
-import type { CollectionType, Metadata } from "@/types";
+import type { CollectionType } from "@/types";
 
 let uuidSeq = 0;
 let collectionSeq = 0;
@@ -70,6 +71,8 @@ export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
 		status: "pending",
 		selected: 0,
 		collectionIds: [SYSTEM_COLLECTION_ID],
+		common: {},
+		format: {},
 		...overrides,
 	} as Metadata;
 }

@@ -17,9 +17,9 @@
  */
 import { ActionIcon } from "@mantine/core";
 import type { AppTableFeatures } from "@renderer/components/Table/Table";
+import type { Metadata } from "@shared/schemas/track.schema";
 import type { Column, SortDirection } from "@tanstack/react-table";
 import { ArrowDown, ArrowDownUp, ArrowUp, type LucideIcon } from "lucide-react";
-import type { Metadata } from "@/types";
 
 export type SortableColumn = {
 	getCanSort: () => boolean;

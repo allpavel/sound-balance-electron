@@ -15,8 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import type { Metadata } from "@shared/schemas/track.schema";
 import type { Data, OpenPathResult } from "@types";
-import type { IAudioMetadata } from "music-metadata";
 
 type Status = "pending" | "processing" | "completed" | "failed";
 
@@ -29,15 +29,6 @@ export type API = {
 	responseOnStop: (cb: (msg: StoppingStatus) => void) => () => void;
 	processingResult: (cb: (msg: ProcessingStatus) => void) => () => void;
 	openOutputFolder: (outputDirectoryPath: string) => Promise<OpenPathResult>;
-};
-
-export type Metadata = IAudioMetadata & {
-	id: string;
-	file: string;
-	filePath: string;
-	status: Status;
-	selected: 0 | 1;
-	collectionIds: string[];
 };
 
 export type NativeValue = {

@@ -16,11 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import {
-	STATUS_VALUES,
-	SYSTEM_COLLECTION_ID,
-} from "@renderer/db/constants/constants";
-import type { Metadata } from "@/types";
+import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
+import { makeTrack } from "@renderer/utils/test-utils/testFactories";
+import { STATUS_VALUES } from "@shared/constants";
 import {
 	areCollectionIdsEqual,
 	assertCollectionIds,
@@ -32,20 +30,8 @@ import {
 	uniqueTracks,
 } from "./trackRepositoryUtils";
 
-function createTrack(overrides: Record<string, unknown> = {}): Metadata {
-	return {
-		id: "track-1",
-		file: "track-1.mp3",
-		filePath: "/music/track-1.mp3",
-		status: "pending",
-		selected: 0,
-		collectionIds: [SYSTEM_COLLECTION_ID],
-		...overrides,
-	} as unknown as Metadata;
-}
-
 function createTrackWithoutField(field: string): Record<string, unknown> {
-	const track = createTrack() as any;
+	const track = makeTrack() as any;
 	delete track[field];
 	return track as any;
 }
@@ -177,20 +163,20 @@ describe("trackRepositoryUtils", () => {
 			"tracks[0].collectionIds[1] must be a non-empty string";
 
 		it("accepts a valid track", () => {
-			expect(() => assertTrackInput(createTrack(), 0)).not.toThrow();
+			expect(() => assertTrackInput(makeTrack(), 0)).not.toThrow();
 		});
 		it("accepts every valid Status value", () => {
 			for (const status of STATUS_VALUES) {
-				expect(() =>
-					assertTrackInput(createTrack({ status }), 0),
-				).not.toThrow();
+				const overrides =
+					status === "failed" ? { status, reason: "test error" } : { status };
+				expect(() => assertTrackInput(makeTrack(overrides), 0)).not.toThrow();
 			}
 		});
 
 		it("accepts unknown IAudioMetadata fields", () => {
 			expect(() =>
 				assertTrackInput(
-					createTrack({
+					makeTrack({
 						format: {
 							duration: 123,
 						},
@@ -219,19 +205,19 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects an empty id", () => {
-			expect(() => assertTrackInput(createTrack({ id: "" }), 0)).toThrow(
+			expect(() => assertTrackInput(makeTrack({ id: "" }), 0)).toThrow(
 				idErrorMessage,
 			);
 		});
 
 		it("rejects a whitespace-only id", () => {
-			expect(() => assertTrackInput(createTrack({ id: "   " }), 0)).toThrow(
+			expect(() => assertTrackInput(makeTrack({ id: "   " }), 0)).toThrow(
 				idErrorMessage,
 			);
 		});
 
 		it("rejects a non-string id", () => {
-			expect(() => assertTrackInput(createTrack({ id: 123 }), 0)).toThrow(
+			expect(() => assertTrackInput(makeTrack({ id: 123 } as any), 0)).toThrow(
 				idErrorMessage,
 			);
 		});
@@ -243,13 +229,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects an empty file", () => {
-			expect(() => assertTrackInput(createTrack({ file: "" }), 0)).toThrow(
+			expect(() => assertTrackInput(makeTrack({ file: "" }), 0)).toThrow(
 				fileErrorMessage,
 			);
 		});
 
 		it("rejects a whitespace-only file", () => {
-			expect(() => assertTrackInput(createTrack({ file: "   " }), 0)).toThrow(
+			expect(() => assertTrackInput(makeTrack({ file: "   " }), 0)).toThrow(
 				fileErrorMessage,
 			);
 		});
@@ -261,15 +247,15 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects an empty filePath", () => {
-			expect(() => assertTrackInput(createTrack({ filePath: "" }), 0)).toThrow(
+			expect(() => assertTrackInput(makeTrack({ filePath: "" }), 0)).toThrow(
 				filePathErrorMessage,
 			);
 		});
 
 		it("rejects a whitespace-only filePath", () => {
-			expect(() =>
-				assertTrackInput(createTrack({ filePath: "   " }), 0),
-			).toThrow(filePathErrorMessage);
+			expect(() => assertTrackInput(makeTrack({ filePath: "   " }), 0)).toThrow(
+				filePathErrorMessage,
+			);
 		});
 
 		it("rejects a missing filePath", () => {
@@ -286,51 +272,51 @@ describe("trackRepositoryUtils", () => {
 
 		it("rejects undefined status", () => {
 			expect(() =>
-				assertTrackInput(createTrack({ status: undefined }), 0),
+				assertTrackInput(makeTrack({ status: undefined }), 0),
 			).toThrow(statusErrorMessage);
 		});
 
 		it("rejects invalid status values", () => {
 			expect(() =>
-				assertTrackInput(createTrack({ status: "done" }), 0),
+				assertTrackInput(makeTrack({ status: "done" } as any), 0),
 			).toThrow(statusErrorMessage);
 
-			expect(() => assertTrackInput(createTrack({ status: "" }), 0)).toThrow(
-				statusErrorMessage,
-			);
+			expect(() =>
+				assertTrackInput(makeTrack({ status: "" } as any), 0),
+			).toThrow(statusErrorMessage);
 
-			expect(() => assertTrackInput(createTrack({ status: "   " }), 0)).toThrow(
-				statusErrorMessage,
-			);
+			expect(() =>
+				assertTrackInput(makeTrack({ status: "   " } as any), 0),
+			).toThrow(statusErrorMessage);
 
-			expect(() => assertTrackInput(createTrack({ status: 123 }), 0)).toThrow(
-				statusErrorMessage,
-			);
+			expect(() =>
+				assertTrackInput(makeTrack({ status: 123 } as any), 0),
+			).toThrow(statusErrorMessage);
 
-			expect(() => assertTrackInput(createTrack({ status: null }), 0)).toThrow(
-				statusErrorMessage,
-			);
+			expect(() =>
+				assertTrackInput(makeTrack({ status: null } as any), 0),
+			).toThrow(statusErrorMessage);
 		});
 
 		it("rejects invalid selected values", () => {
-			expect(() => assertTrackInput(createTrack({ selected: 2 }), 0)).toThrow(
-				selectedErrorMessage,
-			);
-
 			expect(() =>
-				assertTrackInput(createTrack({ selected: true }), 0),
-			).toThrow(selectedErrorMessage);
-
-			expect(() => assertTrackInput(createTrack({ selected: "1" }), 0)).toThrow(
-				selectedErrorMessage,
-			);
-
-			expect(() =>
-				assertTrackInput(createTrack({ selected: null }), 0),
+				assertTrackInput(makeTrack({ selected: 2 } as any), 0),
 			).toThrow(selectedErrorMessage);
 
 			expect(() =>
-				assertTrackInput(createTrack({ selected: undefined }), 0),
+				assertTrackInput(makeTrack({ selected: true } as any), 0),
+			).toThrow(selectedErrorMessage);
+
+			expect(() =>
+				assertTrackInput(makeTrack({ selected: "1" } as any), 0),
+			).toThrow(selectedErrorMessage);
+
+			expect(() =>
+				assertTrackInput(makeTrack({ selected: null } as any), 0),
+			).toThrow(selectedErrorMessage);
+
+			expect(() =>
+				assertTrackInput(makeTrack({ selected: undefined }), 0),
 			).toThrow(selectedErrorMessage);
 		});
 
@@ -343,18 +329,18 @@ describe("trackRepositoryUtils", () => {
 		it("rejects invalid collectionIds", () => {
 			expect(() =>
 				assertTrackInput(
-					createTrack({ collectionIds: SYSTEM_COLLECTION_ID }),
+					makeTrack({ collectionIds: SYSTEM_COLLECTION_ID } as any),
 					0,
 				),
 			).toThrow(collectionIdsArrayErrorMessage);
 
 			expect(() =>
-				assertTrackInput(createTrack({ collectionIds: null }), 0),
+				assertTrackInput(makeTrack({ collectionIds: null } as any), 0),
 			).toThrow(collectionIdsArrayErrorMessage);
 
 			expect(() =>
 				assertTrackInput(
-					createTrack({ collectionIds: [SYSTEM_COLLECTION_ID, ""] }),
+					makeTrack({ collectionIds: [SYSTEM_COLLECTION_ID, ""] }),
 					0,
 				),
 			).toThrow(collectionIdsItemErrorMessage);
@@ -549,21 +535,21 @@ describe("trackRepositoryUtils", () => {
 
 	describe("uniqueTracks", () => {
 		it("returns tracks unchanged when ids are unique", () => {
-			const first = createTrack({ id: "t1" });
-			const second = createTrack({ id: "t2" });
+			const first = makeTrack({ id: "t1" });
+			const second = makeTrack({ id: "t2" });
 			expect(uniqueTracks([first, second])).toEqual([first, second]);
 		});
 
 		it("keeps the last occurrence when duplicated ids are present", () => {
-			const first = createTrack({
+			const first = makeTrack({
 				id: "t1",
 				filePath: "/music/first.mp3",
 			});
-			const second = createTrack({
+			const second = makeTrack({
 				id: "t2",
 				filePath: "/music/second.mp3",
 			});
-			const duplicate = createTrack({
+			const duplicate = makeTrack({
 				id: "t1",
 				filePath: "/music/duplicate.mp3",
 			});
@@ -574,14 +560,14 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("filters out tracks with empty ids", () => {
-			const valid = createTrack({ id: "t1" });
-			const invalid = createTrack({ id: "" });
+			const valid = makeTrack({ id: "t1" });
+			const invalid = makeTrack({ id: "" });
 			expect(uniqueTracks([invalid, valid])).toEqual([valid]);
 		});
 
 		it("filters out tracks with whitespace-only ids", () => {
-			const valid = createTrack({ id: "t1" });
-			const invalid = createTrack({ id: "   " });
+			const valid = makeTrack({ id: "t1" });
+			const invalid = makeTrack({ id: "   " });
 			expect(uniqueTracks([invalid, valid])).toEqual([valid]);
 		});
 

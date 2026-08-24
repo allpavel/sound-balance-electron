@@ -20,9 +20,10 @@ import {
 	DATABASE_NAME,
 	SYSTEM_COLLECTION_ID,
 } from "@renderer/db/constants/constants";
+import type { Metadata } from "@shared/schemas/track.schema";
 import Dexie, { type EntityTable } from "dexie";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
-import type { CollectionType, Metadata } from "@/types";
+import type { CollectionType } from "@/types";
 
 const db = new Dexie(DATABASE_NAME) as Dexie & {
 	tracks: EntityTable<Metadata, "id">;

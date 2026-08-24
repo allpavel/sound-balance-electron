@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { ActionIcon, Popover, Select } from "@mantine/core";
+import type { Metadata } from "@shared/schemas/track.schema";
 import type { Column } from "@tanstack/react-table";
 import { Funnel } from "lucide-react";
 import { useMemo } from "react";
-import type { Metadata } from "@/types";
 import type { AppTableFeatures } from "../Table/Table";
 
 export default function FilterSelect({

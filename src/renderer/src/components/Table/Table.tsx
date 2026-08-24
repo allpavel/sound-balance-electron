@@ -31,6 +31,7 @@ import StatusIcon from "@renderer/components/StatusIcon/StatusIcon";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { getSortingIcon } from "@renderer/utils/getSortingIcons";
+import type { Metadata } from "@shared/schemas/track.schema";
 import { useCreateAtom } from "@tanstack/react-store";
 import {
 	type ColumnVisibilityState,
@@ -54,7 +55,6 @@ import {
 import { Search } from "lucide-react";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Metadata } from "@/types";
 
 const features = tableFeatures({
 	rowSortingFeature,
@@ -194,7 +194,14 @@ export default function TableComponent() {
 			id: "status",
 			header: "Status",
 			accessorKey: "status",
-			cell: ({ row }) => <StatusIcon status={row.original.status} />,
+			cell: ({ row }) => (
+				<StatusIcon
+					status={row.original.status}
+					reason={
+						row.original.status === "failed" ? row.original.reason : undefined
+					}
+				/>
+			),
 		},
 	]);
 

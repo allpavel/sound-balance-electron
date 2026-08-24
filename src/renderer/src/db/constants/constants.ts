@@ -18,9 +18,3 @@
 
 export const DATABASE_NAME = "AudioDB";
 export const SYSTEM_COLLECTION_ID = "all";
-export const STATUS_VALUES = [
-	"pending",
-	"processing",
-	"completed",
-	"failed",
-] as const;
