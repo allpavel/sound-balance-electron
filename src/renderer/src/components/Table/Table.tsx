@@ -114,8 +114,8 @@ export default function TableComponent() {
 						const isAllSelected: 0 | 1 = e.currentTarget.checked ? 1 : 0;
 						const previousRowSelection = { ...rowSelectionAtom.get() };
 						table.getToggleAllRowsSelectedHandler()(e);
-						const selectedIds = table.getSelectedRowIds().map((id) => ({
-							id,
+						const selectedIds = table.getRowModel().rows.map((row) => ({
+							id: row.id,
 							changes: { selected: isAllSelected },
 						}));
 						if (selectedIds.length === 0) return;

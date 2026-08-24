@@ -24,9 +24,14 @@ export default function DeleteButton() {
 	const theme = useMantineTheme();
 	const { removeManyTracksAsync, removeManyTracksState, selectedTracks } =
 		useTracks();
+	const hasSelection = selectedTracks.length > 0;
+	const ariaLabel = hasSelection
+		? `Delete ${selectedTracks.length} selected track${selectedTracks.length === 1 ? "" : "s"}`
+		: "Delete selected tracks (none selected)";
 
 	const deleteSelectedTracks = async () => {
 		if (selectedTracks.length === 0) {
+			toast.info("Please select at least one track to delete.");
 			return;
 		}
 		try {
@@ -43,8 +48,9 @@ export default function DeleteButton() {
 		<Button
 			leftSection={<Trash2 size={14} />}
 			color={theme.colors.red[8]}
-			disabled={selectedTracks.length === 0 || removeManyTracksState.isPending}
+			variant={hasSelection ? "filled" : "light"}
 			loading={removeManyTracksState.isPending}
+			aria-label={ariaLabel}
 			onClick={deleteSelectedTracks}
 		>
 			Delete
