@@ -18,6 +18,7 @@
 
 import {
 	ActionIcon,
+	Alert,
 	Button,
 	Flex,
 	Modal,
@@ -25,22 +26,25 @@ import {
 	Tooltip,
 } from "@mantine/core";
 import { schemaResolver, useForm } from "@mantine/form";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useId } from "@mantine/hooks";
 import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
-import { Edit } from "lucide-react";
+import { Edit, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import z from "zod";
+import { useDuplicateCollectionCheck } from "../../hooks/useDuplicateCollectionCheck";
 
 const collectionTitleSchema = z.object({
 	title: z.string().min(1, "Title is required."),
 });
 
 export default function EditCollectionTitle() {
-	const { updateCollectionAsync, updateCollectionState } = useCollections();
+	const { collections, updateCollectionAsync, updateCollectionState } =
+		useCollections();
 	const collection = useAppSelector((state) => state.activeCollection);
+	const alertId = useId();
 
 	const dispatch = useAppDispatch();
 	const [opened, { open, close }] = useDisclosure(false);
@@ -52,6 +56,12 @@ export default function EditCollectionTitle() {
 			title: values.title.trim(),
 		}),
 	});
+
+	const isDuplicate = useDuplicateCollectionCheck(
+		form.values.title,
+		collections,
+		collection.id,
+	);
 
 	const handleOpen = () => {
 		form.setValues({
@@ -104,8 +114,21 @@ export default function EditCollectionTitle() {
 					<TextInput
 						label={"New title:"}
 						key={form.key("title")}
+						aria-describedby={isDuplicate ? alertId : undefined}
 						{...form.getInputProps("title")}
 					/>
+					{isDuplicate && (
+						<Alert
+							id={alertId}
+							icon={<TriangleAlert size={16} aria-hidden="true" />}
+							color="yellow"
+							radius="sm"
+							mt="sm"
+							aria-live="polite"
+						>
+							A collection with this name already exists.
+						</Alert>
+					)}
 					<Flex justify={"center"} mt={"md"}>
 						<Button
 							type="submit"
