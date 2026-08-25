@@ -18,6 +18,7 @@
 
 import {
 	ActionIcon,
+	Alert,
 	Button,
 	Flex,
 	Modal,
@@ -27,10 +28,12 @@ import {
 import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
-import { Plus } from "lucide-react";
+import { Plus, TriangleAlert } from "lucide-react";
+import { useId } from "react";
 import { toast } from "sonner";
 import z from "zod";
 import type { CollectionType } from "@/types";
+import { useDuplicateCollectionCheck } from "../../hooks/useDuplicateCollectionCheck";
 
 const addCollectionSchema = z.object({
 	title: z.string().min(1, "Title is required"),
@@ -38,8 +41,9 @@ const addCollectionSchema = z.object({
 
 export default function AddCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
-	const { addCollectionAsync, addCollectionState } = useCollections();
-
+	const { collections, addCollectionAsync, addCollectionState } =
+		useCollections();
+	const alertId = useId();
 	const initialValues: Omit<CollectionType, "id"> = {
 		title: "",
 	};
@@ -48,6 +52,11 @@ export default function AddCollection() {
 		initialValues,
 		validate: schemaResolver(addCollectionSchema),
 	});
+
+	const isDuplicate = useDuplicateCollectionCheck(
+		form.values.title,
+		collections,
+	);
 
 	return (
 		<>
@@ -80,8 +89,21 @@ export default function AddCollection() {
 					<TextInput
 						label={"Title:"}
 						key={form.key("title")}
+						aria-describedby={isDuplicate ? alertId : undefined}
 						{...form.getInputProps("title")}
 					/>
+					{isDuplicate && (
+						<Alert
+							id={alertId}
+							icon={<TriangleAlert size={16} aria-hidden="true" />}
+							color="yellow"
+							radius="sm"
+							mt="sm"
+							aria-live="polite"
+						>
+							A collection with this name already exists.
+						</Alert>
+					)}
 					<Flex justify={"center"} mt={"md"}>
 						<Button
 							type="submit"
