@@ -22,7 +22,10 @@ import {
 	settingsRepository,
 } from "@renderer/db/repositories/settingsRepository";
 import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
-import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
+import {
+	SETTINGS_SCHEMA_VERSION,
+	type SettingsForm,
+} from "@/src/shared/schemas/settings.schema";
 
 function getValidSettings({
 	concurrency = 4,
@@ -30,6 +33,7 @@ function getValidSettings({
 	concurrency?: number;
 } = {}): SettingsForm {
 	return {
+		version: SETTINGS_SCHEMA_VERSION,
 		global: {
 			outputDirectoryPath: "/music/out",
 			openOutputFolderOnComplete: true,

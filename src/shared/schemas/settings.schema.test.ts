@@ -16,12 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import {
+	FILTER_NAMES,
+	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
 	settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
 
 describe("settingsSchema", () => {
 	const validSettings: SettingsForm = {
+		version: SETTINGS_SCHEMA_VERSION,
 		global: {
 			outputDirectoryPath: "/music/output",
 			openOutputFolderOnComplete: true,
@@ -42,10 +45,73 @@ describe("settingsSchema", () => {
 	it("validates a complete valid settings object", () => {
 		expect(() => settingsSchema.parse(validSettings)).not.toThrow();
 	});
+	it("accepts settings without a version field and defaults to 1", () => {
+		const { version, ...withoutVersion } = validSettings;
+		const result = settingsSchema.safeParse(withoutVersion);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.version).toBe(1);
+		}
+	});
+	it("rejects a non-integer version", () => {
+		const invalid = { ...validSettings, version: 1.5 };
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+
+	it("rejects a negative version", () => {
+		const invalid = { ...validSettings, version: -1 };
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+
+	it("rejects a version of zero", () => {
+		const invalid = { ...validSettings, version: 0 };
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
 	it("fails when outputDirectoryPath is empty", () => {
 		const invalid = {
 			...validSettings,
 			global: { ...validSettings.global, outputDirectoryPath: "" },
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+
+	it("rejects outputDirectoryPath containing null bytes", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: "/music/\0output",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects outputDirectoryPath containing traversal sequences", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: "/music/../../etc/passwd",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects outputDirectoryPath with backslash traversal", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: "C:\\music\\..\\..\\Windows",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects outputDirectoryPath exceeding maximum length", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: `/music/${"a".repeat(4100)}`,
+			},
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
 	});
@@ -204,6 +270,42 @@ describe("settingsSchema", () => {
 			global: {
 				...validSettings.global,
 				outputDirectoryPath: null,
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("accepts every known filter name", () => {
+		for (const filterName of FILTER_NAMES) {
+			const settings = {
+				...validSettings,
+				audio: { ...validSettings.audio, audioFilter: filterName },
+			};
+			expect(settingsSchema.safeParse(settings).success).toBe(true);
+		}
+	});
+	it("accepts an empty audioFilter (no filter)", () => {
+		const settings = {
+			...validSettings,
+			audio: { ...validSettings.audio, audioFilter: "" },
+		};
+		expect(() => settingsSchema.parse(settings)).not.toThrow();
+	});
+	it("rejects an unknown audioFilter string", () => {
+		const invalid = {
+			...validSettings,
+			audio: {
+				...validSettings.audio,
+				audioFilter: "malicious;rm -rf /",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects an audioFilter with shell metacharacters", () => {
+		const invalid = {
+			...validSettings,
+			audio: {
+				...validSettings.audio,
+				audioFilter: "loudnorm$(whoami)",
 			},
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
