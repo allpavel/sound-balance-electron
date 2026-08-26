@@ -1,6 +1,7 @@
+import { optionsSchema } from "@shared/schemas/options.schema";
 import { z } from "zod";
 
-export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_SCHEMA_VERSION = 1;
 
 export const FILTER_NAMES = [
 	"acompressor",
@@ -221,11 +222,11 @@ export const settingsSchema = z.object({
 	audio: audioSchema,
 });
 
-export type SettingsForm = z.infer<typeof settingsSchema>;
-export type CBR = z.infer<typeof cbrSchema>;
-export type VBR = z.infer<typeof vbrSchema>;
-export type AUDIO_FILTER_NAMES = (typeof FILTER_NAMES)[number];
-export type AUDIO_ENCODER_NAMES = (typeof ENCODER_NAMES)[number];
+export const audioFilterConfigSchema = z.object({
+	name: z.string(),
+	desc: z.string(),
+	options: z.array(optionsSchema),
+});
 
 export function safeParseSettings(
 	input: unknown,
@@ -236,3 +237,12 @@ export function safeParseSettings(
 	}
 	return { success: false, error: result.error.message };
 }
+
+export type SettingsForm = z.infer<typeof settingsSchema>;
+export type CBR = z.infer<typeof cbrSchema>;
+export type VBR = z.infer<typeof vbrSchema>;
+export type AUDIO_FILTER_NAMES = (typeof FILTER_NAMES)[number];
+export type AUDIO_ENCODER_NAMES = (typeof ENCODER_NAMES)[number];
+export type FilterOption = z.infer<typeof optionsSchema>;
+export type AudioFilterConfig = z.infer<typeof audioFilterConfigSchema>;
+export type AUDIO_FILTERS = Record<AUDIO_FILTER_NAMES, AudioFilterConfig>;
