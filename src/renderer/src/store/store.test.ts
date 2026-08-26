@@ -75,7 +75,7 @@ const customSettings: SettingsState = {
 	},
 	audio: {
 		...initialSettings.audio,
-		audioFilter: "volume=2",
+		audioFilter: "volume",
 	},
 	loading: false,
 };
@@ -102,7 +102,7 @@ const storedSettings: SettingsFormLike = {
 	},
 	audio: {
 		...initialSettings.audio,
-		audioFilter: "highpass=f=200",
+		audioFilter: "highpass",
 	},
 };
 

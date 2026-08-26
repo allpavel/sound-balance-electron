@@ -62,7 +62,7 @@ const customSettings: SettingsFormLike = {
 	},
 	audio: {
 		...initialSettings.audio,
-		audioFilter: "volume=2",
+		audioFilter: "volume",
 	},
 };
 
@@ -204,7 +204,7 @@ describe("settingsSlice - getSettings thunk", () => {
 			"/custom/path",
 		);
 		expect(store.getState().settings.global.concurrency).toBe(8);
-		expect(store.getState().settings.audio.audioFilter).toBe("volume=2");
+		expect(store.getState().settings.audio.audioFilter).toBe("volume");
 	});
 
 	it("applies partial stored settings as-is and does not merge with initialSettings", async () => {

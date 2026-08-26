@@ -25,7 +25,7 @@ import {
 } from "@mantine/core";
 import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { FILTER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type { AUDIO_FILTER_NAMES } from "@types";
+import type { AUDIO_FILTER_NAMES } from "@shared/schemas/settings.schema";
 import type { JSX } from "react";
 
 export function AudioFilterFactory({

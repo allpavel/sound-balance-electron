@@ -19,7 +19,7 @@ import { Combobox, TextInput, useCombobox } from "@mantine/core";
 import { AudioFilterFactory } from "@renderer/components/Settings/AudioOptions/Filters/FilterOptions/FilterOptions";
 import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { FILTER_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import type { AUDIO_FILTER_NAMES } from "@types";
+import type { AUDIO_FILTER_NAMES } from "@shared/schemas/settings.schema";
 import { useMemo } from "react";
 
 // temp line
@@ -60,7 +60,7 @@ export default function Filters() {
 			store={combobox}
 			withArrow
 			onOptionSubmit={(val) => {
-				form.setFieldValue("audio.audioFilter", val);
+				form.setFieldValue("audio.audioFilter", val as "" | AUDIO_FILTER_NAMES);
 				form.setFieldValue("audio.filterOptions", {});
 				combobox.closeDropdown();
 			}}
