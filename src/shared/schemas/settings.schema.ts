@@ -1,6 +1,129 @@
 import { z } from "zod";
 
-const encoders = [
+export const SETTINGS_SCHEMA_VERSION = 2;
+
+export const FILTER_NAMES = [
+	"acompressor",
+	"acontrast",
+	"acrusher",
+	"adeclick",
+	"adeclip",
+	"adecorrelate",
+	"adelay",
+	"adenorm",
+	"aderivative",
+	"adrc",
+	"adynamicequalizer",
+	"adynamicsmooth",
+	"aecho",
+	"aemphasis",
+	"aeval",
+	"aexciter",
+	"afade",
+	"afftdn",
+	"afftfilt",
+	"aformat",
+	"afreqshift",
+	"afwtdn",
+	"agate",
+	"aintegral",
+	"alatency",
+	"alimiter",
+	"allpass",
+	"aloop",
+	"ametadata",
+	"amultiply",
+	"anlmdn",
+	"anlmf",
+	"anlms",
+	"anull",
+	"apad",
+	"aperms",
+	"aphaser",
+	"aphaseshift",
+	"apsnr",
+	"apsyclip",
+	"apulsator",
+	"arealtime",
+	"aresample",
+	"areverse",
+	"arls",
+	"arnndn",
+	"asdr",
+	"asendcmd",
+	"asetnsamples",
+	"asetpts",
+	"asetrate",
+	"asettb",
+	"ashowinfo",
+	"asidedata",
+	"asisdr",
+	"asoftclip",
+	"aspectralstats",
+	"asr",
+	"astats",
+	"asubboost",
+	"asubcut",
+	"asupercut",
+	"asuperpass",
+	"asuperstop",
+	"atempo",
+	"atilt",
+	"atrim",
+	"axcorrelate",
+	"azmq",
+	"bandpass",
+	"bandreject",
+	"bass",
+	"biquad",
+	"bs2b",
+	"channelmap",
+	"chorus",
+	"compand",
+	"compensationdelay",
+	"crossfeed",
+	"crystalizer",
+	"dcshift",
+	"deesser",
+	"dialoguenhance",
+	"drmeter",
+	"dynaudnorm",
+	"earwax",
+	"equalizer",
+	"extrastereo",
+	"firequalizer",
+	"flanger",
+	"haas",
+	"hdcd",
+	"highpass",
+	"highshelf",
+	"loudnorm",
+	"lowpass",
+	"lowshelf",
+	"mcompand",
+	"pan",
+	"replaygain",
+	"rubberband",
+	"sidechaincompress",
+	"sidechaingate",
+	"silencedetect",
+	"silenceremove",
+	"sofalizer",
+	"speechnorm",
+	"stereotools",
+	"stereowiden",
+	"superequalizer",
+	"surround",
+	"tiltshelf",
+	"treble",
+	"tremolo",
+	"vibrato",
+	"virtualbass",
+	"volume",
+	"volumedetect",
+	"afifo",
+] as const;
+const ENCODER_NAMES = [
 	"aac",
 	"ac3",
 	"ac3_fixed",
@@ -36,10 +159,25 @@ const vbrValues = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
 const cbrSchema = z.enum(cbrValues);
 const vbrSchema = z.enum(vbrValues);
-const encoderNames = z.enum(encoders);
+const encoderNames = z.enum(ENCODER_NAMES);
+
+const PATH_TRAVERSAL_PATTERN = /\.\.[/\\]/;
+const NULL_BYTE_PATTERN = /\0/;
+const MAX_PATH_LENGTH = 4096;
+
+const outputDirectoryPathSchema = z
+	.string()
+	.min(1, "Output directory is required")
+	.max(MAX_PATH_LENGTH, `Path exceeds ${MAX_PATH_LENGTH} characters`)
+	.refine((path) => !NULL_BYTE_PATTERN.test(path), {
+		message: "Path contains null bytes",
+	})
+	.refine((path) => !PATH_TRAVERSAL_PATTERN.test(path), {
+		message: "Path contains traversal sequences (..)",
+	});
 
 const globalBaseSchema = z.object({
-	outputDirectoryPath: z.string().min(1, "Output directory is required"),
+	outputDirectoryPath: outputDirectoryPathSchema,
 	openOutputFolderOnComplete: z.boolean(),
 	concurrency: z.coerce
 		.number()
@@ -49,11 +187,14 @@ const globalBaseSchema = z.object({
 	overwrite: z.boolean(),
 	noOverwrite: z.boolean(),
 });
+
+const audioFilterSchema = z.union([z.literal(""), z.enum(FILTER_NAMES)]);
+
 const audioBaseSchema = z.object({
 	audioCodec: z.union([encoderNames, z.literal("copy")]),
 	codecOptions: z.record(z.string(), z.string().or(z.number()).or(z.boolean())),
 	outputExtension: z.string(),
-	audioFilter: z.string(),
+	audioFilter: audioFilterSchema,
 	filterOptions: z.record(
 		z.string(),
 		z.string().or(z.number()).or(z.boolean()),
@@ -75,8 +216,23 @@ const audioSchema = z.discriminatedUnion("audioQuality", [
 ]);
 
 export const settingsSchema = z.object({
+	version: z.number().int().min(1).default(1),
 	global: globalBaseSchema,
 	audio: audioSchema,
 });
 
 export type SettingsForm = z.infer<typeof settingsSchema>;
+export type CBR = z.infer<typeof cbrSchema>;
+export type VBR = z.infer<typeof vbrSchema>;
+export type AUDIO_FILTER_NAMES = (typeof FILTER_NAMES)[number];
+export type AUDIO_ENCODER_NAMES = (typeof ENCODER_NAMES)[number];
+
+export function safeParseSettings(
+	input: unknown,
+): { success: true; data: SettingsForm } | { success: false; error: string } {
+	const result = settingsSchema.safeParse(input);
+	if (result.success) {
+		return { success: true, data: result.data };
+	}
+	return { success: false, error: result.error.message };
+}
