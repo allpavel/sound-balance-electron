@@ -26,6 +26,7 @@ export default function useSettingsForm() {
 	const settings = useAppSelector((state) => state.settings);
 	const form = useSettingsFormInstance({
 		initialValues: {
+			version: settings.version,
 			audio: structuredClone(settings.audio),
 			global: structuredClone(settings.global),
 		},
@@ -34,6 +35,7 @@ export default function useSettingsForm() {
 
 	useEffect(() => {
 		form.setValues({
+			version: settings.version,
 			audio: structuredClone(settings.audio),
 			global: structuredClone(settings.global),
 		});

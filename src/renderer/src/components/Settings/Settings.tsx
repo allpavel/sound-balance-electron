@@ -44,6 +44,7 @@ export default function Settings() {
 					<form
 						onSubmit={form.onSubmit((values) => {
 							const newValues = {
+								version: values.version,
 								audio: structuredClone(values.audio),
 								global: structuredClone(values.global),
 							};

@@ -17,7 +17,10 @@
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
-import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
+import {
+	SETTINGS_SCHEMA_VERSION,
+	type SettingsForm,
+} from "@/src/shared/schemas/settings.schema";
 
 const SETTINGS_ACTIONS = {
 	loadFromDB: "settings/loadFromDB",
@@ -25,6 +28,7 @@ const SETTINGS_ACTIONS = {
 };
 
 export const initialSettings: SettingsForm = {
+	version: SETTINGS_SCHEMA_VERSION,
 	global: {
 		outputDirectoryPath: "",
 		openOutputFolderOnComplete: false,
