@@ -31,7 +31,7 @@ const textOption = baseOptions.extend({
 	defaultValue: z.string(),
 });
 
-export const optionSchema = z.discriminatedUnion("type", [
+export const optionsSchema = z.discriminatedUnion("type", [
 	numberOptions,
 	selectOptions,
 	switchOptions,
