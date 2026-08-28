@@ -138,6 +138,11 @@ const ENCODER_NAMES = [
 	"libvorbis",
 	"wavpack",
 ] as const;
+export const ENCODER_CATEGORIES = [
+	"Lossy General Audio",
+	"Speech & Voice Codecs",
+	"Lossless Audio",
+] as const;
 const cbrValues = [
 	"320k",
 	"256k",
@@ -161,6 +166,7 @@ const vbrValues = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 const cbrSchema = z.enum(cbrValues);
 const vbrSchema = z.enum(vbrValues);
 const encoderNames = z.enum(ENCODER_NAMES);
+const encoderCategorySchema = z.enum(ENCODER_CATEGORIES);
 
 const PATH_TRAVERSAL_PATTERN = /\.\.[/\\]/;
 const NULL_BYTE_PATTERN = /\0/;
@@ -227,6 +233,12 @@ export const audioFilterConfigSchema = z.object({
 	desc: z.string(),
 	options: z.array(optionsSchema),
 });
+export const audioEncoderConfigSchema = z.object({
+	name: z.string(),
+	desc: z.string(),
+	category: encoderCategorySchema,
+	options: z.array(optionsSchema),
+});
 
 export function safeParseSettings(
 	input: unknown,
@@ -241,8 +253,13 @@ export function safeParseSettings(
 export type SettingsForm = z.infer<typeof settingsSchema>;
 export type CBR = z.infer<typeof cbrSchema>;
 export type VBR = z.infer<typeof vbrSchema>;
+
 export type AUDIO_FILTER_NAMES = (typeof FILTER_NAMES)[number];
-export type AUDIO_ENCODER_NAMES = (typeof ENCODER_NAMES)[number];
+export type AUDIO_FILTERS = Record<AUDIO_FILTER_NAMES, AudioFilterConfig>;
 export type FilterOption = z.infer<typeof optionsSchema>;
 export type AudioFilterConfig = z.infer<typeof audioFilterConfigSchema>;
-export type AUDIO_FILTERS = Record<AUDIO_FILTER_NAMES, AudioFilterConfig>;
+
+export type AUDIO_ENCODER_NAMES = (typeof ENCODER_NAMES)[number];
+export type AUDIO_ENCODERS = Record<AUDIO_ENCODER_NAMES, AudioEncoderConfig>;
+export type AudioEncoderConfig = z.infer<typeof audioEncoderConfigSchema>;
+export type EncoderCategory = (typeof ENCODER_CATEGORIES)[number];
