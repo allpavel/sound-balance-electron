@@ -16,8 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { AUDIO_FILTERS } from "@shared/schemas/settings.schema";
-import type { AUDIO_ENCODERS } from "@types";
+import type {
+	AUDIO_ENCODERS,
+	AUDIO_FILTERS,
+} from "@shared/schemas/settings.schema";
 import type { AUDIO_MUXER_EXTENSIONS, EXTENSIONS } from "./settings.types";
 
 export const CONCURRENCY_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
