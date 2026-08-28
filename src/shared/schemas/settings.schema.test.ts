@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import {
+	audioFilterConfigSchema,
 	FILTER_NAMES,
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
@@ -309,5 +310,141 @@ describe("settingsSchema", () => {
 			},
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+});
+
+describe("audioFilterConfigSchema", () => {
+	const createValidFilterConfig = (
+		overrides: Record<string, unknown> = {},
+	): Record<string, unknown> => ({
+		name: "loudnorm",
+		desc: "EBU R128 loudness normalization.",
+		options: [
+			{
+				type: "number",
+				label: "I",
+				desc: "Set integrated loudness target.",
+				min: -70,
+				max: -5,
+				defaultValue: -24,
+			},
+			{
+				type: "switch",
+				label: "linear",
+				desc: "Normalize by linearly scaling the source audio.",
+				defaultValue: true,
+			},
+		],
+		...overrides,
+	});
+
+	it("validates a complete filter configuration", () => {
+		const result = audioFilterConfigSchema.safeParse(createValidFilterConfig());
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts a filter configuration with an empty options array", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ options: [] }),
+		);
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts every supported option type inside a single configuration", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({
+				options: [
+					{
+						type: "number",
+						label: "I",
+						desc: "Integrated loudness target.",
+						min: -70,
+						max: -5,
+						defaultValue: -24,
+					},
+					{
+						type: "select",
+						label: "mode",
+						desc: "Operation mode.",
+						options: ["downward", "upward"],
+						defaultValue: "downward",
+					},
+					{
+						type: "switch",
+						label: "linear",
+						desc: "Linear normalization.",
+						defaultValue: true,
+					},
+					{
+						type: "text",
+						label: "delays",
+						desc: "Delay list.",
+						defaultValue: "1000",
+					},
+				],
+			}),
+		);
+		expect(result.success).toBe(true);
+	});
+
+	it.each(["name", "desc", "options"])(
+		"rejects a missing %s field and reports its path",
+		(field) => {
+			const config = createValidFilterConfig();
+			delete config[field];
+			const result = audioFilterConfigSchema.safeParse(config);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual([field]);
+			}
+		},
+	);
+
+	it("rejects a non-string name", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ name: 42 }),
+		);
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects a non-string desc", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ desc: null }),
+		);
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects a non-array options value", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ options: "loudnorm" }),
+		);
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects an invalid option entry and reports the nested path", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({
+				options: [
+					{
+						type: "number",
+						label: "I",
+						desc: "Integrated loudness target.",
+						min: -70,
+						defaultValue: -24,
+					},
+				],
+			}),
+		);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["options", 0, "max"]);
+		}
+	});
+
+	it("accepts any string name without restricting it to FILTER_NAMES", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ name: "custom_filter" }),
+		);
+		expect(result.success).toBe(true);
 	});
 });
