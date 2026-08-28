@@ -830,8 +830,8 @@ export const FILTER_OPTIONS = {
 			},
 			{
 				type: "select",
-				label: "type",
-				desc: "Specify the effect type.",
+				label: "curve",
+				desc: "Set curve for fade transition.",
 				options: [
 					{
 						label: "tri - select triangular, linear slope",
@@ -985,14 +985,6 @@ export const FILTER_OPTIONS = {
 				defaultValue: 10,
 				min: 0,
 				max: 100,
-			},
-			{
-				type: "number",
-				label: "targetrms",
-				desc: "Set the target RMS. Range is between 0 and 1.",
-				defaultValue: 0,
-				min: 0,
-				max: 1,
 			},
 			{
 				type: "number",
