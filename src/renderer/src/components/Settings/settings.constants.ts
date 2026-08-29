@@ -218,7 +218,7 @@ export const FILTER_OPTIONS = {
 				label: "lforate",
 				desc: "Set LFO rate. Range is between 0.01 and 200.",
 				defaultValue: 0.3,
-				min: 1,
+				min: 0.01,
 				max: 200,
 			},
 		],
@@ -378,8 +378,8 @@ export const FILTER_OPTIONS = {
 				label: "level",
 				desc: "Set level of added noise in dB. Range is between 1 and 16.",
 				defaultValue: -351,
-				min: 1,
-				max: 16,
+				min: -451,
+				max: -90,
 			},
 			{
 				type: "select",
@@ -2621,7 +2621,7 @@ export const ENCODER_OPTIONS = {
 				label: "frame_size",
 				desc: "Block size in samples. Default automatically decided based on sample rate and channels.",
 				defaultValue: 0,
-				min: 128,
+				min: 0,
 				max: 131072,
 			},
 			{
