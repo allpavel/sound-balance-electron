@@ -140,12 +140,14 @@ describe("optionsSchema", () => {
 		);
 
 		it.each(optionFactories)(
-			"%s option accepts an empty label and desc because the schema does not enforce non-emptiness",
+			"%s option rejects an empty label or desc",
 			(_name, factory) => {
-				const result = optionsSchema.safeParse(
-					factory({ label: "", desc: "" }),
+				expect(optionsSchema.safeParse(factory({ label: "" })).success).toBe(
+					false,
 				);
-				expect(result.success).toBe(true);
+				expect(optionsSchema.safeParse(factory({ desc: "" })).success).toBe(
+					false,
+				);
 			},
 		);
 	});
@@ -192,11 +194,24 @@ describe("optionsSchema", () => {
 			},
 		);
 
-		it("does not enforce numeric relationships between min, max, and defaultValue", () => {
+		it("rejects when min is greater than max", () => {
 			const result = optionsSchema.safeParse(
-				createNumberOption({ min: 100, max: 10, defaultValue: 5000 }),
+				createNumberOption({ min: 100, max: 10, defaultValue: 50 }),
 			);
-			expect(result.success).toBe(true);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(["min"]);
+			}
+		});
+
+		it("rejects when defaultValue is outside the [min, max] range", () => {
+			const result = optionsSchema.safeParse(
+				createNumberOption({ min: 0, max: 10, defaultValue: 5000 }),
+			);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(["defaultValue"]);
+			}
 		});
 	});
 
@@ -368,14 +383,14 @@ describe("optionsSchema", () => {
 			}
 		});
 
-		it("strips unknown properties instead of failing", () => {
-			const result = optionsSchema.safeParse(
-				createNumberOption({ legacyField: "value" }),
-			);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).not.toHaveProperty("legacyField");
-			}
-		});
+		it.each(optionFactories)(
+			"%s option rejects unknown properties (strict mode)",
+			(_name, factory) => {
+				const result = optionsSchema.safeParse(
+					factory({ legacyField: "value" }),
+				);
+				expect(result.success).toBe(false);
+			},
+		);
 	});
 });

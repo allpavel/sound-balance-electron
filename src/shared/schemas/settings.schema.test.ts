@@ -441,10 +441,30 @@ describe("audioFilterConfigSchema", () => {
 		}
 	});
 
-	it("accepts any string name without restricting it to FILTER_NAMES", () => {
+	it("rejects a name that is not a member of FILTER_NAMES", () => {
 		const result = audioFilterConfigSchema.safeParse(
-			createValidFilterConfig({ name: "custom_filter" }),
+			createValidFilterConfig({ name: "custom_unknown_filter" }),
 		);
-		expect(result.success).toBe(true);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["name"]);
+		}
+	});
+
+	it("rejects an empty desc string", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ desc: "" }),
+		);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["desc"]);
+		}
+	});
+
+	it("rejects unknown properties on the config object (strict mode)", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ legacyField: "value" }),
+		);
+		expect(result.success).toBe(false);
 	});
 });
