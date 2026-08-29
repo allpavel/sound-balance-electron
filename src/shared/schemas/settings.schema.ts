@@ -228,11 +228,13 @@ export const settingsSchema = z.object({
 	audio: audioSchema,
 });
 
-export const audioFilterConfigSchema = z.object({
-	name: z.string(),
-	desc: z.string(),
-	options: z.array(optionsSchema),
-});
+export const audioFilterConfigSchema = z
+	.object({
+		name: z.enum(FILTER_NAMES),
+		desc: z.string().min(1, "Description must not be empty"),
+		options: z.array(optionsSchema),
+	})
+	.strict();
 export const audioEncoderConfigSchema = z.object({
 	name: z.string(),
 	desc: z.string(),
