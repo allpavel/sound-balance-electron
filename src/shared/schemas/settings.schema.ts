@@ -235,12 +235,14 @@ export const audioFilterConfigSchema = z
 		options: z.array(optionsSchema),
 	})
 	.strict();
-export const audioEncoderConfigSchema = z.object({
-	name: z.string(),
-	desc: z.string(),
-	category: encoderCategorySchema,
-	options: z.array(optionsSchema),
-});
+export const audioEncoderConfigSchema = z
+	.object({
+		name: z.enum(ENCODER_NAMES),
+		desc: z.string().min(1, "Description must not be empty"),
+		category: encoderCategorySchema,
+		options: z.array(optionsSchema),
+	})
+	.strict();
 
 export function safeParseSettings(
 	input: unknown,
