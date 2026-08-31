@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { v7 as uuidV7 } from "uuid";
 import type { CollectionType } from "@/types";
 

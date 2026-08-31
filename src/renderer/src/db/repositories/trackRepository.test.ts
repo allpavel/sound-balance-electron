@@ -16,14 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import {
-	makeTrack,
-	resetDatabase,
-} from "@renderer/utils/test-utils/testFactories";
+import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
+import { makeTrack } from "@shared/utils/factories";
 
 describe("tracksRepository", () => {
 	beforeEach(async () => {

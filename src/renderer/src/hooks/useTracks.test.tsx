@@ -16,15 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// @vitest-environment jsdom
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import {
-	makeTrack,
-	resetTestState,
-} from "@renderer/utils/test-utils/testFactories";
+import { resetTestState } from "@renderer/utils/test-utils/testFactories";
+// @vitest-environment jsdom
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
+import { makeTrack } from "@shared/utils/factories";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { PropsWithChildren } from "react";

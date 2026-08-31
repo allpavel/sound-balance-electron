@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 
 import {
 	collectionIdsSchema,
