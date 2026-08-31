@@ -21,3 +21,5 @@ export const STATUS_VALUES = [
 	"completed",
 	"failed",
 ] as const;
+
+export const SYSTEM_COLLECTION_ID = "all";
