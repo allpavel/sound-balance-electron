@@ -20,7 +20,7 @@ import { EVENT_CHANNELS, INITIALSETTINGS } from "@main/constants";
 import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
 import { getTrackTitle, isDirectory } from "@main/lib/utils";
 import { ProcessManager } from "@main/services/ffmpeg/processManager";
-import type { Data } from "@types";
+import type { Data } from "@shared/schemas/data.schema";
 import type { IpcMainInvokeEvent } from "electron";
 import PQueue from "p-queue";
 import type { Failed, ProcessingStatus } from "@/types";

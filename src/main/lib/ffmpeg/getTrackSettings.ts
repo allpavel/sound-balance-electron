@@ -17,7 +17,7 @@
  */
 
 import { buildCodecOptions, buildFilter } from "@main/lib/ffmpeg/utils";
-import type { SettingsForm } from "@types";
+import type { SettingsForm } from "@shared/schemas/settings.schema";
 
 export const getTrackSettings = (
 	initialSettings: SettingsForm["audio"],

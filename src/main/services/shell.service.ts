@@ -17,9 +17,9 @@
  */
 
 import fs from "node:fs/promises";
-import type { OpenPathResult } from "@types";
 import { shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron/main";
+import type { OpenPathResult } from "@/types";
 
 const isSystemError = (err: unknown): err is NodeJS.ErrnoException => {
 	return err instanceof Error && "code" in err && typeof err.code === "string";
