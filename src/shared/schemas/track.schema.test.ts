@@ -17,6 +17,7 @@
  */
 
 import { STATUS_VALUES } from "@shared/constants";
+import { makeTrack } from "@shared/utils/factories";
 import {
 	collectionIdsSchema,
 	selectedSchema,
@@ -25,24 +26,8 @@ import {
 	trackInputSchema,
 } from "./track.schema";
 
-function createValidTrackInput(
-	overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
-	return {
-		id: "track-1",
-		file: "track-1.mp3",
-		filePath: "/music/track-1.mp3",
-		status: "pending",
-		selected: 0,
-		collectionIds: ["all"],
-		common: {},
-		format: {},
-		...overrides,
-	};
-}
-
 function withoutField(field: string): Record<string, unknown> {
-	const track = createValidTrackInput();
+	const track = makeTrack();
 	delete track[field];
 	return track;
 }
@@ -197,19 +182,19 @@ describe("track.schema", () => {
 		] as const;
 
 		it("accepts a complete application-owned track", () => {
-			const result = trackInputSchema.safeParse(createValidTrackInput());
+			const result = trackInputSchema.safeParse(makeTrack());
 			expect(result.success).toBe(true);
 		});
 
 		it("accepts an empty collectionIds array", () => {
 			const result = trackInputSchema.safeParse(
-				createValidTrackInput({ collectionIds: [] }),
+				makeTrack({ collectionIds: [] }),
 			);
 			expect(result.success).toBe(true);
 		});
 
 		it("accepts unknown IAudioMetadata fields and preserves them", () => {
-			const input = createValidTrackInput({
+			const input = makeTrack({
 				format: {
 					duration: 210.5,
 					bitrate: 320000,
@@ -246,9 +231,7 @@ describe("track.schema", () => {
 
 		it("rejects empty id, file, and filePath values", () => {
 			for (const field of ["id", "file", "filePath"] as const) {
-				const result = trackInputSchema.safeParse(
-					createValidTrackInput({ [field]: "" }),
-				);
+				const result = trackInputSchema.safeParse(makeTrack({ [field]: "" }));
 				expect(result.success).toBe(false);
 				if (!result.success) {
 					expect(result.error.issues[0]?.path).toEqual([field]);
@@ -259,7 +242,7 @@ describe("track.schema", () => {
 		it("rejects whitespace-only id, file, and filePath values", () => {
 			for (const field of ["id", "file", "filePath"] as const) {
 				const result = trackInputSchema.safeParse(
-					createValidTrackInput({ [field]: "   " }),
+					makeTrack({ [field]: "   " }),
 				);
 				expect(result.success).toBe(false);
 				if (!result.success) {
@@ -270,7 +253,7 @@ describe("track.schema", () => {
 
 		it("rejects invalid status values and reports the status path", () => {
 			const result = trackInputSchema.safeParse(
-				createValidTrackInput({ status: "done" }),
+				makeTrack({ status: "done" } as any),
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -280,7 +263,7 @@ describe("track.schema", () => {
 
 		it("rejects invalid selected values and reports the selected path", () => {
 			const result = trackInputSchema.safeParse(
-				createValidTrackInput({ selected: 2 }),
+				makeTrack({ selected: 2 } as any),
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -290,7 +273,7 @@ describe("track.schema", () => {
 
 		it("rejects a non-array collectionIds value and reports the collectionIds path", () => {
 			const result = trackInputSchema.safeParse(
-				createValidTrackInput({ collectionIds: "all" }),
+				makeTrack({ collectionIds: "all" } as any),
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -300,7 +283,7 @@ describe("track.schema", () => {
 
 		it("rejects invalid collectionIds items and reports the invalid index", () => {
 			const result = trackInputSchema.safeParse(
-				createValidTrackInput({ collectionIds: ["all", ""] }),
+				makeTrack({ collectionIds: ["all", ""] }),
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
