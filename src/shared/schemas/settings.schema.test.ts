@@ -15,34 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { getValidSettings } from "@shared/utils/factories";
 import {
 	audioFilterConfigSchema,
 	FILTER_NAMES,
-	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
 	settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
 
 describe("settingsSchema", () => {
-	const validSettings: SettingsForm = {
-		version: SETTINGS_SCHEMA_VERSION,
-		global: {
-			outputDirectoryPath: "/music/output",
-			openOutputFolderOnComplete: true,
-			concurrency: 4,
-			overwrite: false,
-			noOverwrite: true,
-		},
-		audio: {
-			audioCodec: "libmp3lame",
-			codecOptions: { compression_level: 5 },
-			audioQuality: "vbr",
-			audioQualityValue: "4",
-			outputExtension: ".mp3",
-			audioFilter: "loudnorm",
-			filterOptions: { I: -24, LRA: 7 },
-		},
-	};
+	const validSettings: SettingsForm = getValidSettings();
 	it("validates a complete valid settings object", () => {
 		expect(() => settingsSchema.parse(validSettings)).not.toThrow();
 	});
