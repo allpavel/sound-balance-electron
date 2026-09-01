@@ -17,6 +17,7 @@
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
+import { toast } from "sonner";
 import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
@@ -50,8 +51,15 @@ export const initialSettings: SettingsForm = {
 export const getSettings = createAsyncThunk(
 	SETTINGS_ACTIONS.loadFromDB,
 	async () => {
-		const storedSettings = await settingsRepository.getSettings();
-		return storedSettings ?? initialSettings;
+		const result = await settingsRepository.getSettings();
+		if (result.status === "invalid") {
+			toast.error("Stored settings are corrupted and were reset to defaults.");
+			return initialSettings;
+		}
+		if (result.status === "valid") {
+			return result.data;
+		}
+		return initialSettings;
 	},
 );
 

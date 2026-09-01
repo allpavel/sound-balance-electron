@@ -344,9 +344,10 @@ describe("Thunk integration smoke tests", () => {
 	});
 
 	it("updates only the settings slice when the getSettings thunk is dispatched", async () => {
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue(
-			storedSettings as GetSettingsResult,
-		);
+		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
+			status: "valid",
+			data: storedSettings,
+		} as GetSettingsResult);
 		const store = createAppStore(getPreloadedState());
 		const dispatch: AppDispatch = store.dispatch;
 		const before = store.getState();

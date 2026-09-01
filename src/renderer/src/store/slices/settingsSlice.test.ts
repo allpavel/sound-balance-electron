@@ -133,7 +133,10 @@ describe("settingsSlice - getSettings thunk", () => {
 		expect(settingsRepository.getSettings).toHaveBeenCalledTimes(1);
 		expect(settingsRepository.saveSettings).not.toHaveBeenCalled();
 		expect(store.getState().settings).toEqual(getTestState({ loading: true }));
-		deferred.resolve(customSettings as GetSettingsResult);
+		deferred.resolve({
+			status: "valid",
+			data: customSettings,
+		} as GetSettingsResult);
 		const result = await dispatchPromise;
 		expect(result.meta.requestStatus).toBe("fulfilled");
 		expect(result.payload).toEqual(customSettings);
@@ -157,9 +160,11 @@ describe("settingsSlice - getSettings thunk", () => {
 		expect(store.getState().settings).toEqual(getTestState());
 	});
 
-	it("falls back to initialSettings when repository returns null", async () => {
+	it("falls back to initialSettings when repository returns empty", async () => {
 		const previousState = getTestState();
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue(null);
+		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
+			status: "empty",
+		} as GetSettingsResult);
 		const store = createTestStore({
 			settings: previousState,
 		});
@@ -171,11 +176,12 @@ describe("settingsSlice - getSettings thunk", () => {
 		expect(store.getState().settings).not.toEqual(previousState);
 	});
 
-	it("falls back to initialSettings when repository returns undefined", async () => {
+	it("falls back to initialSettings when repository returns invalid", async () => {
 		const previousState = getTestState();
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue(
-			undefined as any,
-		);
+		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
+			status: "invalid",
+			issues: "test",
+		} as GetSettingsResult);
 		const store = createTestStore({
 			settings: previousState,
 		});
@@ -188,9 +194,10 @@ describe("settingsSlice - getSettings thunk", () => {
 	});
 
 	it("replaces non-initial prior state on fulfill", async () => {
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue(
-			customSettings as GetSettingsResult,
-		);
+		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
+			status: "valid",
+			data: customSettings,
+		} as GetSettingsResult);
 		const previousState = getTestState();
 		const store = createTestStore({
 			settings: previousState,
@@ -213,9 +220,10 @@ describe("settingsSlice - getSettings thunk", () => {
 				concurrency: 3,
 			},
 		};
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue(
-			partialStored as any,
-		);
+		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
+			status: "valid",
+			data: partialStored as any,
+		} as GetSettingsResult);
 		const store = createTestStore({
 			settings: getTestState({ loading: true }),
 		});
@@ -227,28 +235,36 @@ describe("settingsSlice - getSettings thunk", () => {
 		} as any);
 	});
 
-	it("handles malformed non-object stored settings by spreading into an empty object", async () => {
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue(false as any);
+	it("handles malformed non-object stored settings by returning initial settings", async () => {
+		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
+			status: "invalid",
+			issues: "test",
+		} as GetSettingsResult);
 		const store = createTestStore({
 			settings: getTestState({ loading: true }),
 		});
 		const result = await store.dispatch(getSettings());
 		expect(result.meta.requestStatus).toBe("fulfilled");
 		expect(store.getState().settings).toEqual({
+			...initialSettings,
 			loading: false,
-		} as any);
+		});
 	});
 
-	it("handles malformed array stored settings by spreading array indices", async () => {
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue([] as any);
+	it("handles malformed array stored settings by returning initial settings", async () => {
+		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
+			status: "invalid",
+			issues: "test",
+		} as GetSettingsResult);
 		const store = createTestStore({
 			settings: getTestState({ loading: true }),
 		});
 		const result = await store.dispatch(getSettings());
 		expect(result.meta.requestStatus).toBe("fulfilled");
 		expect(store.getState().settings).toEqual({
+			...initialSettings,
 			loading: false,
-		} as any);
+		});
 	});
 });
 
