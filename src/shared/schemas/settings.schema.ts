@@ -261,16 +261,6 @@ export const audioEncoderConfigSchema = z
 	})
 	.strict();
 
-export function safeParseSettings(
-	input: unknown,
-): { success: true; data: SettingsForm } | { success: false; error: string } {
-	const result = settingsSchema.safeParse(input);
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	return { success: false, error: result.error.message };
-}
-
 export type SettingsForm = z.infer<typeof settingsSchema>;
 export type CBR = z.infer<typeof cbrSchema>;
 export type VBR = z.infer<typeof vbrSchema>;
