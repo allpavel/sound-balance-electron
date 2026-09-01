@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// @vitest-environment jsdom
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetTestState } from "@renderer/utils/test-utils/testFactories";
-// @vitest-environment jsdom
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
 import { makeTrack } from "@shared/utils/factories";
