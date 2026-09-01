@@ -17,35 +17,41 @@
  */
 
 import { db } from "@renderer/db/db";
-import {
-	type SettingsForm,
-	settingsSchema,
-} from "@/src/shared/schemas/settings.schema";
+import { safeParseSettings } from "@shared/validators";
+import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 
 export const SETTINGS_ID = "globalSettings";
 
-function parseSettings(input: SettingsForm) {
-	return settingsSchema.safeParse(input);
-}
+export type SettingsLoadResult =
+	| { status: "empty" }
+	| { status: "invalid"; issues: string }
+	| { status: "valid"; data: SettingsForm };
 
 export const settingsRepository = {
-	async getSettings(): Promise<SettingsForm | null> {
+	async getSettings(): Promise<SettingsLoadResult> {
 		const result = await db.settings.get(SETTINGS_ID);
 		if (!result || result.settings === undefined || result.settings === null) {
-			return null;
+			return { status: "empty" };
 		}
-		const parsedData = parseSettings(result.settings);
+		const parsedData = safeParseSettings(result.settings);
 		if (!parsedData.success) {
-			return null;
+			return {
+				status: "invalid",
+				issues: parsedData.issues
+					.map((i) => `${i.path}: ${i.message}`)
+					.join("; "),
+			};
 		}
-		return parsedData.data;
+		return { status: "valid", data: parsedData.data };
 	},
 
 	async saveSettings(settings: SettingsForm): Promise<void> {
-		const parsedData = parseSettings(settings);
+		const parsedData = safeParseSettings(settings);
 		if (!parsedData.success) {
-			throw new Error(`Invalid settings: ${parsedData.error}`);
+			throw new Error(
+				`Invalid settings:  ${parsedData.issues.map((i) => `${i.path}: ${i.message}`).join("; ")}`,
+			);
 		}
-		await db.settings.put({ id: SETTINGS_ID, settings });
+		await db.settings.put({ id: SETTINGS_ID, settings: parsedData.data });
 	},
 };
