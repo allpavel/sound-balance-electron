@@ -15,10 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// settingsRepository.ts — suggested migration hook
-// --- REFACTORED: Replaced lossy error string with structured issue array,
-// added severity classification, and enriched the return type for programmatic
-// consumption at all architectural boundaries (repository, thunk, IPC).
 import {
 	type SettingsForm,
 	settingsSchema,
