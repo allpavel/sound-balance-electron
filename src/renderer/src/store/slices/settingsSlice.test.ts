@@ -303,7 +303,7 @@ describe("settingsSlice - saveSettings thunk", () => {
 		deferred.resolve(undefined as SaveSettingsResult);
 		const result = await dispatchPromise;
 		expect(result.meta.requestStatus).toBe("fulfilled");
-		expect(result.payload).toBeUndefined();
+		expect(result.payload).toEqual(savedPayload);
 		expect(store.getState().settings).toEqual({
 			...savedPayload,
 			loading: false,
@@ -332,7 +332,7 @@ describe("settingsSlice - saveSettings thunk", () => {
 		});
 		const result = await store.dispatch(saveSettings(savedPayload));
 		expect(result.meta.requestStatus).toBe("fulfilled");
-		expect(result.payload).toBeUndefined();
+		expect(result.payload).toEqual(savedPayload);
 		expect(settingsRepository.saveSettings).toHaveBeenCalledTimes(1);
 		expect(settingsRepository.saveSettings).toHaveBeenCalledWith(savedPayload);
 		expect(settingsRepository.getSettings).not.toHaveBeenCalled();
@@ -370,5 +370,21 @@ describe("settingsSlice - saveSettings thunk", () => {
 		);
 		expect(result.meta.requestStatus).toBe("rejected");
 		expect(store.getState().settings.global.outputDirectoryPath).toBe(before);
+	});
+
+	it("rejects without calling repository when settings are invalid", async () => {
+		const store = createTestStore();
+		const before = store.getState().settings;
+		const invalidSettings = {
+			...initialSettings,
+			global: {
+				...initialSettings.global,
+				concurrency: 999,
+			},
+		};
+		const result = await store.dispatch(saveSettings(invalidSettings));
+		expect(result.meta.requestStatus).toBe("rejected");
+		expect(settingsRepository.saveSettings).not.toHaveBeenCalled();
+		expect(store.getState().settings).toEqual(before);
 	});
 });

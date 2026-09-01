@@ -17,6 +17,7 @@
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
+import { safeParseSettings } from "@shared/validators";
 import { toast } from "sonner";
 import {
 	SETTINGS_SCHEMA_VERSION,
@@ -65,11 +66,17 @@ export const getSettings = createAsyncThunk(
 
 export const saveSettings = createAsyncThunk(
 	SETTINGS_ACTIONS.saveToDB,
-	async (settings: SettingsForm, { dispatch }) => {
-		await settingsRepository.saveSettings(settings);
-		dispatch(setSettings(settings));
+	async (settings: SettingsForm, { dispatch, rejectWithValue }) => {
+		const parsed = safeParseSettings(settings);
+		if (!parsed.success) {
+			return rejectWithValue(parsed.issues);
+		}
+		await settingsRepository.saveSettings(parsed.data);
+		dispatch(setSettings(parsed.data));
+		return parsed.data;
 	},
 );
+
 const settingsSlice = createSlice({
 	name: "settings",
 	initialState: { ...initialSettings, loading: false },
