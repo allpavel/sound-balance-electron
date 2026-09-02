@@ -189,19 +189,27 @@ const PATH_TRAVERSAL_PATTERN = /\.\.[/\\]/;
 const NULL_BYTE_PATTERN = /\0/;
 const MAX_PATH_LENGTH = 4096;
 
-const outputDirectoryPathSchema = z
+const baseOutputDirectoryPathSchema = z
 	.string()
-	.min(1, "Output directory is required")
-	.max(MAX_PATH_LENGTH, `Path exceeds ${MAX_PATH_LENGTH} characters`)
-	.refine((path) => !NULL_BYTE_PATTERN.test(path), {
-		message: "Path contains null bytes",
-	})
-	.refine((path) => !PATH_TRAVERSAL_PATTERN.test(path), {
-		message: "Path contains traversal sequences (..)",
-	});
+	.max(MAX_PATH_LENGTH, `Path exceeds ${MAX_PATH_LENGTH} characters`);
 
-const globalBaseSchema = z.object({
-	outputDirectoryPath: outputDirectoryPathSchema,
+const schemaWithRefine = (schema: z.ZodString) =>
+	schema
+		.refine((path) => !NULL_BYTE_PATTERN.test(path), {
+			message: "Path contains null bytes",
+		})
+		.refine((path) => !PATH_TRAVERSAL_PATTERN.test(path), {
+			message: "Path contains traversal sequences (..)",
+		});
+
+const looseOutputDirectoryPathSchema = schemaWithRefine(
+	baseOutputDirectoryPathSchema,
+);
+const strictOutputDirectoryPathSchema = schemaWithRefine(
+	baseOutputDirectoryPathSchema.min(1, "Output directory is required"),
+);
+
+const commonSettingsSchema = z.object({
 	openOutputFolderOnComplete: z.boolean(),
 	concurrency: z.coerce
 		.number()
@@ -210,6 +218,13 @@ const globalBaseSchema = z.object({
 		.max(10, "Concurrency must be between 1 and 10"),
 	overwrite: z.boolean(),
 	noOverwrite: z.boolean(),
+});
+
+const looseGlobalBaseSettingsSchema = commonSettingsSchema.extend({
+	outputDirectoryPath: looseOutputDirectoryPathSchema,
+});
+const strictGlobalBaseSettingsSchema = commonSettingsSchema.extend({
+	outputDirectoryPath: strictOutputDirectoryPathSchema,
 });
 
 const audioFilterSchema = z.union([z.literal(""), z.enum(FILTER_NAMES)]);
@@ -239,9 +254,15 @@ const audioSchema = z.discriminatedUnion("audioQuality", [
 	}),
 ]);
 
-export const settingsSchema = z.object({
+export const looseSettingsSchema = z.object({
 	version: z.number().int().min(1).default(1),
-	global: globalBaseSchema,
+	global: looseGlobalBaseSettingsSchema,
+	audio: audioSchema,
+});
+
+export const strictSettingsSchema = z.object({
+	version: z.number().int().min(1).default(1),
+	global: strictGlobalBaseSettingsSchema,
 	audio: audioSchema,
 });
 
@@ -261,7 +282,7 @@ export const audioEncoderConfigSchema = z
 	})
 	.strict();
 
-export type SettingsForm = z.infer<typeof settingsSchema>;
+export type SettingsForm = z.infer<typeof strictSettingsSchema>;
 export type CBR = z.infer<typeof cbrSchema>;
 export type VBR = z.infer<typeof vbrSchema>;
 
