@@ -34,7 +34,7 @@ export type SettingsParseResult =
 
 export function safeParseSettings(
 	input: unknown,
-	mode: "strict" | "loose" = "strict",
+	{ mode }: { mode: "strict" | "loose" } = { mode: "strict" },
 ): SettingsParseResult {
 	let result: ZodSafeParseResult<SettingsForm>;
 	if (mode === "strict") {

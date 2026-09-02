@@ -33,7 +33,7 @@ export const settingsRepository = {
 		if (!result || result.settings === undefined || result.settings === null) {
 			return { status: "empty" };
 		}
-		const parsedData = safeParseSettings(result.settings);
+		const parsedData = safeParseSettings(result.settings, { mode: "loose" });
 		if (!parsedData.success) {
 			return {
 				status: "invalid",
@@ -46,12 +46,16 @@ export const settingsRepository = {
 	},
 
 	async saveSettings(settings: SettingsForm): Promise<void> {
-		const parsedData = safeParseSettings(settings);
+		const parsedData = safeParseSettings(settings, { mode: "loose" });
 		if (!parsedData.success) {
 			throw new Error(
 				`Invalid settings:  ${parsedData.issues.map((i) => `${i.path}: ${i.message}`).join("; ")}`,
 			);
 		}
 		await db.settings.put({ id: SETTINGS_ID, settings: parsedData.data });
+	},
+
+	async clear(): Promise<void> {
+		await db.settings.clear();
 	},
 };

@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { z } from "zod";
-import { settingsSchema } from "./settings.schema";
+import { strictSettingsSchema } from "./settings.schema";
 import { trackInputSchema } from "./track.schema";
 
 export const dataSchema = z.object({
 	tracks: z.array(trackInputSchema),
-	settings: settingsSchema,
+	settings: strictSettingsSchema,
 });
 
 export type Data = z.infer<typeof dataSchema>;
