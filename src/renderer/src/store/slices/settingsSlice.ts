@@ -15,10 +15,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import {
+	createAsyncThunk,
+	createSlice,
+	type PayloadAction,
+} from "@reduxjs/toolkit";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
-import { safeParseSettings } from "@shared/validators";
-import { toast } from "sonner";
+import {
+	type SettingsValidationIssue,
+	safeParseSettings,
+} from "@shared/validators";
 import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
@@ -27,7 +33,8 @@ import {
 const SETTINGS_ACTIONS = {
 	loadFromDB: "settings/loadFromDB",
 	saveToDB: "settings/saveToDB",
-};
+	reset: "settings/reset",
+} as const;
 
 export const initialSettings: SettingsForm = {
 	version: SETTINGS_SCHEMA_VERSION,
@@ -49,60 +56,124 @@ export const initialSettings: SettingsForm = {
 	},
 };
 
+export interface SettingsState {
+	data: SettingsForm;
+	loading: boolean;
+	error: string | null;
+}
+
+const initialState: SettingsState = {
+	data: initialSettings,
+	loading: false,
+	error: null,
+};
+
 export const getSettings = createAsyncThunk(
 	SETTINGS_ACTIONS.loadFromDB,
 	async () => {
 		const result = await settingsRepository.getSettings();
-		if (result.status === "invalid") {
-			toast.error("Stored settings are corrupted and were reset to defaults.");
-			return initialSettings;
-		}
 		if (result.status === "valid") {
 			return result.data;
 		}
-		return initialSettings;
+		if (result.status === "empty") {
+			return initialSettings;
+		}
+		throw new Error(`Stored settings are corrupted: ${result.issues}`);
 	},
 );
 
-export const saveSettings = createAsyncThunk(
+export const saveSettings = createAsyncThunk<
+	SettingsForm,
+	SettingsForm,
+	{ rejectValue: SettingsValidationIssue[] }
+>(
 	SETTINGS_ACTIONS.saveToDB,
 	async (settings: SettingsForm, { dispatch, rejectWithValue }) => {
 		const parsed = safeParseSettings(settings, { mode: "loose" });
 		if (!parsed.success) {
 			return rejectWithValue(parsed.issues);
 		}
-		await settingsRepository.saveSettings(parsed.data);
-		dispatch(setSettings(parsed.data));
+		try {
+			await settingsRepository.saveSettings(parsed.data);
+		} catch (error) {
+			return rejectWithValue([
+				{
+					path: "",
+					code: "persist_error",
+					message:
+						error instanceof Error
+							? error.message
+							: "Unable to persist settings.",
+				},
+			]);
+		}
 		return parsed.data;
+	},
+);
+
+export const resetSettings = createAsyncThunk(
+	SETTINGS_ACTIONS.reset,
+	async () => {
+		await settingsRepository.clear();
+		return initialSettings;
 	},
 );
 
 const settingsSlice = createSlice({
 	name: "settings",
-	initialState: { ...initialSettings, loading: false },
+	initialState,
 	reducers: {
-		setSettings(_, action) {
-			const parsedPayload = safeParseSettings(action.payload, {
-				mode: "loose",
-			});
-			if (!parsedPayload.success) return;
-			return { ...parsedPayload.data, loading: false };
+		setSettings(state, action: PayloadAction<SettingsForm>) {
+			const parsed = safeParseSettings(action.payload, { mode: "loose" });
+			if (!parsed.success) {
+				return;
+			}
+			state.data = parsed.data;
+			state.loading = false;
+			state.error = null;
 		},
 	},
 	extraReducers: (builder) => {
-		builder.addCase(getSettings.pending, (state) => {
-			state.loading = true;
-		});
-		builder.addCase(getSettings.fulfilled, (_, action) => {
-			const parsedPayload = safeParseSettings(action.payload, {
-				mode: "loose",
+		builder
+			.addCase(getSettings.pending, (state) => {
+				state.loading = true;
+				state.error = null;
+			})
+			.addCase(getSettings.fulfilled, (state, action) => {
+				const parsed = safeParseSettings(action.payload, { mode: "loose" });
+				state.loading = false;
+				state.data = parsed.success ? parsed.data : action.payload;
+				state.error = null;
+			})
+			.addCase(getSettings.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.error.message ?? "Unable to load settings.";
+			})
+			.addCase(resetSettings.pending, (state) => {
+				state.loading = true;
+			})
+			.addCase(resetSettings.fulfilled, (state, action) => {
+				state.loading = false;
+				state.data = action.payload;
+				state.error = null;
+			})
+			.addCase(resetSettings.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.error.message ?? "Unable to reset settings.";
+			})
+			.addCase(saveSettings.pending, (state) => {
+				state.loading = true;
+				state.error = null;
+			})
+			.addCase(saveSettings.fulfilled, (state, action) => {
+				state.loading = false;
+				state.data = action.payload;
+				state.error = null;
+			})
+			.addCase(saveSettings.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.error.message ?? "Unable to save settings.";
 			});
-			if (!parsedPayload.success) return;
-			return { ...parsedPayload.data, loading: false };
-		});
-		builder.addCase(getSettings.rejected, (state) => {
-			state.loading = false;
-		});
 	},
 });
 
