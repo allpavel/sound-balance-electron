@@ -42,19 +42,19 @@ export default function Settings() {
 			<Modal opened={opened} onClose={close} title="Settings">
 				<SettingsFormProvider form={form}>
 					<form
-						onSubmit={form.onSubmit((values) => {
+						onSubmit={form.onSubmit(async (values) => {
 							const newValues = {
 								version: values.version,
 								audio: structuredClone(values.audio),
 								global: structuredClone(values.global),
 							};
 							try {
-								dispatch(saveSettings(newValues));
+								await dispatch(saveSettings(newValues)).unwrap();
 								toast.success("Settings updated successfully.");
+								close();
 							} catch {
 								toast.error("Unable to save settings. Please try again.");
 							}
-							close();
 						})}
 					>
 						<Stack>

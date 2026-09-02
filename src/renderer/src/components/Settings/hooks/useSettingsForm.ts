@@ -23,7 +23,7 @@ import { looseSettingsSchema } from "@shared/schemas/settings.schema";
 import { useEffect } from "react";
 
 export default function useSettingsForm() {
-	const settings = useAppSelector((state) => state.settings);
+	const { data: settings, loading } = useAppSelector((state) => state.settings);
 	const form = useSettingsFormInstance({
 		initialValues: {
 			version: settings.version,
@@ -41,5 +41,5 @@ export default function useSettingsForm() {
 		});
 	}, [form.setValues, settings]);
 
-	return { form, isLoading: settings.loading };
+	return { form, isLoading: loading };
 }

@@ -34,7 +34,7 @@ export default function StartProcessing() {
 	const [isRunning, setIsRunning] = useState(false);
 	const [errorMsg, setErrorMsg] = useState("");
 	const { selectedTracks: tracks, updateTrack } = useTracks();
-	const settings = useAppSelector((state) => state.settings);
+	const settings = useAppSelector((state) => state.settings.data);
 	const dispatch = useAppDispatch();
 
 	useEffect(() => {
