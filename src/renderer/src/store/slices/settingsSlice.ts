@@ -67,7 +67,7 @@ export const getSettings = createAsyncThunk(
 export const saveSettings = createAsyncThunk(
 	SETTINGS_ACTIONS.saveToDB,
 	async (settings: SettingsForm, { dispatch, rejectWithValue }) => {
-		const parsed = safeParseSettings(settings);
+		const parsed = safeParseSettings(settings, { mode: "loose" });
 		if (!parsed.success) {
 			return rejectWithValue(parsed.issues);
 		}
@@ -82,7 +82,11 @@ const settingsSlice = createSlice({
 	initialState: { ...initialSettings, loading: false },
 	reducers: {
 		setSettings(_, action) {
-			return { ...action.payload, loading: false };
+			const parsedPayload = safeParseSettings(action.payload, {
+				mode: "loose",
+			});
+			if (!parsedPayload.success) return;
+			return { ...parsedPayload.data, loading: false };
 		},
 	},
 	extraReducers: (builder) => {
@@ -90,7 +94,11 @@ const settingsSlice = createSlice({
 			state.loading = true;
 		});
 		builder.addCase(getSettings.fulfilled, (_, action) => {
-			return { ...action.payload, loading: false };
+			const parsedPayload = safeParseSettings(action.payload, {
+				mode: "loose",
+			});
+			if (!parsedPayload.success) return;
+			return { ...parsedPayload.data, loading: false };
 		});
 		builder.addCase(getSettings.rejected, (state) => {
 			state.loading = false;
