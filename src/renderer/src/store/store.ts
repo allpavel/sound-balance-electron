@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { combineReducers, configureStore } from "@reduxjs/toolkit";
+import { listenerMiddleware } from "@renderer/store/middleware/settingsMiddleware";
 import activeCollectionSlice from "@renderer/store/slices/collectionSlice";
 import resultsSlice from "@renderer/store/slices/resultsSlice";
 import selectedTracks from "@renderer/store/slices/selectedTracksSlice";
@@ -32,6 +33,8 @@ export const createAppStore = (preloadedState?: RootState) =>
 	configureStore({
 		reducer: rootReducer,
 		preloadedState,
+		middleware: (getDefaultMiddleware) =>
+			getDefaultMiddleware().prepend(listenerMiddleware.middleware),
 	});
 
 export const store = createAppStore();
