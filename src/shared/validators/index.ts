@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import {
+	looseSettingsSchema,
 	type SettingsForm,
-	settingsSchema,
+	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
+import type { ZodSafeParseResult } from "zod";
 
 export interface SettingsValidationIssue {
 	path: string;
@@ -30,8 +32,16 @@ export type SettingsParseResult =
 	| { success: true; data: SettingsForm }
 	| { success: false; issues: SettingsValidationIssue[] };
 
-export function safeParseSettings(input: unknown): SettingsParseResult {
-	const result = settingsSchema.safeParse(input);
+export function safeParseSettings(
+	input: unknown,
+	mode: "strict" | "loose" = "strict",
+): SettingsParseResult {
+	let result: ZodSafeParseResult<SettingsForm>;
+	if (mode === "strict") {
+		result = strictSettingsSchema.safeParse(input);
+	} else {
+		result = looseSettingsSchema.safeParse(input);
+	}
 	if (result.success) {
 		return { success: true, data: result.data };
 	}
