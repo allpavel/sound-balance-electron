@@ -40,4 +40,5 @@ export const createAppStore = (preloadedState?: RootState) =>
 export const store = createAppStore();
 
 export type RootState = ReturnType<typeof rootReducer>;
-export type AppDispatch = typeof store.dispatch;
+export type AppStore = ReturnType<typeof createAppStore>;
+export type AppDispatch = AppStore["dispatch"];
