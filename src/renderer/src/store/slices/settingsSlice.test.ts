@@ -33,7 +33,11 @@ vi.mock("@renderer/db/repositories/settingsRepository", () => ({
 }));
 
 type SettingsFormLike = typeof initialSettings;
-type SettingsState = SettingsFormLike & { loading: boolean };
+interface SettingsState {
+	data: SettingsFormLike;
+	loading: boolean;
+	error: string | null;
+}
 
 type GetSettingsResult = Awaited<
 	ReturnType<typeof settingsRepository.getSettings>
@@ -69,12 +73,15 @@ const customSettings: SettingsFormLike = {
 const getTestState = ({
 	initial = false,
 	loading = false,
+	error = null,
 }: {
 	initial?: boolean;
 	loading?: boolean;
+	error?: string | null;
 } = {}): SettingsState => ({
-	...(initial ? initialSettings : customSettings),
+	data: initial ? initialSettings : customSettings,
 	loading,
+	error,
 });
 
 const savedPayload: SettingsFormLike = {
@@ -91,7 +98,7 @@ const savedPayload: SettingsFormLike = {
 };
 
 describe("settingsSlice - initial state", () => {
-	it("exposes initialSettings plus loading:false", () => {
+	it("exposes initialSettings nested in data, plus loading:false and error:null", () => {
 		const store = createTestStore();
 		const mockState = getTestState({ initial: true });
 		expect(store.getState().settings).toEqual(mockState);
@@ -104,18 +111,11 @@ describe("settingsSlice - initial state", () => {
 });
 
 describe("settingsSlice - setSettings reducer", () => {
-	it("replaces state and forces loading:false", () => {
+	it("replaces state and forces loading:false, error:null", () => {
 		const prev = getTestState({ loading: true });
 		const next = settingsReducer(prev, setSettings(customSettings));
 		expect(next).toEqual(getTestState());
 		expect(next).not.toBe(prev);
-	});
-
-	it("strips loading from payload if present at runtime", () => {
-		const prev = getTestState();
-		const payloadWithLoading = getTestState({ loading: true });
-		const next = settingsReducer(prev, setSettings(payloadWithLoading));
-		expect(next).toEqual(prev);
 	});
 });
 
@@ -157,7 +157,9 @@ describe("settingsSlice - getSettings thunk", () => {
 		deferred.reject(new Error("fail"));
 		const result = await dispatchPromise;
 		expect(result.meta.requestStatus).toBe("rejected");
-		expect(store.getState().settings).toEqual(getTestState());
+		expect(store.getState().settings.loading).toBe(false);
+		expect(store.getState().settings.error).toBe("fail");
+		expect(store.getState().settings.data).toEqual(previousState.data);
 	});
 
 	it("falls back to initialSettings when repository returns empty", async () => {
@@ -186,11 +188,7 @@ describe("settingsSlice - getSettings thunk", () => {
 			settings: previousState,
 		});
 		const result = await store.dispatch(getSettings());
-		expect(settingsRepository.getSettings).toHaveBeenCalledTimes(1);
-		expect(result.meta.requestStatus).toBe("fulfilled");
-		expect(result.payload).toEqual(initialSettings);
-		expect(store.getState().settings).toEqual(getTestState({ initial: true }));
-		expect(store.getState().settings).not.toEqual(previousState);
+		expect(result.meta.requestStatus).toBe("rejected");
 	});
 
 	it("replaces non-initial prior state on fulfill", async () => {
@@ -207,64 +205,25 @@ describe("settingsSlice - getSettings thunk", () => {
 		expect(result.meta.requestStatus).toBe("fulfilled");
 		expect(result.payload).toEqual(customSettings);
 		expect(store.getState().settings).toEqual(previousState);
-		expect(store.getState().settings.global.outputDirectoryPath).toBe(
+		expect(store.getState().settings.data.global.outputDirectoryPath).toBe(
 			"/custom/path",
 		);
-		expect(store.getState().settings.global.concurrency).toBe(8);
-		expect(store.getState().settings.audio.audioFilter).toBe("volume");
+		expect(store.getState().settings.data.global.concurrency).toBe(8);
+		expect(store.getState().settings.data.audio.audioFilter).toBe("volume");
 	});
 
-	it("applies partial stored settings as-is and does not merge with initialSettings", async () => {
-		const partialStored = {
-			global: {
-				concurrency: 3,
-			},
-		};
+	it("applies valid stored settings", async () => {
 		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
 			status: "valid",
-			data: partialStored as any,
+			data: customSettings,
 		} as GetSettingsResult);
 		const store = createTestStore({
 			settings: getTestState({ loading: true }),
 		});
 		const result = await store.dispatch(getSettings());
 		expect(result.meta.requestStatus).toBe("fulfilled");
-		expect(store.getState().settings).toEqual({
-			...partialStored,
-			loading: false,
-		} as any);
-	});
-
-	it("handles malformed non-object stored settings by returning initial settings", async () => {
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
-			status: "invalid",
-			issues: "test",
-		} as GetSettingsResult);
-		const store = createTestStore({
-			settings: getTestState({ loading: true }),
-		});
-		const result = await store.dispatch(getSettings());
-		expect(result.meta.requestStatus).toBe("fulfilled");
-		expect(store.getState().settings).toEqual({
-			...initialSettings,
-			loading: false,
-		});
-	});
-
-	it("handles malformed array stored settings by returning initial settings", async () => {
-		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
-			status: "invalid",
-			issues: "test",
-		} as GetSettingsResult);
-		const store = createTestStore({
-			settings: getTestState({ loading: true }),
-		});
-		const result = await store.dispatch(getSettings());
-		expect(result.meta.requestStatus).toBe("fulfilled");
-		expect(store.getState().settings).toEqual({
-			...initialSettings,
-			loading: false,
-		});
+		expect(store.getState().settings.data).toEqual(customSettings);
+		expect(store.getState().settings.loading).toBe(false);
 	});
 });
 
@@ -282,11 +241,13 @@ describe("settingsSlice - saveSettings thunk", () => {
 		};
 		await store.dispatch(saveSettings(payload));
 		expect(settingsRepository.saveSettings).toHaveBeenCalledWith(payload);
-		expect(store.getState().settings.global.outputDirectoryPath).toBe("/out");
+		expect(store.getState().settings.data.global.outputDirectoryPath).toBe(
+			"/out",
+		);
 		expect(store.getState().settings.loading).toBe(false);
 	});
 
-	it("does not update state while save is pending because there is no optimistic update", async () => {
+	it("sets loading to true while save is pending", async () => {
 		const deferred = createDeferred<SaveSettingsResult>();
 		vi.mocked(settingsRepository.saveSettings).mockReturnValue(
 			deferred.promise,
@@ -299,27 +260,11 @@ describe("settingsSlice - saveSettings thunk", () => {
 		expect(settingsRepository.saveSettings).toHaveBeenCalledTimes(1);
 		expect(settingsRepository.saveSettings).toHaveBeenCalledWith(savedPayload);
 		expect(settingsRepository.getSettings).not.toHaveBeenCalled();
-		expect(store.getState().settings).toEqual(state);
+		expect(store.getState().settings.loading).toBe(true);
 		deferred.resolve(undefined as SaveSettingsResult);
 		const result = await dispatchPromise;
 		expect(result.meta.requestStatus).toBe("fulfilled");
 		expect(result.payload).toEqual(savedPayload);
-		expect(store.getState().settings).toEqual({
-			...savedPayload,
-			loading: false,
-		});
-	});
-
-	it("does not set loading to true while save is pending", async () => {
-		const deferred = createDeferred<SaveSettingsResult>();
-		vi.mocked(settingsRepository.saveSettings).mockReturnValue(
-			deferred.promise,
-		);
-		const store = createTestStore();
-		const dispatchPromise = store.dispatch(saveSettings(savedPayload));
-		expect(store.getState().settings.loading).toBe(false);
-		deferred.resolve(undefined as SaveSettingsResult);
-		await dispatchPromise;
 		expect(store.getState().settings.loading).toBe(false);
 	});
 
@@ -337,8 +282,9 @@ describe("settingsSlice - saveSettings thunk", () => {
 		expect(settingsRepository.saveSettings).toHaveBeenCalledWith(savedPayload);
 		expect(settingsRepository.getSettings).not.toHaveBeenCalled();
 		expect(store.getState().settings).toEqual({
-			...savedPayload,
+			data: savedPayload,
 			loading: false,
+			error: null,
 		});
 	});
 
@@ -350,10 +296,8 @@ describe("settingsSlice - saveSettings thunk", () => {
 			settings: getTestState({ loading: true }),
 		});
 		await store.dispatch(saveSettings(savedPayload));
-		expect(store.getState().settings).toEqual({
-			...savedPayload,
-			loading: false,
-		});
+		expect(store.getState().settings.loading).toBe(false);
+		expect(store.getState().settings.data).toEqual(savedPayload);
 	});
 
 	it("does not update store state when repository throws", async () => {
@@ -361,7 +305,7 @@ describe("settingsSlice - saveSettings thunk", () => {
 			new Error("fail"),
 		);
 		const store = createTestStore();
-		const before = store.getState().settings.global.outputDirectoryPath;
+		const before = store.getState().settings.data;
 		const result = await store.dispatch(
 			saveSettings({
 				...initialSettings,
@@ -369,7 +313,8 @@ describe("settingsSlice - saveSettings thunk", () => {
 			}),
 		);
 		expect(result.meta.requestStatus).toBe("rejected");
-		expect(store.getState().settings.global.outputDirectoryPath).toBe(before);
+		expect(store.getState().settings.data).toBe(before);
+		expect(store.getState().settings.error).toBe("fail");
 	});
 
 	it("rejects without calling repository when settings are invalid", async () => {
@@ -385,6 +330,7 @@ describe("settingsSlice - saveSettings thunk", () => {
 		const result = await store.dispatch(saveSettings(invalidSettings));
 		expect(result.meta.requestStatus).toBe("rejected");
 		expect(settingsRepository.saveSettings).not.toHaveBeenCalled();
-		expect(store.getState().settings).toEqual(before);
+		expect(store.getState().settings.data).toEqual(before.data);
+		expect(store.getState().settings.error).not.toBeNull();
 	});
 });

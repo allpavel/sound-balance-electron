@@ -49,11 +49,15 @@ vi.mock("@renderer/db/repositories/settingsRepository", () => ({
 	},
 }));
 
-type SettingsState = RootState["settings"];
 type SelectedTracksState = RootState["selectedTracks"];
 type ResultsState = RootState["results"];
 type ActiveCollectionState = RootState["activeCollection"];
-type SettingsFormLike = Omit<SettingsState, "loading">;
+type SettingsFormLike = typeof initialSettings;
+type SettingsState = {
+	data: SettingsFormLike;
+	loading: boolean;
+	error: string | null;
+};
 
 type GetSettingsResult = Awaited<
 	ReturnType<typeof settingsRepository.getSettings>
@@ -64,20 +68,23 @@ type SaveSettingsResult = Awaited<
 type GetAllTracksResult = Awaited<ReturnType<typeof tracksRepository.getAll>>;
 
 const customSettings: SettingsState = {
-	...initialSettings,
-	global: {
-		...initialSettings.global,
-		outputDirectoryPath: "/custom/path",
-		openOutputFolderOnComplete: true,
-		overwrite: false,
-		noOverwrite: true,
-		concurrency: 8,
-	},
-	audio: {
-		...initialSettings.audio,
-		audioFilter: "volume",
+	data: {
+		...initialSettings,
+		global: {
+			...initialSettings.global,
+			outputDirectoryPath: "/custom/path",
+			openOutputFolderOnComplete: true,
+			overwrite: false,
+			noOverwrite: true,
+			concurrency: 8,
+		},
+		audio: {
+			...initialSettings.audio,
+			audioFilter: "volume",
+		},
 	},
 	loading: false,
+	error: null,
 };
 
 const savedSettings: SettingsFormLike = {
@@ -180,8 +187,9 @@ describe("Store shape and initialization", () => {
 			total: 0,
 		});
 		expect(state.settings).toEqual({
-			...initialSettings,
+			data: initialSettings,
 			loading: false,
+			error: null,
 		});
 		expect(initialSettings).toEqual(initialSettingsSnapshot);
 		expectNoRepositoryCalls();
@@ -295,12 +303,13 @@ describe("Synchronous slice isolation", () => {
 		const after = store.getState();
 		expect(after).not.toBe(before);
 		expect(after.settings).toEqual({
-			...savedSettings,
+			data: savedSettings,
 			loading: false,
+			error: null,
 		});
 		expect(after.settings).not.toBe(before.settings);
-		expect(after.settings.global).not.toBe(before.settings.global);
-		expect(after.settings.audio).not.toBe(before.settings.audio);
+		expect(after.settings.data.global).not.toBe(before.settings.data.global);
+		expect(after.settings.data.audio).not.toBe(before.settings.data.audio);
 		expect(after.selectedTracks).toBe(before.selectedTracks);
 		expect(after.results).toBe(before.results);
 		expect(after.activeCollection).toBe(before.activeCollection);
@@ -329,8 +338,9 @@ describe("Synchronous slice isolation", () => {
 			t9: true,
 		});
 		expect(state.settings).toEqual({
-			...savedSettings,
+			data: savedSettings,
 			loading: false,
+			error: null,
 		});
 		expect(state.results).toEqual(payload);
 		expect(() => structuredClone(state)).not.toThrow();
@@ -356,8 +366,9 @@ describe("Thunk integration smoke tests", () => {
 		const after = store.getState();
 		expect(after).not.toBe(before);
 		expect(after.settings).toEqual({
-			...storedSettings,
+			data: storedSettings,
 			loading: false,
+			error: null,
 		});
 		expect(after.settings).not.toBe(before.settings);
 		expect(after.selectedTracks).toBe(before.selectedTracks);
@@ -380,8 +391,9 @@ describe("Thunk integration smoke tests", () => {
 		const after = store.getState();
 		expect(after).not.toBe(before);
 		expect(after.settings).toEqual({
-			...savedSettings,
+			data: savedSettings,
 			loading: false,
+			error: null,
 		});
 		expect(after.settings).not.toBe(before.settings);
 		expect(after.selectedTracks).toBe(before.selectedTracks);
