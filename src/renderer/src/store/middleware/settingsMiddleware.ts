@@ -21,6 +21,7 @@ import {
 	resetSettings,
 	saveSettings,
 } from "@renderer/store/slices/settingsSlice";
+import { CORRUPTION_SETTINGS_TOAST, SAVE_ERROR_TOAST } from "@shared/constants";
 import { toast } from "sonner";
 
 export const listenerMiddleware = createListenerMiddleware();
@@ -31,7 +32,7 @@ const isSaveRejection = isAnyOf(saveSettings.rejected);
 listenerMiddleware.startListening({
 	matcher: isLoadRejection,
 	effect: async (_action, listenerApi) => {
-		toast.error("Stored settings are corrupted and were reset to defaults.");
+		toast.error(CORRUPTION_SETTINGS_TOAST);
 		listenerApi.dispatch(resetSettings());
 	},
 });
@@ -39,6 +40,6 @@ listenerMiddleware.startListening({
 listenerMiddleware.startListening({
 	matcher: isSaveRejection,
 	effect: async () => {
-		toast.error("Unable to save settings. Please try again.");
+		toast.error(SAVE_ERROR_TOAST);
 	},
 });

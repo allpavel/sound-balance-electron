@@ -19,6 +19,7 @@ import { Button, Flex, Loader, Modal, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
+import { SAVE_ERROR_TOAST } from "@shared/constants";
 import { Settings as IconSettings } from "lucide-react";
 import { toast } from "sonner";
 import { AudioOptions } from "./AudioOptions/AudioOptions";
@@ -53,7 +54,7 @@ export default function Settings() {
 								toast.success("Settings updated successfully.");
 								close();
 							} catch {
-								toast.error("Unable to save settings. Please try again.");
+								toast.error(SAVE_ERROR_TOAST);
 							}
 						})}
 					>

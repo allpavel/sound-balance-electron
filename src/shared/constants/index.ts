@@ -23,3 +23,7 @@ export const STATUS_VALUES = [
 ] as const;
 
 export const SYSTEM_COLLECTION_ID = "all";
+
+export const CORRUPTION_SETTINGS_TOAST =
+	"Stored settings are corrupted and were reset to defaults.";
+export const SAVE_ERROR_TOAST = "Unable to save settings. Please try again.";
