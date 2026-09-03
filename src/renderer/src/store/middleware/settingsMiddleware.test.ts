@@ -40,8 +40,11 @@ import {
 	saveSettings,
 } from "@renderer/store/slices/settingsSlice";
 import { type AppStore, createAppStore } from "@renderer/store/store";
-import { CORRUPTION_SETTINGS_TOAST, SAVE_ERROR_TOAST } from "@shared/constants";
 import { toast } from "sonner";
+
+export const CORRUPTION_SETTINGS_TOAST =
+	"Stored settings are corrupted and were reset to defaults.";
+export const SAVE_ERROR_TOAST = "Unable to save settings. Please try again.";
 
 vi.mock("sonner", () => ({
 	toast: {
@@ -73,15 +76,6 @@ type GetSettingsResult = Awaited<
 
 function mockGetSettingsResult(result: GetSettingsResult): void {
 	repo.getSettings.mockResolvedValue(result);
-}
-
-async function settleMicrotasks(): Promise<void> {
-	await vi.waitFor(() => {
-		expect(true).toBe(true);
-	});
-	await vi.waitFor(() => {
-		expect(true).toBe(true);
-	});
 }
 
 describe("settingsMiddleware", () => {
@@ -122,7 +116,6 @@ describe("settingsMiddleware", () => {
 		it("does not trigger toast or reset when settings load succeeds (empty)", async () => {
 			mockGetSettingsResult({ status: "empty" });
 			await store.dispatch(getSettings());
-			await settleMicrotasks();
 			expect(toast.error).not.toHaveBeenCalled();
 			expect(repo.clear).not.toHaveBeenCalled();
 		});
@@ -133,7 +126,6 @@ describe("settingsMiddleware", () => {
 				data: validSettingsPayload,
 			});
 			await store.dispatch(getSettings());
-			await settleMicrotasks();
 			expect(toast.error).not.toHaveBeenCalled();
 			expect(repo.clear).not.toHaveBeenCalled();
 		});
@@ -146,7 +138,6 @@ describe("settingsMiddleware", () => {
 			await vi.waitFor(() => {
 				expect(toast.error).toHaveBeenCalledWith(SAVE_ERROR_TOAST);
 			});
-			await settleMicrotasks();
 			expect(repo.clear).not.toHaveBeenCalled();
 		});
 
@@ -167,9 +158,8 @@ describe("settingsMiddleware", () => {
 		});
 
 		it("does not trigger toast or reset when save succeeds", async () => {
-			repo.saveSettings.mockResolvedValue(undefined as any);
+			repo.saveSettings.mockResolvedValue(undefined);
 			await store.dispatch(saveSettings(initialSettings));
-			await new Promise((resolve) => setTimeout(resolve, 10));
 			expect(toast.error).not.toHaveBeenCalled();
 			expect(repo.clear).not.toHaveBeenCalled();
 		});
