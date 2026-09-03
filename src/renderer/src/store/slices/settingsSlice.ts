@@ -88,7 +88,7 @@ export const saveSettings = createAsyncThunk<
 	{ rejectValue: SettingsValidationIssue[] }
 >(
 	SETTINGS_ACTIONS.saveToDB,
-	async (settings: SettingsForm, { dispatch, rejectWithValue }) => {
+	async (settings: SettingsForm, { rejectWithValue }) => {
 		const parsed = safeParseSettings(settings, { mode: "loose" });
 		if (!parsed.success) {
 			return rejectWithValue(parsed.issues);
@@ -172,7 +172,11 @@ const settingsSlice = createSlice({
 			})
 			.addCase(saveSettings.rejected, (state, action) => {
 				state.loading = false;
-				state.error = action.error.message ?? "Unable to save settings.";
+				const payload = action.payload as SettingsValidationIssue[] | undefined;
+				state.error =
+					payload?.[0]?.message ??
+					action.error.message ??
+					"Unable to save settings.";
 			});
 	},
 });
