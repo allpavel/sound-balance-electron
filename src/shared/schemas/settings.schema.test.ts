@@ -21,7 +21,7 @@ import {
 	audioFilterConfigSchema,
 	FILTER_NAMES,
 	type SettingsForm,
-	settingsSchema,
+	strictSettingsSchema as settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
 
 describe("settingsSchema", () => {
