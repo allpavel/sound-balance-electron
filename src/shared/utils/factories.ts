@@ -22,6 +22,7 @@ import {
 } from "@shared/schemas/settings.schema";
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { CollectionType } from "@/types";
+import { deepMerge } from "./deepMerge";
 
 let collectionSeq = 0;
 let trackSeq = 0;
@@ -60,24 +61,26 @@ export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
 export function getValidSettings(
 	overrides: Partial<SettingsForm> = {},
 ): SettingsForm {
-	return {
-		version: SETTINGS_SCHEMA_VERSION,
-		global: {
-			outputDirectoryPath: "/music/output",
-			openOutputFolderOnComplete: true,
-			concurrency: 4,
-			overwrite: false,
-			noOverwrite: true,
+	return deepMerge(
+		{
+			version: SETTINGS_SCHEMA_VERSION,
+			global: {
+				outputDirectoryPath: "/music/output",
+				openOutputFolderOnComplete: true,
+				concurrency: 4,
+				overwrite: false,
+				noOverwrite: true,
+			},
+			audio: {
+				audioCodec: "libmp3lame",
+				codecOptions: { compression_level: 5 },
+				audioQuality: "vbr",
+				audioQualityValue: "4",
+				outputExtension: ".mp3",
+				audioFilter: "loudnorm",
+				filterOptions: { I: -24, LRA: 7 },
+			},
 		},
-		audio: {
-			audioCodec: "libmp3lame",
-			codecOptions: { compression_level: 5 },
-			audioQuality: "vbr",
-			audioQualityValue: "4",
-			outputExtension: ".mp3",
-			audioFilter: "loudnorm",
-			filterOptions: { I: -24, LRA: 7 },
-		},
-		...overrides,
-	};
+		overrides,
+	);
 }
