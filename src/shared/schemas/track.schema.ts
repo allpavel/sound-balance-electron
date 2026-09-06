@@ -18,21 +18,34 @@
 import { STATUS_VALUES } from "@shared/constants";
 import z from "zod";
 
+const MAX_PATH_LENGTH = 4096;
+const MAX_BASE64_IMAGE_SIZE = 5 * 1024 * 1024;
+const NULL_BYTE_PATTERN = /\0/;
+
 export const nonEmptyStringSchema = z
 	.string()
-	.refine((value) => value.trim().length > 0);
+	.min(1)
+	.max(MAX_PATH_LENGTH)
+	.refine((val) => val.trim().length > 0)
+	.refine((val) => !NULL_BYTE_PATTERN.test(val));
 
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
 export const targetCollectionIdSchema = nonEmptyStringSchema;
 export const selectedSchema = z.union([z.literal(0), z.literal(1)]);
 export const statusSchema = z.enum(STATUS_VALUES);
-
-const pictureSchema = z.object({
-	format: z.string(),
-	data: z.string(),
-	description: z.string().optional(),
-	name: z.string().optional(),
-});
+export const pictureSchema = z
+	.object({
+		format: z.string().min(1).max(50),
+		data: z
+			.string()
+			.max(
+				MAX_BASE64_IMAGE_SIZE,
+				"Album art exceeds maximum allowed size (5MB)",
+			),
+		description: z.string().max(500).optional(),
+		name: z.string().max(255).optional(),
+	})
+	.strict();
 
 const commonSchema = z
 	.object({
@@ -43,17 +56,17 @@ const commonSchema = z
 		track: z
 			.object({ no: z.number().nullable(), of: z.number().nullable() })
 			.optional(),
-		picture: z.array(pictureSchema).optional(),
+		picture: z.array(pictureSchema).max(20).optional(),
 	})
-	.partial();
+	.strict();
 
 const formatSchema = z
 	.object({
-		duration: z.number().optional(),
-		bitrate: z.number().optional(),
-		codec: z.string().optional(),
+		duration: z.number().min(0).max(1000000).optional(),
+		bitrate: z.number().int().min(0).max(100000000).optional(),
+		codec: z.string().max(100).optional(),
 	})
-	.partial();
+	.strict();
 
 const trackBaseSchema = z
 	.object({
@@ -65,7 +78,7 @@ const trackBaseSchema = z
 		common: commonSchema,
 		format: formatSchema,
 	})
-	.loose();
+	.strip();
 
 export const trackInputSchema = z.discriminatedUnion("status", [
 	trackBaseSchema.extend({ status: z.literal("pending") }),
@@ -73,7 +86,7 @@ export const trackInputSchema = z.discriminatedUnion("status", [
 	trackBaseSchema.extend({ status: z.literal("completed") }),
 	trackBaseSchema.extend({
 		status: z.literal("failed"),
-		reason: nonEmptyStringSchema,
+		reason: nonEmptyStringSchema.min(1).max(1000),
 	}),
 ]);
 
