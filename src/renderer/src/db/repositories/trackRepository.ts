@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
 import {
 	areCollectionIdsEqual,
@@ -28,6 +27,7 @@ import {
 	normalizeTrackChanges,
 	uniqueTracks,
 } from "@renderer/db/utils/trackRepositoryUtils";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
 
 type TrackUpdate = {

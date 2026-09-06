@@ -97,7 +97,13 @@ export default function InfoModal({ trackData }: InfoModalProps) {
 										);
 									}
 								})}
-								{Object.entries(trackData.format).map(([key, value]) => {
+								{Object.entries(trackData.format).map(([key, rawValue]) => {
+									const value = rawValue as
+										| string
+										| number
+										| { no?: number | null; of?: number | null }
+										| { format: string; data: string; name?: string }[]
+										| undefined;
 									if (Array.isArray(value)) {
 										if (key === "picture") {
 											return (

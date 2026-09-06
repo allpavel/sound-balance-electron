@@ -15,7 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import type { AUDIO_ENCODERS, AUDIO_FILTERS } from "@types";
+
+import type {
+	AUDIO_ENCODERS,
+	AUDIO_FILTERS,
+} from "@shared/schemas/settings.schema";
 import type { AUDIO_MUXER_EXTENSIONS, EXTENSIONS } from "./settings.types";
 
 export const CONCURRENCY_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
@@ -214,7 +218,7 @@ export const FILTER_OPTIONS = {
 				label: "lforate",
 				desc: "Set LFO rate. Range is between 0.01 and 200.",
 				defaultValue: 0.3,
-				min: 1,
+				min: 0.01,
 				max: 200,
 			},
 		],
@@ -374,8 +378,8 @@ export const FILTER_OPTIONS = {
 				label: "level",
 				desc: "Set level of added noise in dB. Range is between 1 and 16.",
 				defaultValue: -351,
-				min: 1,
-				max: 16,
+				min: -451,
+				max: -90,
 			},
 			{
 				type: "select",
@@ -826,8 +830,8 @@ export const FILTER_OPTIONS = {
 			},
 			{
 				type: "select",
-				label: "type",
-				desc: "Specify the effect type.",
+				label: "curve",
+				desc: "Set curve for fade transition.",
 				options: [
 					{
 						label: "tri - select triangular, linear slope",
@@ -981,14 +985,6 @@ export const FILTER_OPTIONS = {
 				defaultValue: 10,
 				min: 0,
 				max: 100,
-			},
-			{
-				type: "number",
-				label: "targetrms",
-				desc: "Set the target RMS. Range is between 0 and 1.",
-				defaultValue: 0,
-				min: 0,
-				max: 1,
 			},
 			{
 				type: "number",
@@ -2625,7 +2621,7 @@ export const ENCODER_OPTIONS = {
 				label: "frame_size",
 				desc: "Block size in samples. Default automatically decided based on sample rate and channels.",
 				defaultValue: 0,
-				min: 128,
+				min: 0,
 				max: 131072,
 			},
 			{

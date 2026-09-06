@@ -15,10 +15,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import type { Data } from "@shared/schemas/data.schema";
 import type { Metadata } from "@shared/schemas/track.schema";
-import type { Data, OpenPathResult } from "@types";
 
 type Status = "pending" | "processing" | "completed" | "failed";
+
+export interface OpenPathResult {
+	success: boolean;
+	reason: string;
+}
 
 export type API = {
 	showDialog: () => Promise<Metadata[]>;

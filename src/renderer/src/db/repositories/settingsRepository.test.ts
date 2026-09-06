@@ -15,14 +15,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 import { db } from "@renderer/db/db";
 import {
 	SETTINGS_ID,
 	settingsRepository,
 } from "@renderer/db/repositories/settingsRepository";
 import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
-import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
+import {
+	SETTINGS_SCHEMA_VERSION,
+	type SettingsForm,
+} from "@/src/shared/schemas/settings.schema";
 
 function getValidSettings({
 	concurrency = 4,
@@ -30,6 +32,7 @@ function getValidSettings({
 	concurrency?: number;
 } = {}): SettingsForm {
 	return {
+		version: SETTINGS_SCHEMA_VERSION,
 		global: {
 			outputDirectoryPath: "/music/out",
 			openOutputFolderOnComplete: true,
@@ -69,17 +72,23 @@ describe("settingsRepository", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+		3;
 	});
 
 	describe("getSettings", () => {
-		it("returns null when no settings have been saved", async () => {
-			expect(await settingsRepository.getSettings()).toBeNull();
+		it("returns empty status when no settings have been saved", async () => {
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "empty",
+			});
 		});
 
 		it("returns the saved settings object", async () => {
 			const validSettings = getValidSettings();
 			await settingsRepository.saveSettings(validSettings);
-			expect(await settingsRepository.getSettings()).toEqual(validSettings);
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "valid",
+				data: validSettings,
+			});
 		});
 
 		it("ignores unrelated settings rows", async () => {
@@ -88,39 +97,54 @@ describe("settingsRepository", () => {
 				id: "otherSettings",
 				settings: validSettings,
 			});
-			expect(await settingsRepository.getSettings()).toBeNull();
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "empty",
+			});
 			await settingsRepository.saveSettings(validSettings);
-			expect(await settingsRepository.getSettings()).toEqual(validSettings);
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "valid",
+				data: validSettings,
+			});
 			expect(await db.settings.count()).toBe(2);
 		});
 
-		it("returns null when the persisted row has no settings property", async () => {
+		it("returns empty status when the persisted row has no settings property", async () => {
 			await putSettings({
 				id: SETTINGS_ID,
 			});
-			expect(await settingsRepository.getSettings()).toBeNull();
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "empty",
+			});
 			expect(await db.settings.count()).toBe(1);
 		});
 
-		it("returns null when persisted settings are null", async () => {
+		it("returns empty status when persisted settings are null", async () => {
 			await putSettings({
 				id: SETTINGS_ID,
 				settings: null,
 			});
-			expect(await settingsRepository.getSettings()).toBeNull();
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "empty",
+			});
 			expect(await db.settings.count()).toBe(1);
 		});
 
-		it("returns null when persisted settings are not an object", async () => {
+		it("returns invalid status when persisted settings are not an object", async () => {
 			await putSettings({
 				id: SETTINGS_ID,
 				settings: "invalid",
 			});
-			expect(await settingsRepository.getSettings()).toBeNull();
+			const result = await settingsRepository.getSettings();
+			expect(result.status).toBe("invalid");
+			if (result.status === "invalid") {
+				expect(result.issues).toContain(
+					"Invalid input: expected object, received string",
+				);
+			}
 			expect(await db.settings.count()).toBe(1);
 		});
 
-		it("returns null when persisted settings are invalid", async () => {
+		it("returns invalid status when persisted settings are invalid", async () => {
 			await putSettings({
 				id: SETTINGS_ID,
 				settings: {
@@ -129,7 +153,8 @@ describe("settingsRepository", () => {
 					},
 				},
 			});
-			expect(await settingsRepository.getSettings()).toBeNull();
+			const result = await settingsRepository.getSettings();
+			expect(result.status).toBe("invalid");
 			expect(await db.settings.count()).toBe(1);
 		});
 
@@ -142,7 +167,8 @@ describe("settingsRepository", () => {
 					},
 				},
 			});
-			expect(await settingsRepository.getSettings()).toBeNull();
+			const result = await settingsRepository.getSettings();
+			expect(result.status).toBe("invalid");
 			expect(await db.settings.count()).toBe(1);
 		});
 
@@ -150,12 +176,14 @@ describe("settingsRepository", () => {
 			const validSettings = getValidSettings();
 			await settingsRepository.saveSettings(validSettings);
 			const first = await settingsRepository.getSettings();
-			expect(first).not.toBeNull();
-			const mutableSettings = first as SettingsForm;
-			mutableSettings.global.concurrency = 999;
-			mutableSettings.audio.filterOptions.I = 999;
+			expect(first.status).toBe("valid");
+			if (first.status === "valid") {
+				const mutableSettings = first.data;
+				mutableSettings.global.concurrency = 999;
+				mutableSettings.audio.filterOptions.I = 999;
+			}
 			const second = await settingsRepository.getSettings();
-			expect(second).toEqual(validSettings);
+			expect(second).toEqual({ status: "valid", data: validSettings });
 		});
 
 		it("propagates database read errors", async () => {
@@ -183,7 +211,10 @@ describe("settingsRepository", () => {
 			await settingsRepository.saveSettings(first);
 			await settingsRepository.saveSettings(second);
 			expect(await db.settings.count()).toBe(1);
-			expect(await settingsRepository.getSettings()).toEqual(second);
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "valid",
+				data: second,
+			});
 		});
 
 		it("replaces nested fields rather than merging them", async () => {
@@ -195,11 +226,13 @@ describe("settingsRepository", () => {
 			await settingsRepository.saveSettings(validSettings);
 			await settingsRepository.saveSettings(replacementSettings);
 			const stored = await settingsRepository.getSettings();
-			expect(stored).toEqual(replacementSettings);
-			expect(stored?.audio.filterOptions).toEqual({ I: -16 });
-			expect(stored?.audio.filterOptions).not.toEqual(
-				validSettings.audio.filterOptions,
-			);
+			expect(stored).toEqual({ status: "valid", data: replacementSettings });
+			if (stored.status === "valid") {
+				expect(stored.data.audio.filterOptions).toEqual({ I: -16 });
+				expect(stored.data.audio.filterOptions).not.toEqual(
+					validSettings.audio.filterOptions,
+				);
+			}
 		});
 
 		it("persists string, number, and boolean option values", async () => {
@@ -215,7 +248,10 @@ describe("settingsRepository", () => {
 				linear: true,
 			};
 			await settingsRepository.saveSettings(validSettings);
-			expect(await settingsRepository.getSettings()).toEqual(validSettings);
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "valid",
+				data: validSettings,
+			});
 		});
 
 		it("persists empty codecOptions and filterOptions objects", async () => {
@@ -223,7 +259,10 @@ describe("settingsRepository", () => {
 			validSettings.audio.codecOptions = {};
 			validSettings.audio.filterOptions = {};
 			await settingsRepository.saveSettings(validSettings);
-			expect(await settingsRepository.getSettings()).toEqual(validSettings);
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "valid",
+				data: validSettings,
+			});
 		});
 
 		it("coerces numeric concurrency provided as a string at runtime", async () => {
@@ -237,7 +276,10 @@ describe("settingsRepository", () => {
 			};
 			await saveSettings(runtimeSettings);
 			const stored = await settingsRepository.getSettings();
-			expect(stored?.global.concurrency).toBe(4);
+			expect(stored.status).toBe("valid");
+			if (stored.status === "valid") {
+				expect(stored.data.global.concurrency).toBe(4);
+			}
 			expect(await db.settings.count()).toBe(1);
 		});
 
@@ -250,7 +292,10 @@ describe("settingsRepository", () => {
 			});
 			const validSettings = getValidSettings();
 			await settingsRepository.saveSettings(validSettings);
-			expect(await settingsRepository.getSettings()).toEqual(validSettings);
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "valid",
+				data: validSettings,
+			});
 			expect(await db.settings.count()).toBe(1);
 		});
 
@@ -268,7 +313,10 @@ describe("settingsRepository", () => {
 					},
 				},
 			});
-			expect(await settingsRepository.getSettings()).toEqual(validSettings);
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "valid",
+				data: validSettings,
+			});
 			expect(await db.settings.count()).toBe(1);
 		});
 
@@ -281,7 +329,9 @@ describe("settingsRepository", () => {
 			).rejects.toThrow("write failed");
 			expect(putSpy).toHaveBeenCalledTimes(1);
 			expect(await db.settings.count()).toBe(0);
-			expect(await settingsRepository.getSettings()).toBeNull();
+			expect(await settingsRepository.getSettings()).toEqual({
+				status: "empty",
+			});
 		});
 
 		it("does not create duplicate rows when saves happen concurrently", async () => {
@@ -293,8 +343,10 @@ describe("settingsRepository", () => {
 			]);
 			expect(await db.settings.count()).toBe(1);
 			const stored = await settingsRepository.getSettings();
-			expect(stored).not.toBeNull();
-			expect([first, second]).toContainEqual(stored);
+			expect(stored.status).toBe("valid");
+			if (stored.status === "valid") {
+				expect([first, second]).toContainEqual(stored.data);
+			}
 		});
 	});
 });

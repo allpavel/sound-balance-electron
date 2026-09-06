@@ -19,6 +19,7 @@ import { Button, Flex, Loader, Modal, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
+import { SAVE_ERROR_TOAST } from "@shared/constants";
 import { Settings as IconSettings } from "lucide-react";
 import { toast } from "sonner";
 import { AudioOptions } from "./AudioOptions/AudioOptions";
@@ -42,18 +43,19 @@ export default function Settings() {
 			<Modal opened={opened} onClose={close} title="Settings">
 				<SettingsFormProvider form={form}>
 					<form
-						onSubmit={form.onSubmit((values) => {
+						onSubmit={form.onSubmit(async (values) => {
 							const newValues = {
+								version: values.version,
 								audio: structuredClone(values.audio),
 								global: structuredClone(values.global),
 							};
 							try {
-								dispatch(saveSettings(newValues));
+								await dispatch(saveSettings(newValues)).unwrap();
 								toast.success("Settings updated successfully.");
+								close();
 							} catch {
-								toast.error("Unable to save settings. Please try again.");
+								toast.error(SAVE_ERROR_TOAST);
 							}
-							close();
 						})}
 					>
 						<Stack>

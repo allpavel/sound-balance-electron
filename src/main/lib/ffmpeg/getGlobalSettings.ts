@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { SettingsForm } from "@types";
+import type { SettingsForm } from "@shared/schemas/settings.schema";
 
 export const getGlobalSettings = (settings: SettingsForm["global"]) => {
 	const result: string[] = [];

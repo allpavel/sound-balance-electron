@@ -15,37 +15,87 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { getValidSettings } from "@shared/utils/factories";
 import {
+	audioFilterConfigSchema,
+	FILTER_NAMES,
 	type SettingsForm,
-	settingsSchema,
+	strictSettingsSchema as settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
 
 describe("settingsSchema", () => {
-	const validSettings: SettingsForm = {
-		global: {
-			outputDirectoryPath: "/music/output",
-			openOutputFolderOnComplete: true,
-			concurrency: 4,
-			overwrite: false,
-			noOverwrite: true,
-		},
-		audio: {
-			audioCodec: "libmp3lame",
-			codecOptions: { compression_level: 5 },
-			audioQuality: "vbr",
-			audioQualityValue: "4",
-			outputExtension: ".mp3",
-			audioFilter: "loudnorm",
-			filterOptions: { I: -24, LRA: 7 },
-		},
-	};
+	const validSettings: SettingsForm = getValidSettings();
 	it("validates a complete valid settings object", () => {
 		expect(() => settingsSchema.parse(validSettings)).not.toThrow();
+	});
+	it("accepts settings without a version field and defaults to 1", () => {
+		const { version, ...withoutVersion } = validSettings;
+		const result = settingsSchema.safeParse(withoutVersion);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.version).toBe(1);
+		}
+	});
+	it("rejects a non-integer version", () => {
+		const invalid = { ...validSettings, version: 1.5 };
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+
+	it("rejects a negative version", () => {
+		const invalid = { ...validSettings, version: -1 };
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+
+	it("rejects a version of zero", () => {
+		const invalid = { ...validSettings, version: 0 };
+		expect(() => settingsSchema.parse(invalid)).toThrow();
 	});
 	it("fails when outputDirectoryPath is empty", () => {
 		const invalid = {
 			...validSettings,
 			global: { ...validSettings.global, outputDirectoryPath: "" },
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+
+	it("rejects outputDirectoryPath containing null bytes", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: "/music/\0output",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects outputDirectoryPath containing traversal sequences", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: "/music/../../etc/passwd",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects outputDirectoryPath with backslash traversal", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: "C:\\music\\..\\..\\Windows",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects outputDirectoryPath exceeding maximum length", () => {
+		const invalid = {
+			...validSettings,
+			global: {
+				...validSettings.global,
+				outputDirectoryPath: `/music/${"a".repeat(4100)}`,
+			},
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
 	});
@@ -207,5 +257,197 @@ describe("settingsSchema", () => {
 			},
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("accepts every known filter name", () => {
+		for (const filterName of FILTER_NAMES) {
+			const settings = {
+				...validSettings,
+				audio: { ...validSettings.audio, audioFilter: filterName },
+			};
+			expect(settingsSchema.safeParse(settings).success).toBe(true);
+		}
+	});
+	it("accepts an empty audioFilter (no filter)", () => {
+		const settings = {
+			...validSettings,
+			audio: { ...validSettings.audio, audioFilter: "" },
+		};
+		expect(() => settingsSchema.parse(settings)).not.toThrow();
+	});
+	it("rejects an unknown audioFilter string", () => {
+		const invalid = {
+			...validSettings,
+			audio: {
+				...validSettings.audio,
+				audioFilter: "malicious;rm -rf /",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("rejects an audioFilter with shell metacharacters", () => {
+		const invalid = {
+			...validSettings,
+			audio: {
+				...validSettings.audio,
+				audioFilter: "loudnorm$(whoami)",
+			},
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+});
+
+describe("audioFilterConfigSchema", () => {
+	const createValidFilterConfig = (
+		overrides: Record<string, unknown> = {},
+	): Record<string, unknown> => ({
+		name: "loudnorm",
+		desc: "EBU R128 loudness normalization.",
+		options: [
+			{
+				type: "number",
+				label: "I",
+				desc: "Set integrated loudness target.",
+				min: -70,
+				max: -5,
+				defaultValue: -24,
+			},
+			{
+				type: "switch",
+				label: "linear",
+				desc: "Normalize by linearly scaling the source audio.",
+				defaultValue: true,
+			},
+		],
+		...overrides,
+	});
+
+	it("validates a complete filter configuration", () => {
+		const result = audioFilterConfigSchema.safeParse(createValidFilterConfig());
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts a filter configuration with an empty options array", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ options: [] }),
+		);
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts every supported option type inside a single configuration", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({
+				options: [
+					{
+						type: "number",
+						label: "I",
+						desc: "Integrated loudness target.",
+						min: -70,
+						max: -5,
+						defaultValue: -24,
+					},
+					{
+						type: "select",
+						label: "mode",
+						desc: "Operation mode.",
+						options: ["downward", "upward"],
+						defaultValue: "downward",
+					},
+					{
+						type: "switch",
+						label: "linear",
+						desc: "Linear normalization.",
+						defaultValue: true,
+					},
+					{
+						type: "text",
+						label: "delays",
+						desc: "Delay list.",
+						defaultValue: "1000",
+					},
+				],
+			}),
+		);
+		expect(result.success).toBe(true);
+	});
+
+	it.each(["name", "desc", "options"])(
+		"rejects a missing %s field and reports its path",
+		(field) => {
+			const config = createValidFilterConfig();
+			delete config[field];
+			const result = audioFilterConfigSchema.safeParse(config);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual([field]);
+			}
+		},
+	);
+
+	it("rejects a non-string name", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ name: 42 }),
+		);
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects a non-string desc", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ desc: null }),
+		);
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects a non-array options value", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ options: "loudnorm" }),
+		);
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects an invalid option entry and reports the nested path", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({
+				options: [
+					{
+						type: "number",
+						label: "I",
+						desc: "Integrated loudness target.",
+						min: -70,
+						defaultValue: -24,
+					},
+				],
+			}),
+		);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["options", 0, "max"]);
+		}
+	});
+
+	it("rejects a name that is not a member of FILTER_NAMES", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ name: "custom_unknown_filter" }),
+		);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["name"]);
+		}
+	});
+
+	it("rejects an empty desc string", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ desc: "" }),
+		);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["desc"]);
+		}
+	});
+
+	it("rejects unknown properties on the config object (strict mode)", () => {
+		const result = audioFilterConfigSchema.safeParse(
+			createValidFilterConfig({ legacyField: "value" }),
+		);
+		expect(result.success).toBe(false);
 	});
 });

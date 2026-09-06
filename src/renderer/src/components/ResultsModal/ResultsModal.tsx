@@ -32,9 +32,9 @@ import { toast } from "sonner";
 export default function ResultModal() {
 	const [opened, { open, close }] = useDisclosure();
 	const results = useAppSelector((state) => state.results);
-	const {
-		global: { outputDirectoryPath },
-	} = useAppSelector((state) => state.settings);
+	const outputDirectoryPath = useAppSelector(
+		(state) => state.settings.data.global.outputDirectoryPath,
+	);
 
 	useEffect(() => {
 		if (results.total > 0) {

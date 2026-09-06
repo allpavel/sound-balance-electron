@@ -15,15 +15,26 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-export const STATUS_VALUES = [
-	"pending",
-	"processing",
-	"completed",
-	"failed",
-] as const;
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-export const SYSTEM_COLLECTION_ID = "all";
-
-export const CORRUPTION_SETTINGS_TOAST =
-	"Stored settings are corrupted and were reset to defaults.";
-export const SAVE_ERROR_TOAST = "Unable to save settings. Please try again.";
+export function deepMerge<T extends Record<string, unknown>>(
+	base: T,
+	overrides: Record<string, unknown>,
+): T {
+	const result = { ...base };
+	for (const key of Object.keys(overrides)) {
+		const baseValue = (base as Record<string, unknown>)[key];
+		const overrideValue = overrides[key];
+		if (isPlainObject(baseValue) && isPlainObject(overrideValue)) {
+			(result as Record<string, unknown>)[key] = deepMerge(
+				baseValue,
+				overrideValue,
+			);
+		} else {
+			(result as Record<string, unknown>)[key] = overrideValue;
+		}
+	}
+	return result;
+}

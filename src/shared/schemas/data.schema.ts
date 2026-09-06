@@ -15,15 +15,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-export const STATUS_VALUES = [
-	"pending",
-	"processing",
-	"completed",
-	"failed",
-] as const;
+import { z } from "zod";
+import { strictSettingsSchema } from "./settings.schema";
+import { trackInputSchema } from "./track.schema";
 
-export const SYSTEM_COLLECTION_ID = "all";
+export const dataSchema = z.object({
+	tracks: z.array(trackInputSchema),
+	settings: strictSettingsSchema,
+});
 
-export const CORRUPTION_SETTINGS_TOAST =
-	"Stored settings are corrupted and were reset to defaults.";
-export const SAVE_ERROR_TOAST = "Unable to save settings. Please try again.";
+export type Data = z.infer<typeof dataSchema>;

@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
-import { makeTrack } from "@renderer/utils/test-utils/testFactories";
-import { STATUS_VALUES } from "@shared/constants";
+import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { makeTrack } from "@shared/utils/factories";
 import {
 	areCollectionIdsEqual,
 	assertCollectionIds,

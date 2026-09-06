@@ -19,25 +19,27 @@
 import { schemaResolver } from "@mantine/form";
 import { useSettingsFormInstance } from "@renderer/components/Settings/context/SettingsFormContext";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
+import { looseSettingsSchema } from "@shared/schemas/settings.schema";
 import { useEffect } from "react";
-import { settingsSchema } from "../../../../../shared/schemas/settings.schema";
 
 export default function useSettingsForm() {
-	const settings = useAppSelector((state) => state.settings);
+	const { data: settings, loading } = useAppSelector((state) => state.settings);
 	const form = useSettingsFormInstance({
 		initialValues: {
+			version: settings.version,
 			audio: structuredClone(settings.audio),
 			global: structuredClone(settings.global),
 		},
-		validate: schemaResolver(settingsSchema),
+		validate: schemaResolver(looseSettingsSchema),
 	});
 
 	useEffect(() => {
 		form.setValues({
+			version: settings.version,
 			audio: structuredClone(settings.audio),
 			global: structuredClone(settings.global),
 		});
 	}, [form.setValues, settings]);
 
-	return { form, isLoading: settings.loading };
+	return { form, isLoading: loading };
 }

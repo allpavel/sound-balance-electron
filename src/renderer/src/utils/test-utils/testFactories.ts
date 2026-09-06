@@ -16,15 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@renderer/db/constants/constants";
 import { db } from "@renderer/db/db";
-import type { Metadata } from "@shared/schemas/track.schema";
+import { resetFactorySequences } from "@shared/utils/factories";
 import { v7 as uuidV7 } from "uuid";
-import type { CollectionType } from "@/types";
 
 let uuidSeq = 0;
-let collectionSeq = 0;
-let trackSeq = 0;
 
 export function configureUuidMock(): void {
 	uuidSeq = 0;
@@ -41,38 +37,11 @@ export async function resetDatabase(): Promise<void> {
 
 export function resetSequences() {
 	uuidSeq = 0;
-	collectionSeq = 0;
-	trackSeq = 0;
+	resetFactorySequences();
 }
 
 export async function resetTestState() {
 	resetSequences();
 	await resetDatabase();
 	configureUuidMock();
-}
-
-export function makeCollection(
-	overrides: Partial<CollectionType> = {},
-): CollectionType {
-	collectionSeq += 1;
-	return {
-		id: `col-${collectionSeq}`,
-		title: `Collection ${collectionSeq}`,
-		...overrides,
-	};
-}
-
-export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
-	trackSeq += 1;
-	return {
-		id: `track-${trackSeq}`,
-		file: `track-${trackSeq}.mp3`,
-		filePath: `/music/track-${trackSeq}.mp3`,
-		status: "pending",
-		selected: 0,
-		collectionIds: [SYSTEM_COLLECTION_ID],
-		common: {},
-		format: {},
-		...overrides,
-	} as Metadata;
 }

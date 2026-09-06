@@ -24,8 +24,8 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
+import type { Data } from "@shared/schemas/data.schema";
 import type { TrackChanges } from "@shared/schemas/track.schema";
-import type { Data } from "@types";
 import { useEffect, useState } from "react";
 import type { ProcessingStatus, StoppingStatus } from "@/types";
 
@@ -34,7 +34,7 @@ export default function StartProcessing() {
 	const [isRunning, setIsRunning] = useState(false);
 	const [errorMsg, setErrorMsg] = useState("");
 	const { selectedTracks: tracks, updateTrack } = useTracks();
-	const settings = useAppSelector((state) => state.settings);
+	const settings = useAppSelector((state) => state.settings.data);
 	const dispatch = useAppDispatch();
 
 	useEffect(() => {

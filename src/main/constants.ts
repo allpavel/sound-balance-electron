@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { SettingsForm } from "@types";
+import type { SettingsForm } from "@shared/schemas/settings.schema";
 
 export const INITIALSETTINGS = {
+	version: 1,
 	global: {
 		outputDirectoryPath: "",
 		openOutputFolderOnComplete: false,
