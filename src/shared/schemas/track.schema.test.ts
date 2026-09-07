@@ -24,6 +24,7 @@ import {
 	statusSchema,
 	targetCollectionIdSchema,
 	trackInputSchema,
+	tracksArraySchema,
 } from "./track.schema";
 
 function withoutField(field: string): Record<string, unknown> {
@@ -33,6 +34,92 @@ function withoutField(field: string): Record<string, unknown> {
 }
 
 describe("track.schema", () => {
+	describe("track.schema - security constraints", () => {
+		it("rejects filePath containing null bytes", () => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ filePath: "/music/\0track.mp3" }),
+			);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(["filePath"]);
+			}
+		});
+
+		it("rejects filePath exceeding 4096 characters", () => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ filePath: `/music/${"a".repeat(4100)}.mp3` }),
+			);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(["filePath"]);
+			}
+		});
+
+		it("rejects id containing null bytes", () => {
+			const result = trackInputSchema.safeParse(makeTrack({ id: "track\0id" }));
+			expect(result.success).toBe(false);
+		});
+
+		it("strips unknown top-level properties instead of preserving them", () => {
+			const input = { ...makeTrack(), unknownField: "should be stripped" };
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data).not.toHaveProperty("unknownField");
+			}
+		});
+
+		it("rejects picture data exceeding 5MB", () => {
+			const oversizedData = "x".repeat(5 * 1024 * 1024 + 1);
+			const result = trackInputSchema.safeParse(
+				makeTrack({
+					common: {
+						picture: [
+							{
+								format: "image/jpeg",
+								data: oversizedData,
+							},
+						],
+					},
+				}),
+			);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual([
+					"common",
+					"picture",
+					0,
+					"data",
+				]);
+			}
+		});
+
+		it("rejects more than 10 pictures", () => {
+			const pictures = Array.from({ length: 21 }, () => ({
+				format: "image/jpeg",
+				data: "AQID",
+			}));
+			const result = trackInputSchema.safeParse(
+				makeTrack({ common: { picture: pictures } }),
+			);
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects year outside valid range", () => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ common: { year: 99999 } }),
+			);
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects negative duration", () => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ format: { duration: -1 } }),
+			);
+			expect(result.success).toBe(false);
+		});
+	});
+
 	describe("STATUS_VALUES", () => {
 		it("contains the supported track statuses", () => {
 			expect(STATUS_VALUES).toEqual([
@@ -288,6 +375,78 @@ describe("track.schema", () => {
 			expect(result.success).toBe(false);
 			if (!result.success) {
 				expect(result.error.issues[0]?.path).toEqual(["collectionIds", 1]);
+			}
+		});
+	});
+
+	describe("tracksArraySchema", () => {
+		it("accepts a valid array of tracks", () => {
+			const tracks = [makeTrack(), makeTrack()];
+			const result = tracksArraySchema.safeParse(tracks);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data).toHaveLength(2);
+				expect(result.data[0]).toEqual(tracks[0]);
+				expect(result.data[1]).toEqual(tracks[1]);
+			}
+		});
+
+		it("accepts an empty array (valid state: no tracks loaded)", () => {
+			const result = tracksArraySchema.safeParse([]);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data).toEqual([]);
+			}
+		});
+
+		it("rejects non-array inputs", () => {
+			for (const input of [
+				null,
+				undefined,
+				"not-an-array",
+				42,
+				true,
+				{},
+				makeTrack(), // a single track object is NOT an array
+			]) {
+				const result = tracksArraySchema.safeParse(input);
+				expect(result.success).toBe(false);
+				if (!result.success) {
+					expect(result.error.issues[0]?.code).toBe("invalid_type");
+				}
+			}
+		});
+
+		it("propagates item errors with the correct index in the path", () => {
+			const result = tracksArraySchema.safeParse([
+				makeTrack(),
+				makeTrack({ status: "invalid_status" } as any),
+			]);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual([1, "status"]);
+			}
+		});
+
+		it("reports index 0 for an invalid first item", () => {
+			const result = tracksArraySchema.safeParse([makeTrack({ id: "" })]);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual([0, "id"]);
+			}
+		});
+
+		it("captures multiple item-level errors across different indices", () => {
+			const result = tracksArraySchema.safeParse([
+				makeTrack({ id: "" }),
+				makeTrack(),
+				makeTrack({ filePath: "   " }),
+			]);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				const paths = result.error.issues.map((i) => i.path.join("."));
+				expect(paths).toContain("0.id");
+				expect(paths).toContain("2.filePath");
 			}
 		});
 	});

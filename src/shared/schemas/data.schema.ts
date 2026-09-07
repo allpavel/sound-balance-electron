@@ -17,10 +17,10 @@
  */
 import { z } from "zod";
 import { strictSettingsSchema } from "./settings.schema";
-import { trackInputSchema } from "./track.schema";
+import { tracksArraySchema } from "./track.schema";
 
 export const dataSchema = z.object({
-	tracks: z.array(trackInputSchema),
+	tracks: tracksArraySchema,
 	settings: strictSettingsSchema,
 });
 

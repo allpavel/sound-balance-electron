@@ -52,7 +52,7 @@ const commonSchema = z
 		artist: z.string().optional(),
 		title: z.string().optional(),
 		album: z.string().optional(),
-		year: z.number().optional(),
+		year: z.number().int().min(1000).max(9999).optional(),
 		track: z
 			.object({ no: z.number().nullable(), of: z.number().nullable() })
 			.optional(),
@@ -89,6 +89,7 @@ export const trackInputSchema = z.discriminatedUnion("status", [
 		reason: nonEmptyStringSchema.min(1).max(1000),
 	}),
 ]);
+export const tracksArraySchema = z.array(trackInputSchema);
 
 type TrackInput = z.infer<typeof trackInputSchema>;
 
