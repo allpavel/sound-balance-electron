@@ -20,8 +20,11 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { EVENT_CHANNELS, INITIALSETTINGS } from "@main/constants";
 import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
-import { getTrackTitle, isDirectory } from "@main/lib/utils";
-import { formatValidationIssues } from "@main/lib/utils/formatValidationIssues";
+import {
+	formatValidationIssues,
+	getTrackTitle,
+	isDirectory,
+} from "@main/lib/utils";
 import { ProcessManager } from "@main/services/ffmpeg/processManager";
 import type { Data } from "@shared/schemas/data.schema";
 import type { Metadata } from "@shared/schemas/track.schema";
