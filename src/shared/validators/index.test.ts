@@ -15,8 +15,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { getValidSettings } from "@shared/utils/factories";
-import { safeParseSettings } from "./index";
+import { getValidSettings, makeTrack } from "@shared/utils/factories";
+import {
+	safeParseData,
+	safeParseSettings,
+	safeParseTracks,
+	type ValidationIssue,
+} from "./index";
 
 describe("safeParseSettings", () => {
 	describe("successful parsing contract", () => {
@@ -181,5 +186,218 @@ describe("safeParseSettings", () => {
 				expect(paths).toContain("audio.audioCodec");
 			}
 		});
+	});
+});
+
+describe("safeParseTracks", () => {
+	describe("successful parsing contract", () => {
+		it("returns success: true and parsed data for a valid tracks array", () => {
+			const tracks = [makeTrack(), makeTrack()];
+			const result = safeParseTracks(tracks);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data).toHaveLength(2);
+				expect(result.data[0]?.id).toBe(tracks[0]?.id);
+			}
+		});
+
+		it("accepts an empty tracks array", () => {
+			const result = safeParseTracks([]);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data).toEqual([]);
+			}
+		});
+
+		it("strips unknown top-level properties from tracks", () => {
+			const tracks = [{ ...makeTrack(), unknownProp: "should be stripped" }];
+			const result = safeParseTracks(tracks);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data[0]).not.toHaveProperty("unknownProp");
+			}
+		});
+	});
+
+	describe("failed parsing contract", () => {
+		it("rejects non-array input", () => {
+			for (const input of [null, undefined, "string", 42, {}, makeTrack()]) {
+				const result = safeParseTracks(input);
+				expect(result.success).toBe(false);
+				if (!result.success) {
+					expect(result.issues.length).toBeGreaterThan(0);
+				}
+			}
+		});
+
+		it("rejects a track with missing required fields and reports path", () => {
+			const invalidTrack = { ...makeTrack() };
+			delete (invalidTrack as any).id;
+			const result = safeParseTracks([invalidTrack]);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.path).toBe("0.id");
+			}
+		});
+
+		it("rejects a track with invalid status and reports nested path", () => {
+			const result = safeParseTracks([makeTrack({ status: "invalid" as any })]);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.path).toBe("0.status");
+			}
+		});
+
+		it("reports correct index for invalid items in the array", () => {
+			const tracks = [makeTrack(), makeTrack({ filePath: "" })];
+			const result = safeParseTracks(tracks);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.path).toBe("1.filePath");
+			}
+		});
+
+		it("captures multiple simultaneous issues", () => {
+			const tracks = [
+				makeTrack({ id: "", filePath: "" }),
+				makeTrack({ selected: 99 as any }),
+			];
+			const result = safeParseTracks(tracks);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues.length).toBeGreaterThanOrEqual(3);
+			}
+		});
+	});
+});
+
+describe("safeParseData", () => {
+	const createValidData = () => ({
+		tracks: [makeTrack()],
+		settings: getValidSettings(),
+	});
+
+	describe("successful parsing contract", () => {
+		it("returns success: true for a fully valid Data payload", () => {
+			const result = safeParseData(createValidData());
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.tracks).toHaveLength(1);
+				expect(result.data.settings).toBeDefined();
+			}
+		});
+
+		it("accepts empty tracks array with valid settings", () => {
+			const result = safeParseData({
+				tracks: [],
+				settings: getValidSettings(),
+			});
+			expect(result.success).toBe(true);
+		});
+	});
+
+	describe("failed parsing contract", () => {
+		it("rejects non-object input", () => {
+			for (const input of [null, undefined, "string", 42, []]) {
+				const result = safeParseData(input);
+				expect(result.success).toBe(false);
+			}
+		});
+
+		it("rejects missing tracks property", () => {
+			const { tracks, ...withoutTracks } = createValidData();
+			const result = safeParseData(withoutTracks);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.path).toBe("tracks");
+			}
+		});
+
+		it("rejects missing settings property", () => {
+			const { settings, ...withoutSettings } = createValidData();
+			const result = safeParseData(withoutSettings);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.path).toBe("settings");
+			}
+		});
+
+		it("rejects invalid track within the array and reports nested path", () => {
+			const result = safeParseData({
+				tracks: [makeTrack({ status: "invalid" as any })],
+				settings: getValidSettings(),
+			});
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.path).toBe("tracks.0.status");
+			}
+		});
+
+		it("rejects invalid settings and reports nested path", () => {
+			const result = safeParseData({
+				tracks: [makeTrack()],
+				settings: {
+					...getValidSettings(),
+					global: { ...getValidSettings().global, concurrency: 0 },
+				},
+			});
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.path).toBe("settings.global.concurrency");
+			}
+		});
+
+		it("captures issues from both tracks and settings simultaneously", () => {
+			const result = safeParseData({
+				tracks: [makeTrack({ id: "" })],
+				settings: {
+					...getValidSettings(),
+					global: { ...getValidSettings().global, concurrency: 0 },
+				},
+			});
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				const paths = result.issues.map((i: ValidationIssue) => i.path);
+				expect(paths).toContain("tracks.0.id");
+				expect(paths).toContain("settings.global.concurrency");
+			}
+		});
+	});
+});
+
+describe("mapZodIssues DRY contract", () => {
+	it("produces identical issue format across all validators", () => {
+		const invalidSettings = { invalid: true };
+		const invalidTracks = "not-an-array";
+		const invalidData = null;
+
+		const settingsResult = safeParseSettings(invalidSettings);
+		const tracksResult = safeParseTracks(invalidTracks);
+		const dataResult = safeParseData(invalidData);
+
+		expect(settingsResult.success).toBe(false);
+		expect(tracksResult.success).toBe(false);
+		expect(dataResult.success).toBe(false);
+
+		if (
+			!settingsResult.success &&
+			!tracksResult.success &&
+			!dataResult.success
+		) {
+			for (const issues of [
+				settingsResult.issues,
+				tracksResult.issues,
+				dataResult.issues,
+			]) {
+				for (const issue of issues) {
+					expect(issue).toHaveProperty("path");
+					expect(issue).toHaveProperty("message");
+					expect(issue).toHaveProperty("code");
+					expect(typeof issue.path).toBe("string");
+					expect(typeof issue.message).toBe("string");
+					expect(typeof issue.code).toBe("string");
+				}
+			}
+		}
 	});
 });

@@ -15,42 +15,77 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import { type Data, dataSchema } from "@shared/schemas/data.schema";
 import {
 	looseSettingsSchema,
 	type SettingsForm,
 	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
-import type { ZodSafeParseResult } from "zod";
+import { type Metadata, tracksArraySchema } from "@shared/schemas/track.schema";
+import type { ZodError, ZodSafeParseResult } from "zod";
 
-export interface SettingsValidationIssue {
+export interface ValidationIssue {
 	path: string;
 	message: string;
 	code: string;
 }
+// Backward-compatible alias. Existing imports of
+// SettingsValidationIssue continue to work without modification.
+export type SettingsValidationIssue = ValidationIssue;
 
-export type SettingsParseResult =
-	| { success: true; data: SettingsForm }
-	| { success: false; issues: SettingsValidationIssue[] };
+export type ValidationResult<T> =
+	| { success: true; data: T }
+	| { success: false; issues: ValidationIssue[] };
 
+export type SettingsParseResult = ValidationResult<SettingsForm>;
+export type TracksParseResult = ValidationResult<Metadata[]>;
+export type DataParseResult = ValidationResult<Data>;
+
+function mapZodIssues(error: ZodError): ValidationIssue[] {
+	return error.issues.map((issue) => ({
+		path: issue.path.join("."),
+		message: issue.message,
+		code: issue.code,
+	}));
+}
+
+/**
+ * Validates settings input against strict or loose schema.
+ * Used by: Renderer (form validation), Main (IPC boundary), SettingsRepository.
+ */
 export function safeParseSettings(
 	input: unknown,
 	{ mode }: { mode: "strict" | "loose" } = { mode: "strict" },
 ): SettingsParseResult {
-	let result: ZodSafeParseResult<SettingsForm>;
-	if (mode === "strict") {
-		result = strictSettingsSchema.safeParse(input);
-	} else {
-		result = looseSettingsSchema.safeParse(input);
-	}
+	const schema = mode === "strict" ? strictSettingsSchema : looseSettingsSchema;
+	const result: ZodSafeParseResult<SettingsForm> = schema.safeParse(input);
 	if (result.success) {
 		return { success: true, data: result.data };
 	}
-	const issues: SettingsValidationIssue[] = result.error.issues.map(
-		(issue) => ({
-			path: issue.path.join("."),
-			message: issue.message,
-			code: issue.code,
-		}),
-	);
-	return { success: false, issues };
+	return { success: false, issues: mapZodIssues(result.error) };
+}
+
+/**
+ * Validates an array of track objects against trackInputSchema.
+ * Used by: Renderer (DB ingestion), Main (metadata result validation).
+ */
+export function safeParseTracks(input: unknown): TracksParseResult {
+	const result = tracksArraySchema.safeParse(input);
+	if (result.success) {
+		return { success: true, data: result.data };
+	}
+	return { success: false, issues: mapZodIssues(result.error) };
+}
+
+/**
+ * Validates the complete IPC processing payload (tracks + settings).
+ * This is the primary boundary validator for Renderer → Main IPC calls.
+ * Uses dataSchema which composes tracksArraySchema + strictSettingsSchema.
+ */
+export function safeParseData(input: unknown): DataParseResult {
+	const result = dataSchema.safeParse(input);
+	if (result.success) {
+		return { success: true, data: result.data };
+	}
+	return { success: false, issues: mapZodIssues(result.error) };
 }
