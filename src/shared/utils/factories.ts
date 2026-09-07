@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import type { Data } from "@shared/schemas/data.schema";
 import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
@@ -83,4 +84,13 @@ export function getValidSettings(
 		},
 		overrides,
 	);
+}
+
+export function getValidData(
+	overrides: { tracks?: Metadata[]; settings?: Partial<SettingsForm> } = {},
+): Data {
+	return {
+		tracks: overrides.tracks ?? [makeTrack()],
+		settings: getValidSettings(overrides.settings),
+	};
 }

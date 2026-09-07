@@ -21,7 +21,11 @@ import {
 	type SettingsForm,
 	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
-import { type Metadata, tracksArraySchema } from "@shared/schemas/track.schema";
+import {
+	type Metadata,
+	trackInputSchema,
+	tracksArraySchema,
+} from "@shared/schemas/track.schema";
 import type { ZodError, ZodSafeParseResult } from "zod";
 
 export interface ValidationIssue {
@@ -38,6 +42,7 @@ export type ValidationResult<T> =
 	| { success: false; issues: ValidationIssue[] };
 
 export type SettingsParseResult = ValidationResult<SettingsForm>;
+export type TrackParseResult = ValidationResult<Metadata>;
 export type TracksParseResult = ValidationResult<Metadata[]>;
 export type DataParseResult = ValidationResult<Data>;
 
@@ -51,7 +56,6 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
 
 /**
  * Validates settings input against strict or loose schema.
- * Used by: Renderer (form validation), Main (IPC boundary), SettingsRepository.
  */
 export function safeParseSettings(
 	input: unknown,
@@ -67,10 +71,20 @@ export function safeParseSettings(
 
 /**
  * Validates an array of track objects against trackInputSchema.
- * Used by: Renderer (DB ingestion), Main (metadata result validation).
  */
 export function safeParseTracks(input: unknown): TracksParseResult {
 	const result = tracksArraySchema.safeParse(input);
+	if (result.success) {
+		return { success: true, data: result.data };
+	}
+	return { success: false, issues: mapZodIssues(result.error) };
+}
+
+/**
+ * Validates a track object against trackInputSchema.
+ */
+export function safeParseTrack(input: unknown): TrackParseResult {
+	const result = trackInputSchema.safeParse(input);
 	if (result.success) {
 		return { success: true, data: result.data };
 	}
