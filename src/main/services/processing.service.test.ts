@@ -45,10 +45,8 @@ vi.mock("@main/lib/ffmpeg", () => ({
 	getGlobalSettings: vi.fn(() => ["-y"]),
 	getTrackSettings: vi.fn(() => []),
 }));
-vi.mock("@main/lib/utils", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@main/lib/utils")>();
+vi.mock("@main/lib/utils", () => {
 	return {
-		...actual,
 		isDirectory: vi.fn(async () => true),
 		getTrackTitle: vi.fn((artist, title) => `${artist} - ${title}`),
 	};
