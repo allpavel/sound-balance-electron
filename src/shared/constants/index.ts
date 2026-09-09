@@ -27,3 +27,6 @@ export const SYSTEM_COLLECTION_ID = "all";
 export const CORRUPTION_SETTINGS_TOAST =
 	"Stored settings are corrupted and were reset to defaults.";
 export const SAVE_ERROR_TOAST = "Unable to save settings. Please try again.";
+
+export const MAX_BASE64_IMAGE_SIZE = 5 * 1024 * 1024;
+export const MAX_PICTURE_COUNT = 20;

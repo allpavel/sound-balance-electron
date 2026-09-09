@@ -16,36 +16,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import type { IAudioMetadata, IPicture, ITag } from "music-metadata";
+import { isUint8Array, toBase64 } from "./pictureProcessingUtils";
 
 const ID3_KEYS = ["ID3v2.3", "ID3v2.4"] as const;
-
 type Id3Key = (typeof ID3_KEYS)[number];
-
 type ApicValue = {
 	data: unknown;
 };
-
 type ProcessedPicture = Omit<IPicture, "data"> & { data: string };
 type ProcessedCommon = Omit<IAudioMetadata["common"], "picture"> & {
 	picture?: ProcessedPicture[];
 };
-
 export type ProcessedMetadata = Omit<IAudioMetadata, "common"> & {
 	common: ProcessedCommon;
 };
 
 const isApicValue = (value: unknown): value is ApicValue =>
 	typeof value === "object" && value !== null && Object.hasOwn(value, "data");
-
-const isUint8Array = (value: unknown): value is Uint8Array =>
-	value instanceof Uint8Array ||
-	(typeof value === "object" &&
-		value !== null &&
-		Symbol.toStringTag in value &&
-		value[Symbol.toStringTag] === "Uint8Array");
-
-const toBase64 = (data: Uint8Array): string =>
-	Buffer.from(data).toString("base64");
 
 const getTagArray = (
 	metadata: IAudioMetadata,
@@ -62,7 +49,6 @@ const hasApicFrame = (metadata: IAudioMetadata): boolean =>
 		if (!tags) {
 			return false;
 		}
-
 		return tags.some((tag) => tag.id === "APIC" && isApicValue(tag.value));
 	});
 

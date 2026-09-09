@@ -15,12 +15,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { STATUS_VALUES } from "@shared/constants";
+import {
+	MAX_BASE64_IMAGE_SIZE,
+	MAX_PICTURE_COUNT,
+	STATUS_VALUES,
+} from "@shared/constants";
 import z from "zod";
 
 const MAX_PATH_LENGTH = 4096;
-const MAX_BASE64_IMAGE_SIZE = 5 * 1024 * 1024;
-const MAX_PICTURE_COUNT = 20;
 const NULL_BYTE_PATTERN = /\0/;
 
 export const nonEmptyStringSchema = z
@@ -317,6 +319,8 @@ export const trackInputSchema = z.discriminatedUnion("status", [
 export const tracksArraySchema = z.array(trackInputSchema);
 
 type TrackInput = z.infer<typeof trackInputSchema>;
+
+export type Picture = z.infer<typeof pictureSchema>;
 
 export type Metadata = TrackInput;
 

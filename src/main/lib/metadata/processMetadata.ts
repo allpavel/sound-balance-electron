@@ -1,4 +1,4 @@
-/*
+2; /*
  * sound-balance-electron
  * Copyright (C) 2026 Pavel Alloyarov
  *
@@ -15,10 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { processAlbumCover } from "@main/lib/metadata/processAlbumCover";
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { IAudioMetadata } from "music-metadata";
 import { v7 as uuid } from "uuid";
+import { sanitizePictures } from "./pictureProcessingUtils";
 
 export const processMetadata = async (
 	filePath: string,
@@ -41,12 +43,7 @@ export const processMetadata = async (
 			collectionIds,
 			common: {
 				...processedData.common,
-				picture: processedData.common.picture?.map((p) => ({
-					format: p.format,
-					data: p.data,
-					description: p.description,
-					name: p.name,
-				})),
+				picture: sanitizePictures(processedData.common.picture),
 			},
 			format: {
 				...processedData.format,
