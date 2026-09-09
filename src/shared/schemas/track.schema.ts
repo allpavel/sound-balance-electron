@@ -49,6 +49,26 @@ export const pictureSchema = z
 		name: z.string().max(255).optional(),
 	})
 	.strict();
+const trackInfoSchema = z
+	.object({
+		id: z.number().int().optional(),
+		type: z.string().optional(),
+		codecName: z.string().optional(),
+		container: z.string().optional(),
+		channels: z.number().int().optional(),
+		bitsPerSample: z.number().int().optional(),
+		sampleRate: z.number().int().optional(),
+		duration: z.number().optional(),
+		bitRate: z.number().int().optional(),
+	})
+	.strict();
+const chapterSchema = z
+	.object({
+		title: z.string().optional(),
+		startTime: z.number().optional(),
+		endTime: z.number().optional(),
+	})
+	.strict();
 
 const commonSchema = z
 	.object({
@@ -67,6 +87,7 @@ const commonSchema = z
 		composer: z.array(z.string()).optional(),
 		artists: z.array(z.string()).optional(),
 		albumartist: z.string().optional(),
+		albumartists: z.array(z.string()).optional(),
 
 		// Dates
 		date: z.string().optional(),
@@ -289,9 +310,15 @@ const formatSchema = z
 		numberOfSamples: z.number().int().optional(),
 		tool: z.string().optional(),
 		trackGain: z.number().optional(),
-		trackPeakLevel: z.number().optional(),
+		trackPeakLevel: z.number().nullable().optional(),
 		albumGain: z.number().optional(),
-		albumPeakLevel: z.number().optional(),
+		albumPeakLevel: z.number().nullable().optional(),
+		tagTypes: z.array(z.string()).optional(),
+		trackInfo: z.array(trackInfoSchema).optional(),
+		chapters: z.array(chapterSchema).optional(),
+		hasAudio: z.boolean().optional(),
+		hasVideo: z.boolean().optional(),
+		codecProfile: z.string().optional(),
 	})
 	.strict();
 
@@ -302,8 +329,8 @@ const trackBaseSchema = z
 		filePath: nonEmptyStringSchema,
 		selected: selectedSchema,
 		collectionIds: collectionIdsSchema,
-		common: commonSchema,
-		format: formatSchema,
+		common: commonSchema.default({}),
+		format: formatSchema.default({}),
 	})
 	.strip();
 
