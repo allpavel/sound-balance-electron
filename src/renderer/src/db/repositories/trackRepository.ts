@@ -64,18 +64,20 @@ export const tracksRepository = {
 			return [];
 		}
 
+		const parsedTracks: Metadata[] = [];
 		const seenFilePaths = new Set<string>();
 
 		for (const [index, track] of tracks.entries()) {
-			assertTrackInput(track, index);
-			const filePath = (track as Metadata).filePath;
+			const parsedTrack = assertTrackInput(track, index);
+			const filePath = parsedTrack.filePath;
 			if (seenFilePaths.has(filePath)) {
 				throw new Error(`tracks contains duplicate filePath: ${filePath}`);
 			}
 			seenFilePaths.add(filePath);
+			parsedTracks.push(parsedTrack);
 		}
 
-		const filePaths = tracks.map((track) => track.filePath);
+		const filePaths = parsedTracks.map((track) => track.filePath);
 
 		return await db.transaction("rw", db.tracks, async () => {
 			const existingTracks = await db.tracks
@@ -94,7 +96,7 @@ export const tracksRepository = {
 			const toAdd: Metadata[] = [];
 			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
 
-			for (const track of tracks) {
+			for (const track of parsedTracks) {
 				const existingRow = existingByFilePath.get(track.filePath);
 
 				if (existingRow) {

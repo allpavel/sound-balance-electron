@@ -23,8 +23,9 @@ import {
 	type Metadata,
 	type TrackChanges,
 	targetCollectionIdSchema,
-	trackInputSchema,
 } from "@shared/schemas/track.schema";
+import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
+import { safeParseTrack } from "@shared/validators";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -55,18 +56,18 @@ function assertCollectionIds(value: unknown, context: string): void {
 	);
 }
 
-function assertTrackInput(track: unknown, index: number): void {
+function assertTrackInput(track: unknown, index: number): Metadata {
 	const context = `tracks[${index}]`;
 	if (!isPlainObject(track)) {
 		throw new Error(`${context} must be an object`);
 	}
 
-	const result = trackInputSchema.safeParse(track);
+	const result = safeParseTrack(track);
 	if (result.success) {
-		return;
+		return result.data;
 	}
 
-	const [field, collectionIndex] = result.error.issues[0]?.path ?? [];
+	const [field, collectionIndex] = (result.issues[0]?.path ?? "").split(".");
 
 	if (field === "id") {
 		throw new Error(`${context}.id must be a non-empty string`);
@@ -93,7 +94,9 @@ function assertTrackInput(track: unknown, index: number): void {
 			`${context}.collectionIds[${String(collectionIndex)}] must be a non-empty string`,
 		);
 	}
-	throw new Error(`${context} is invalid`);
+	throw new Error(
+		`${context} is invalid: ${formatValidationIssues(result.issues)}`,
+	);
 }
 
 function normalizeCollectionIds(
