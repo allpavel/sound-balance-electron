@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { STATUS_VALUES } from "@shared/constants";
+import {
+	MAX_BASE64_IMAGE_SIZE,
+	MAX_PICTURE_COUNT,
+	STATUS_VALUES,
+} from "@shared/constants";
 import { makeTrack } from "@shared/utils/factories";
 import {
 	collectionIdsSchema,
@@ -69,8 +73,8 @@ describe("track.schema", () => {
 			}
 		});
 
-		it("rejects picture data exceeding 5MB", () => {
-			const oversizedData = "x".repeat(5 * 1024 * 1024 + 1);
+		it("rejects picture data exceeding MAX_BASE64_IMAGE_SIZE", () => {
+			const oversizedData = "x".repeat(MAX_BASE64_IMAGE_SIZE + 1);
 			const result = trackInputSchema.safeParse(
 				makeTrack({
 					common: {
@@ -94,8 +98,8 @@ describe("track.schema", () => {
 			}
 		});
 
-		it("rejects more than 10 pictures", () => {
-			const pictures = Array.from({ length: 21 }, () => ({
+		it(`rejects more than ${MAX_PICTURE_COUNT} pictures`, () => {
+			const pictures = Array.from({ length: MAX_PICTURE_COUNT + 1 }, () => ({
 				format: "image/jpeg",
 				data: "AQID",
 			}));
@@ -117,6 +121,147 @@ describe("track.schema", () => {
 				makeTrack({ format: { duration: -1 } }),
 			);
 			expect(result.success).toBe(false);
+		});
+	});
+
+	describe("track.schema - explicit whitelist (common / format)", () => {
+		it("accepts whitelisted common fields (genre, composer, artists, albumartist)", () => {
+			const input = makeTrack({
+				common: {
+					title: "Test Track",
+					genre: ["Rock", "Alternative"],
+					composer: ["John Lennon"],
+					artists: ["John Lennon"],
+					albumartist: "The Beatles",
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				const common = result.data.common as Record<string, unknown>;
+				expect(common.genre).toEqual(["Rock", "Alternative"]);
+				expect(common.composer).toEqual(["John Lennon"]);
+				expect(common.artists).toEqual(["John Lennon"]);
+				expect(common.albumartist).toBe("The Beatles");
+				expect(common.title).toBe("Test Track");
+			}
+		});
+
+		it("accepts whitelisted common fields (dates, credits, identifiers)", () => {
+			const input = makeTrack({
+				common: {
+					date: "2024-01-15",
+					lyricist: ["Lyricist A"],
+					conductor: ["Conductor B"],
+					label: ["Label C"],
+					barcode: "0123456789012",
+					isrc: ["USRC17607839"],
+					musicbrainz_recordingid: "abc-123",
+					albumsort: "Abbey Road",
+					compilation: false,
+					bpm: 120,
+					mood: "Happy",
+					key: "C Major",
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				const common = result.data.common as Record<string, unknown>;
+				expect(common.date).toBe("2024-01-15");
+				expect(common.lyricist).toEqual(["Lyricist A"]);
+				expect(common.barcode).toBe("0123456789012");
+				expect(common.bpm).toBe(120);
+			}
+		});
+
+		it("accepts whitelisted disk and movementIndex fields", () => {
+			const input = makeTrack({
+				common: {
+					disk: { no: 1, of: 2 },
+					movementIndex: { no: 3, of: 5 },
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				const common = result.data.common as Record<string, unknown>;
+				expect(common.disk).toEqual({ no: 1, of: 2 });
+				expect(common.movementIndex).toEqual({ no: 3, of: 5 });
+			}
+		});
+
+		it("accepts whitelisted format fields (container, lossless, numberOfChannels)", () => {
+			const input = makeTrack({
+				format: {
+					duration: 210.5,
+					bitrate: 320000,
+					container: "MPEG",
+					lossless: false,
+					numberOfChannels: 2,
+					sampleRate: 44100,
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				const format = result.data.format as Record<string, unknown>;
+				expect(format.container).toBe("MPEG");
+				expect(format.lossless).toBe(false);
+				expect(format.numberOfChannels).toBe(2);
+				expect(format.sampleRate).toBe(44100);
+				expect(format.duration).toBe(210.5);
+			}
+		});
+
+		it("rejects unknown fields in common (strict mode)", () => {
+			const input = makeTrack({
+				common: {
+					title: "Test",
+					maliciousField: "should be rejected",
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects unknown fields in format (strict mode)", () => {
+			const input = makeTrack({
+				format: {
+					duration: 120,
+					unknownFormatProp: true,
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(false);
+		});
+
+		it("still validates declared common fields with constraints", () => {
+			const input = makeTrack({
+				common: {
+					year: 99999,
+					genre: ["Rock"],
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(["common", "year"]);
+			}
+		});
+
+		it("still validates declared format fields with constraints", () => {
+			const input = makeTrack({
+				format: {
+					duration: -1,
+					container: "MPEG",
+				} as any,
+			});
+			const result = trackInputSchema.safeParse(input);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(["format", "duration"]);
+			}
 		});
 	});
 
@@ -280,7 +425,7 @@ describe("track.schema", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("accepts unknown IAudioMetadata fields and preserves them", () => {
+		it("accepts declared IAudioMetadata fields and preserves them", () => {
 			const input = makeTrack({
 				format: {
 					duration: 210.5,
@@ -407,7 +552,7 @@ describe("track.schema", () => {
 				42,
 				true,
 				{},
-				makeTrack(), // a single track object is NOT an array
+				makeTrack(),
 			]) {
 				const result = tracksArraySchema.safeParse(input);
 				expect(result.success).toBe(false);

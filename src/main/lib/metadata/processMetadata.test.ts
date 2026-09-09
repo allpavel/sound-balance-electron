@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { MAX_BASE64_IMAGE_SIZE, MAX_PICTURE_COUNT } from "@shared/constants";
 import { v7 as uuid } from "uuid";
 import { processAlbumCover } from "./processAlbumCover";
 import { processMetadata } from "./processMetadata";
@@ -229,6 +230,110 @@ describe("processMetadata", () => {
 			await expect(processMetadata(badPath, mockParser)).rejects.toThrow(
 				`Metadata parsing failed for ${badPath}: ${error}`,
 			);
+		});
+	});
+
+	describe("picture sanitization integration", () => {
+		it("should pass through valid pictures from processAlbumCover", async () => {
+			const pictures = [
+				{
+					format: "image/jpeg",
+					data: "AQID",
+					description: "Cover",
+					name: "cover",
+				},
+			];
+			vi.mocked(processAlbumCover).mockReturnValueOnce({
+				format: { codec: "MP3" },
+				common: { artist: "Artist", title: "Title", picture: pictures },
+			} as any);
+			const result = await processMetadata(mockFilePath, mockParser);
+			expect(result.common.picture).toHaveLength(1);
+			expect(result.common.picture?.[0]?.format).toBe("image/jpeg");
+			expect(result.common.picture?.[0]?.data).toBe("AQID");
+		});
+
+		it(`should cap pictures at MAX_PICTURE_COUNT (${MAX_PICTURE_COUNT})`, async () => {
+			const manyPictures = Array.from(
+				{ length: MAX_PICTURE_COUNT + 5 },
+				(_, i) => ({
+					format: "image/jpeg",
+					data: `base64data-${i}`,
+					description: `Cover ${i}`,
+					name: `cover-${i}`,
+				}),
+			);
+			vi.mocked(processAlbumCover).mockReturnValueOnce({
+				format: {},
+				common: { picture: manyPictures },
+			} as any);
+			const result = await processMetadata(mockFilePath, mockParser);
+			expect(result.common.picture).toHaveLength(MAX_PICTURE_COUNT);
+		});
+
+		it("should drop pictures exceeding MAX_BASE64_IMAGE_SIZE", async () => {
+			const oversizedData = "x".repeat(MAX_BASE64_IMAGE_SIZE + 1);
+			vi.mocked(processAlbumCover).mockReturnValueOnce({
+				format: {},
+				common: {
+					picture: [
+						{ format: "image/jpeg", data: oversizedData, name: "big" },
+						{ format: "image/png", data: "smallValidData", name: "small" },
+					],
+				},
+			} as any);
+			const result = await processMetadata(mockFilePath, mockParser);
+			expect(result.common.picture).toHaveLength(1);
+			expect(result.common.picture?.[0]?.name).toBe("small");
+		});
+
+		it("should return undefined for picture when no pictures are present", async () => {
+			vi.mocked(processAlbumCover).mockReturnValueOnce({
+				format: {},
+				common: {},
+			} as any);
+			const result = await processMetadata(mockFilePath, mockParser);
+			expect(result.common.picture).toBeUndefined();
+		});
+
+		it("should handle Uint8Array picture data from non-ID3 formats", async () => {
+			const binaryData = new Uint8Array([0x01, 0x02, 0xff]);
+			const expectedBase64 = Buffer.from(binaryData).toString("base64");
+			vi.mocked(processAlbumCover).mockReturnValueOnce({
+				format: {},
+				common: {
+					picture: [{ format: "image/jpeg", data: binaryData, name: "binary" }],
+				},
+			} as any);
+			const result = await processMetadata(mockFilePath, mockParser);
+			expect(result.common.picture).toHaveLength(1);
+			expect(result.common.picture?.[0]?.data).toBe(expectedBase64);
+		});
+
+		it("should drop pictures with invalid format strings", async () => {
+			vi.mocked(processAlbumCover).mockReturnValueOnce({
+				format: {},
+				common: {
+					picture: [
+						{ format: "", data: "AQID", name: "invalid" },
+						{ format: "image/png", data: "AQID", name: "valid" },
+					],
+				},
+			} as any);
+			const result = await processMetadata(mockFilePath, mockParser);
+			expect(result.common.picture).toHaveLength(1);
+			expect(result.common.picture?.[0]?.name).toBe("valid");
+		});
+
+		it("should return undefined when all pictures are invalid", async () => {
+			vi.mocked(processAlbumCover).mockReturnValueOnce({
+				format: {},
+				common: {
+					picture: [{ format: "", data: "AQID", name: "invalid" }],
+				},
+			} as any);
+			const result = await processMetadata(mockFilePath, mockParser);
+			expect(result.common.picture).toBeUndefined();
 		});
 	});
 });
