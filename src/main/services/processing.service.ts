@@ -20,14 +20,11 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { EVENT_CHANNELS, INITIALSETTINGS } from "@main/constants";
 import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
-import {
-	formatValidationIssues,
-	getTrackTitle,
-	isDirectory,
-} from "@main/lib/utils";
+import { getTrackTitle, isDirectory } from "@main/lib/utils";
 import { ProcessManager } from "@main/services/ffmpeg/processManager";
 import type { Data } from "@shared/schemas/data.schema";
 import type { Metadata } from "@shared/schemas/track.schema";
+import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
 import { safeParseSettings, safeParseTrack } from "@shared/validators";
 import type { IpcMainInvokeEvent } from "electron";
 import PQueue from "p-queue";
