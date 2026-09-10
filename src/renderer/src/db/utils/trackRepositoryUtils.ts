@@ -25,7 +25,7 @@ import {
 	targetCollectionIdSchema,
 } from "@shared/schemas/track.schema";
 import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
-import { safeParseTrack } from "@shared/validators";
+import { safeParseTrack, safeParseTrackChanges } from "@shared/validators";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -99,6 +99,19 @@ function assertTrackInput(track: unknown, index: number): Metadata {
 	);
 }
 
+function assertTrackChanges(changes: unknown, context: string): TrackChanges {
+	if (!isPlainObject(changes)) {
+		throw new Error(`${context} must be a non-null object`);
+	}
+	const result = safeParseTrackChanges(changes);
+	if (result.success) {
+		return result.data;
+	}
+	throw new Error(
+		`${context} is invalid: ${formatValidationIssues(result.issues)}`,
+	);
+}
+
 function normalizeCollectionIds(
 	current: unknown,
 	targetCollectionId: string,
@@ -159,14 +172,18 @@ function normalizeTrackChanges(
 	changes: TrackChanges,
 	context: string,
 ): TrackChanges {
-	if (!("collectionIds" in changes) || changes.collectionIds === undefined) {
-		return changes;
+	const validated = assertTrackChanges(changes, context);
+
+	if (
+		!("collectionIds" in validated) ||
+		validated.collectionIds === undefined
+	) {
+		return validated;
 	}
-	assertCollectionIds(changes.collectionIds, context);
 	return {
-		...changes,
+		...validated,
 		collectionIds: normalizeCollectionIds(
-			changes.collectionIds,
+			validated.collectionIds,
 			SYSTEM_COLLECTION_ID,
 		),
 	};

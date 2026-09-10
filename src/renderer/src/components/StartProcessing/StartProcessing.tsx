@@ -54,7 +54,7 @@ export default function StartProcessing() {
 				const trackChanges: TrackChanges =
 					data.status === "failed"
 						? { status: "failed", reason: data.message ?? "Unknown error" }
-						: { status: data.status, reason: undefined };
+						: { status: data.status };
 				updateTrack({ id: data.id, changes: trackChanges });
 			},
 		);

@@ -18,6 +18,7 @@
 import {
 	MAX_BASE64_IMAGE_SIZE,
 	MAX_PICTURE_COUNT,
+	MAX_REASON_LENGTH,
 	STATUS_VALUES,
 } from "@shared/constants";
 import z from "zod";
@@ -52,7 +53,7 @@ export const pictureSchema = z
 const trackInfoSchema = z
 	.object({
 		id: z.number().int().optional(),
-		type: z.string().optional(),
+		type: z.number().int().optional(),
 		codecName: z.string().optional(),
 		container: z.string().optional(),
 		channels: z.number().int().optional(),
@@ -345,18 +346,42 @@ export const trackInputSchema = z.discriminatedUnion("status", [
 ]);
 export const tracksArraySchema = z.array(trackInputSchema);
 
+const trackChangesFieldsSchema = z
+	.object({
+		filePath: nonEmptyStringSchema.optional(),
+		selected: selectedSchema.optional(),
+		collectionIds: collectionIdsSchema.optional(),
+	})
+	.strict();
+
+const trackChangesStatusSchema = z.discriminatedUnion("status", [
+	z.object({ status: z.literal("pending") }).strict(),
+	z.object({ status: z.literal("processing") }).strict(),
+	z.object({ status: z.literal("completed") }).strict(),
+	z
+		.object({
+			status: z.literal("failed"),
+			reason: nonEmptyStringSchema.max(MAX_REASON_LENGTH),
+		})
+		.strict(),
+]);
+
+/**
+ * A partial track mutation: either metadata fields (filePath/selected/
+ * collectionIds) or a status transition — not both in one payload.
+ */
+export const trackChangesSchema = z.union([
+	trackChangesFieldsSchema,
+	trackChangesStatusSchema,
+]);
+
 type TrackInput = z.infer<typeof trackInputSchema>;
 
 export type Picture = z.infer<typeof pictureSchema>;
 
 export type Metadata = TrackInput;
 
-export type TrackChanges =
-	| Partial<Pick<TrackInput, "filePath" | "selected" | "collectionIds">>
-	| { status: "pending"; reason?: undefined }
-	| { status: "processing"; reason?: undefined }
-	| { status: "completed"; reason?: undefined }
-	| { status: "failed"; reason: string };
+export type TrackChanges = z.infer<typeof trackChangesSchema>;
 
 export type ProcessingStatus =
 	| { id: string; status: "processing" | "completed" }

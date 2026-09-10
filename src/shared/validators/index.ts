@@ -23,6 +23,8 @@ import {
 } from "@shared/schemas/settings.schema";
 import {
 	type Metadata,
+	type TrackChanges,
+	trackChangesSchema,
 	trackInputSchema,
 	tracksArraySchema,
 } from "@shared/schemas/track.schema";
@@ -45,6 +47,7 @@ export type SettingsParseResult = ValidationResult<SettingsForm>;
 export type TrackParseResult = ValidationResult<Metadata>;
 export type TracksParseResult = ValidationResult<Metadata[]>;
 export type DataParseResult = ValidationResult<Data>;
+export type TrackChangesParseResult = ValidationResult<TrackChanges>;
 
 function mapZodIssues(error: ZodError): ValidationIssue[] {
 	return error.issues.map((issue) => ({
@@ -98,6 +101,17 @@ export function safeParseTrack(input: unknown): TrackParseResult {
  */
 export function safeParseData(input: unknown): DataParseResult {
 	const result = dataSchema.safeParse(input);
+	if (result.success) {
+		return { success: true, data: result.data };
+	}
+	return { success: false, issues: mapZodIssues(result.error) };
+}
+
+/**
+ * Validates partial track mutation payloads.
+ */
+export function safeParseTrackChanges(input: unknown): TrackChangesParseResult {
+	const result = trackChangesSchema.safeParse(input);
 	if (result.success) {
 		return { success: true, data: result.data };
 	}
