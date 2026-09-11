@@ -17,14 +17,13 @@
  */
 import {
 	MAX_BASE64_IMAGE_SIZE,
+	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
+	NULL_BYTE_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
 import z from "zod";
-
-const MAX_PATH_LENGTH = 4096;
-const NULL_BYTE_PATTERN = /\0/;
 
 export const nonEmptyStringSchema = z
 	.string()
