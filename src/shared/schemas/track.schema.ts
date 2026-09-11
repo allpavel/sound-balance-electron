@@ -32,6 +32,17 @@ export const nonEmptyStringSchema = z
 	.refine((val) => val.trim().length > 0)
 	.refine((val) => !NULL_BYTE_PATTERN.test(val));
 
+export const reasonSchema = z
+	.string()
+	.min(1)
+	.max(MAX_REASON_LENGTH)
+	.refine((val) => val.trim().length > 0, {
+		message: "Reason must not be blank",
+	})
+	.refine((val) => !NULL_BYTE_PATTERN.test(val), {
+		message: "Reason must not contain null bytes",
+	});
+
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
 export const targetCollectionIdSchema = nonEmptyStringSchema;
 export const selectedSchema = z.union([z.literal(0), z.literal(1)]);
@@ -340,7 +351,7 @@ export const trackInputSchema = z.discriminatedUnion("status", [
 	trackBaseSchema.extend({ status: z.literal("completed") }),
 	trackBaseSchema.extend({
 		status: z.literal("failed"),
-		reason: nonEmptyStringSchema.min(1).max(1000),
+		reason: reasonSchema,
 	}),
 ]);
 export const tracksArraySchema = z.array(trackInputSchema);
@@ -351,7 +362,20 @@ const trackChangesFieldsSchema = z
 		selected: selectedSchema.optional(),
 		collectionIds: collectionIdsSchema.optional(),
 	})
-	.strict();
+	.strict()
+	.superRefine((data, ctx) => {
+		const hasAnyField =
+			data.filePath !== undefined ||
+			data.selected !== undefined ||
+			data.collectionIds !== undefined;
+		if (!hasAnyField) {
+			ctx.addIssue({
+				code: "custom",
+				message:
+					"At least one field (filePath, selected, collectionIds) must be provided",
+			});
+		}
+	});
 
 const trackChangesStatusSchema = z.discriminatedUnion("status", [
 	z.object({ status: z.literal("pending") }).strict(),
@@ -360,7 +384,7 @@ const trackChangesStatusSchema = z.discriminatedUnion("status", [
 	z
 		.object({
 			status: z.literal("failed"),
-			reason: nonEmptyStringSchema.max(MAX_REASON_LENGTH),
+			reason: reasonSchema,
 		})
 		.strict(),
 ]);
