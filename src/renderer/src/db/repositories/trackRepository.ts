@@ -24,8 +24,8 @@ import {
 	isNonEmptyString,
 	isPlainObject,
 	normalizeCollectionIds,
-	normalizeTrackChanges,
 	uniqueTracks,
+	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
@@ -147,10 +147,7 @@ export const tracksRepository = {
 		if (!isPlainObject(changes)) {
 			throw new Error("Changes must be an object");
 		}
-		return await db.tracks.update(
-			id,
-			normalizeTrackChanges(changes, "changes"),
-		);
+		return await db.tracks.update(id, validateTrackChanges(changes, "changes"));
 	},
 
 	async updateMany(updates: { id: string; changes: TrackChanges }[]) {
@@ -185,7 +182,7 @@ export const tracksRepository = {
 			seenIds.add(candidate.id);
 			normalizedUpdates.push({
 				id: candidate.id,
-				changes: normalizeTrackChanges(
+				changes: validateTrackChanges(
 					candidate.changes as Partial<Metadata>,
 					`${context}.changes`,
 				),

@@ -25,8 +25,8 @@ import {
 	assertTrackInput,
 	isPlainObject,
 	normalizeCollectionIds,
-	normalizeTrackChanges,
 	uniqueTracks,
+	validateTrackChanges,
 } from "./trackRepositoryUtils";
 
 function createTrackWithoutField(field: string): Record<string, unknown> {
@@ -575,15 +575,15 @@ describe("trackRepositoryUtils", () => {
 		});
 	});
 
-	describe("normalizeTrackChanges", () => {
+	describe("validateTrackChanges", () => {
 		it("returns changes unchanged when collectionIds is undefined", () => {
 			const changes = { selected: 1 } as any;
-			expect(normalizeTrackChanges(changes, "changes")).toBe(changes);
+			expect(validateTrackChanges(changes, "changes")).toBe(changes);
 		});
 
 		it("removes duplicate system collection ids", () => {
 			expect(
-				normalizeTrackChanges(
+				validateTrackChanges(
 					{
 						collectionIds: [SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID, "mix1"],
 					},
@@ -596,7 +596,7 @@ describe("trackRepositoryUtils", () => {
 
 		it("adds the system collection id when missing", () => {
 			expect(
-				normalizeTrackChanges(
+				validateTrackChanges(
 					{
 						collectionIds: ["mix1"],
 					},
@@ -609,7 +609,7 @@ describe("trackRepositoryUtils", () => {
 
 		it("normalizes an empty collectionIds array to the system collection", () => {
 			expect(
-				normalizeTrackChanges(
+				validateTrackChanges(
 					{
 						collectionIds: [],
 					},
@@ -622,7 +622,7 @@ describe("trackRepositoryUtils", () => {
 
 		it("rejects invalid collection ids", () => {
 			expect(() =>
-				normalizeTrackChanges(
+				validateTrackChanges(
 					{
 						collectionIds: [SYSTEM_COLLECTION_ID, ""],
 					},

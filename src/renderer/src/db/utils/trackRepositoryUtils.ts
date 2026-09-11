@@ -19,7 +19,6 @@
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 
 import {
-	collectionIdsSchema,
 	type Metadata,
 	type TrackChanges,
 	targetCollectionIdSchema,
@@ -40,20 +39,6 @@ function assertTargetCollectionId(value: unknown): void {
 	if (!result.success) {
 		throw new Error("targetCollectionId must be a non-empty string");
 	}
-}
-
-function assertCollectionIds(value: unknown, context: string): void {
-	const result = collectionIdsSchema.safeParse(value);
-	if (result.success) {
-		return;
-	}
-	const path = result.error.issues[0]?.path ?? [];
-	if (path.length === 0) {
-		throw new Error(`${context}.collectionIds must be an array of strings`);
-	}
-	throw new Error(
-		`${context}.collectionIds[${String(path[0])}] must be a non-empty string`,
-	);
 }
 
 function assertTrackInput(track: unknown, index: number): Metadata {
@@ -168,10 +153,7 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
 	return [...byId.values()];
 }
 
-function normalizeTrackChanges(
-	changes: TrackChanges,
-	context: string,
-): TrackChanges {
+function validateTrackChanges(changes: unknown, context: string): TrackChanges {
 	const validated = assertTrackChanges(changes, context);
 
 	if (
@@ -191,12 +173,11 @@ function normalizeTrackChanges(
 
 export {
 	areCollectionIdsEqual,
-	assertCollectionIds,
 	assertTargetCollectionId,
 	assertTrackInput,
 	isNonEmptyString,
 	isPlainObject,
 	normalizeCollectionIds,
-	normalizeTrackChanges,
 	uniqueTracks,
+	validateTrackChanges,
 };
