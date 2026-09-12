@@ -20,7 +20,6 @@ import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { makeTrack } from "@shared/utils/factories";
 import {
 	areCollectionIdsEqual,
-	assertCollectionIds,
 	assertTargetCollectionId,
 	assertTrackInput,
 	isPlainObject,
@@ -88,62 +87,6 @@ describe("trackRepositoryUtils", () => {
 			expect(() => assertTargetCollectionId(123)).toThrow(errorMsg);
 			expect(() => assertTargetCollectionId([])).toThrow(errorMsg);
 			expect(() => assertTargetCollectionId({})).toThrow(errorMsg);
-		});
-	});
-
-	describe("assertCollectionIds", () => {
-		const errorMsg = "test.collectionIds must be an array of strings";
-		const testIdErrorMsg = "test.collectionIds[1] must be a non-empty string";
-
-		it("accepts an empty array", () => {
-			expect(() => assertCollectionIds([], "test")).not.toThrow();
-		});
-
-		it("accepts an array of non-empty strings", () => {
-			expect(() =>
-				assertCollectionIds([SYSTEM_COLLECTION_ID, "mix-1"], "test"),
-			).not.toThrow();
-		});
-
-		it("rejects undefined because collectionIds is required in Metadata", () => {
-			expect(() => assertCollectionIds(undefined, "test")).toThrow(errorMsg);
-		});
-
-		it("rejects null", () => {
-			expect(() => assertCollectionIds(null, "test")).toThrow(errorMsg);
-		});
-
-		it("rejects a non-array value", () => {
-			expect(() => assertCollectionIds(null, "test")).toThrow(errorMsg);
-			expect(() => assertCollectionIds("all", "test")).toThrow(errorMsg);
-			expect(() => assertCollectionIds(123, "test")).toThrow(errorMsg);
-			expect(() => assertCollectionIds({ id: "all" }, "test")).toThrow(
-				errorMsg,
-			);
-		});
-
-		it("rejects an empty collection id", () => {
-			expect(() =>
-				assertCollectionIds([SYSTEM_COLLECTION_ID, ""], "test"),
-			).toThrow(testIdErrorMsg);
-		});
-
-		it("rejects a whitespace-only collection id", () => {
-			expect(() =>
-				assertCollectionIds([SYSTEM_COLLECTION_ID, "   "], "test"),
-			).toThrow(testIdErrorMsg);
-		});
-
-		it("rejects non-string collection ids", () => {
-			expect(() =>
-				assertCollectionIds([SYSTEM_COLLECTION_ID, 123], "test"),
-			).toThrow(testIdErrorMsg);
-			expect(() =>
-				assertCollectionIds([SYSTEM_COLLECTION_ID, null], "test"),
-			).toThrow(testIdErrorMsg);
-			expect(() =>
-				assertCollectionIds([SYSTEM_COLLECTION_ID, undefined], "test"),
-			).toThrow(testIdErrorMsg);
 		});
 	});
 
@@ -578,7 +521,7 @@ describe("trackRepositoryUtils", () => {
 	describe("validateTrackChanges", () => {
 		it("returns changes unchanged when collectionIds is undefined", () => {
 			const changes = { selected: 1 } as any;
-			expect(validateTrackChanges(changes, "changes")).toBe(changes);
+			expect(validateTrackChanges(changes, "changes")).toEqual(changes);
 		});
 
 		it("removes duplicate system collection ids", () => {
@@ -628,7 +571,70 @@ describe("trackRepositoryUtils", () => {
 					},
 					"changes",
 				),
-			).toThrow("changes.collectionIds[1] must be a non-empty string");
+			).toThrow("changes is invalid: collectionIds.1:");
+		});
+
+		it("rejects an empty changes object (no-op mutation)", () => {
+			expect(() => validateTrackChanges({}, "changes")).toThrow(
+				/at least one field/i,
+			);
+		});
+
+		it("rejects status combined with fields", () => {
+			expect(() =>
+				validateTrackChanges({ status: "pending", selected: 1 }, "changes"),
+			).toThrow(/changes is invalid/);
+		});
+
+		it("rejects non-object input with a clear error", () => {
+			expect(() => validateTrackChanges(null, "changes")).toThrow(
+				"changes must be a non-null object",
+			);
+			expect(() => validateTrackChanges(undefined, "changes")).toThrow(
+				"changes must be a non-null object",
+			);
+			expect(() => validateTrackChanges("string", "changes")).toThrow(
+				"changes must be a non-null object",
+			);
+			expect(() => validateTrackChanges(42, "changes")).toThrow(
+				"changes must be a non-null object",
+			);
+		});
+
+		it("rejects invalid collectionIds via schema validation", () => {
+			expect(() =>
+				validateTrackChanges(
+					{ collectionIds: [SYSTEM_COLLECTION_ID, ""] },
+					"changes",
+				),
+			).toThrow(/changes is invalid/);
+		});
+
+		it("rejects invalid selected values via schema validation", () => {
+			expect(() => validateTrackChanges({ selected: 99 }, "changes")).toThrow(
+				/changes is invalid/,
+			);
+		});
+
+		it("rejects failed status without reason", () => {
+			expect(() =>
+				validateTrackChanges({ status: "failed" }, "changes"),
+			).toThrow(/changes is invalid/);
+		});
+
+		it("accepts valid status-only changes", () => {
+			expect(validateTrackChanges({ status: "pending" }, "changes")).toEqual({
+				status: "pending",
+			});
+			expect(validateTrackChanges({ status: "processing" }, "changes")).toEqual(
+				{ status: "processing" },
+			);
+			expect(validateTrackChanges({ status: "completed" }, "changes")).toEqual({
+				status: "completed",
+			});
+			expect(
+				validateTrackChanges({ status: "failed", reason: "error" }, "changes"),
+			).toEqual({ status: "failed", reason: "error" });
 		});
 	});
 });

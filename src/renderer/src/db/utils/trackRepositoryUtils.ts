@@ -162,6 +162,7 @@ function validateTrackChanges(changes: unknown, context: string): TrackChanges {
 	) {
 		return validated;
 	}
+
 	return {
 		...validated,
 		collectionIds: normalizeCollectionIds(
