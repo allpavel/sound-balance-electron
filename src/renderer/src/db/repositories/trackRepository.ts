@@ -144,9 +144,6 @@ export const tracksRepository = {
 		if (!isNonEmptyString(id)) {
 			throw new Error("ID must be a non-empty string");
 		}
-		if (!isPlainObject(changes)) {
-			throw new Error("Changes must be an object");
-		}
 		return await db.tracks.update(id, validateTrackChanges(changes, "changes"));
 	},
 
@@ -172,9 +169,6 @@ export const tracksRepository = {
 			const candidate = update as Partial<TrackUpdate>;
 			if (!isNonEmptyString(candidate.id)) {
 				throw new Error(`${context}.id must be a non-empty string`);
-			}
-			if (!isPlainObject(candidate.changes)) {
-				throw new Error(`${context}.changes must be an object`);
 			}
 			if (seenIds.has(candidate.id)) {
 				throw new Error(`updates contains duplicate id: ${candidate.id}`);
