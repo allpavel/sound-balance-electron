@@ -27,6 +27,7 @@ import {
 	selectedSchema,
 	statusSchema,
 	targetCollectionIdSchema,
+	trackChangesSchema,
 	trackInputSchema,
 	tracksArraySchema,
 } from "./track.schema";
@@ -593,6 +594,200 @@ describe("track.schema", () => {
 				expect(paths).toContain("0.id");
 				expect(paths).toContain("2.filePath");
 			}
+		});
+	});
+
+	describe("trackChangesSchema", () => {
+		describe("fields branch", () => {
+			it("accepts a valid filePath change", () => {
+				const result = trackChangesSchema.safeParse({
+					filePath: "/music/track.mp3",
+				});
+				expect(result.success).toBe(true);
+			});
+
+			it("accepts a valid selected change", () => {
+				expect(trackChangesSchema.safeParse({ selected: 1 }).success).toBe(
+					true,
+				);
+				expect(trackChangesSchema.safeParse({ selected: 0 }).success).toBe(
+					true,
+				);
+			});
+
+			it("accepts a valid collectionIds change", () => {
+				const result = trackChangesSchema.safeParse({
+					collectionIds: ["all", "mix-1"],
+				});
+				expect(result.success).toBe(true);
+			});
+
+			it("accepts multiple fields together", () => {
+				const result = trackChangesSchema.safeParse({
+					filePath: "/music/track.mp3",
+					selected: 1,
+					collectionIds: ["all"],
+				});
+				expect(result.success).toBe(true);
+			});
+
+			it("rejects an empty object (no-op mutation)", () => {
+				const result = trackChangesSchema.safeParse({});
+				expect(result.success).toBe(false);
+				if (!result.success) {
+					expect(result.error.issues[0]?.message).toContain(
+						"At least one field",
+					);
+				}
+			});
+
+			it("rejects unknown fields (strict mode)", () => {
+				const result = trackChangesSchema.safeParse({
+					selected: 1,
+					unknownField: true,
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects invalid filePath values", () => {
+				expect(trackChangesSchema.safeParse({ filePath: "" }).success).toBe(
+					false,
+				);
+				expect(trackChangesSchema.safeParse({ filePath: "   " }).success).toBe(
+					false,
+				);
+			});
+
+			it("rejects invalid selected values", () => {
+				expect(trackChangesSchema.safeParse({ selected: 2 }).success).toBe(
+					false,
+				);
+				expect(trackChangesSchema.safeParse({ selected: true }).success).toBe(
+					false,
+				);
+			});
+
+			it("rejects invalid collectionIds items", () => {
+				const result = trackChangesSchema.safeParse({
+					collectionIds: ["all", ""],
+				});
+				expect(result.success).toBe(false);
+			});
+		});
+
+		describe("status branch", () => {
+			it("accepts pending status", () => {
+				expect(
+					trackChangesSchema.safeParse({ status: "pending" }).success,
+				).toBe(true);
+			});
+
+			it("accepts processing status", () => {
+				expect(
+					trackChangesSchema.safeParse({ status: "processing" }).success,
+				).toBe(true);
+			});
+
+			it("accepts completed status", () => {
+				expect(
+					trackChangesSchema.safeParse({ status: "completed" }).success,
+				).toBe(true);
+			});
+
+			it("accepts failed status with a valid reason", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "failed",
+					reason: "FFmpeg exited with code 1",
+				});
+				expect(result.success).toBe(true);
+			});
+
+			it("rejects failed status without reason", () => {
+				const result = trackChangesSchema.safeParse({ status: "failed" });
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects an empty reason", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "failed",
+					reason: "",
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects a whitespace-only reason", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "failed",
+					reason: "   ",
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects a reason exceeding MAX_REASON_LENGTH", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "failed",
+					reason: "x".repeat(1001),
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects a reason containing null bytes", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "failed",
+					reason: "error\0injection",
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("accepts a reason at exactly MAX_REASON_LENGTH", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "failed",
+					reason: "x".repeat(1000),
+				});
+				expect(result.success).toBe(true);
+			});
+		});
+
+		describe("mutual exclusivity (status XOR fields)", () => {
+			it("rejects status combined with filePath", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "pending",
+					filePath: "/music/track.mp3",
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects status combined with selected", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "completed",
+					selected: 1,
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects status combined with collectionIds", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "processing",
+					collectionIds: ["all"],
+				});
+				expect(result.success).toBe(false);
+			});
+
+			it("rejects reason on non-failed status (strict mode)", () => {
+				const result = trackChangesSchema.safeParse({
+					status: "pending",
+					reason: "should not be here",
+				});
+				expect(result.success).toBe(false);
+			});
+		});
+
+		describe("non-object inputs", () => {
+			it("rejects null, undefined, primitives, and arrays", () => {
+				for (const input of [null, undefined, "str", 42, true, []]) {
+					expect(trackChangesSchema.safeParse(input).success).toBe(false);
+				}
+			});
 		});
 	});
 });
