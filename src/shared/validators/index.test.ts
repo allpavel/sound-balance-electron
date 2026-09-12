@@ -19,6 +19,7 @@ import { getValidSettings, makeTrack } from "@shared/utils/factories";
 import {
 	safeParseData,
 	safeParseSettings,
+	safeParseTrackChanges,
 	safeParseTracks,
 	type ValidationIssue,
 } from "./index";
@@ -399,5 +400,84 @@ describe("mapZodIssues DRY contract", () => {
 				}
 			}
 		}
+	});
+});
+
+describe("safeParseTrackChanges", () => {
+	describe("successful parsing contract", () => {
+		it("returns success: true for valid field changes", () => {
+			const result = safeParseTrackChanges({ selected: 1 });
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data).toEqual({ selected: 1 });
+			}
+		});
+
+		it("returns success: true for valid status changes", () => {
+			const result = safeParseTrackChanges({
+				status: "failed",
+				reason: "FFmpeg error",
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data).toEqual({
+					status: "failed",
+					reason: "FFmpeg error",
+				});
+			}
+		});
+
+		it("strips unknown top-level fields", () => {
+			const result = safeParseTrackChanges({
+				selected: 1,
+				unknownProp: "stripped",
+			});
+			expect(result.success).toBe(false);
+		});
+	});
+
+	describe("failed parsing contract", () => {
+		it("rejects non-object input and reports issues", () => {
+			for (const input of [null, undefined, "str", 42, []]) {
+				const result = safeParseTrackChanges(input);
+				expect(result.success).toBe(false);
+				if (!result.success) {
+					expect(result.issues.length).toBeGreaterThan(0);
+				}
+			}
+		});
+
+		it("rejects an empty object (no-op mutation)", () => {
+			const result = safeParseTrackChanges({});
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.issues[0]?.message).toContain("At least one field");
+			}
+		});
+
+		it("rejects status + fields combination", () => {
+			const result = safeParseTrackChanges({
+				status: "pending",
+				selected: 1,
+			});
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects failed status without reason", () => {
+			const result = safeParseTrackChanges({ status: "failed" });
+			expect(result.success).toBe(false);
+		});
+
+		it("produces issues with path, message, and code", () => {
+			const result = safeParseTrackChanges({ selected: 99 });
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				for (const issue of result.issues) {
+					expect(typeof issue.path).toBe("string");
+					expect(typeof issue.message).toBe("string");
+					expect(typeof issue.code).toBe("string");
+				}
+			}
+		});
 	});
 });
