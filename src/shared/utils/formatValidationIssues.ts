@@ -18,5 +18,7 @@
 export function formatValidationIssues(
 	issues: ReadonlyArray<{ path: string; message: string }>,
 ): string {
-	return issues.map((i) => `${i.path}: ${i.message}`).join("; ");
+	return issues
+		.map((i) => (i.path ? `${i.path}: ${i.message}` : i.message))
+		.join("; ");
 }
