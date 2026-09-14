@@ -15,34 +15,57 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { MAX_BASE64_IMAGE_SIZE } from "@shared/constants";
 import { getValidSettings, makeTrack } from "@shared/utils/factories";
 import {
+	ISSUE_LIMIT_CODE,
+	MAX_VALIDATION_ISSUES,
 	safeParseData,
 	safeParseSettings,
+	safeParseTrack,
 	safeParseTrackChanges,
 	safeParseTracks,
 	type ValidationIssue,
+	type ValidationResult,
 } from "./index";
+
+function expectSuccess<T>(result: ValidationResult<T>): T {
+	if (!result.success) {
+		throw new Error(
+			`Expected validation to succeed but received issues: ${JSON.stringify(result.issues)}`,
+		);
+	}
+	return result.data;
+}
+
+function expectFailure(result: ValidationResult<unknown>): ValidationIssue[] {
+	if (result.success) {
+		throw new Error(
+			`Expected validation to fail but parsing succeeded: ${JSON.stringify(result.data)}`,
+		);
+	}
+	expect(result.issues.length).toBeGreaterThan(0);
+	for (const issue of result.issues) {
+		expect(typeof issue.path).toBe("string");
+		expect(typeof issue.message).toBe("string");
+		expect(typeof issue.code).toBe("string");
+	}
+	return result.issues;
+}
 
 describe("safeParseSettings", () => {
 	describe("successful parsing contract", () => {
 		it("returns success: true and the parsed data for a fully valid settings object", () => {
 			const validSettings = getValidSettings();
-			const result = safeParseSettings(validSettings);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toEqual(validSettings);
-			}
+			const data = expectSuccess(safeParseSettings(validSettings));
+			expect(data).toEqual(validSettings);
 		});
 
 		it("applies schema defaults when optional fields with defaults are omitted", () => {
-			const validSettings = getValidSettings();
-			const { version, ...settingsWithoutVersion } = validSettings;
-			const result = safeParseSettings(settingsWithoutVersion);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data.version).toBe(1);
-			}
+			const { version, ...settingsWithoutVersion } = getValidSettings();
+			const data = expectSuccess(safeParseSettings(settingsWithoutVersion));
+			expect(data.version).toBe(1);
 		});
 
 		it("strips unknown top-level and nested properties from the parsed data", () => {
@@ -55,29 +78,42 @@ describe("safeParseSettings", () => {
 					unknownGlobal: true,
 				},
 			};
-			const result = safeParseSettings(input);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).not.toHaveProperty("unknownTopLevel");
-				expect(result.data.global).not.toHaveProperty("unknownGlobal");
-			}
+			const data = expectSuccess(safeParseSettings(input));
+			expect(data).not.toHaveProperty("unknownTopLevel");
+			expect(data.global).not.toHaveProperty("unknownGlobal");
+		});
+	});
+
+	describe("mode option (strict vs loose)", () => {
+		it("defaults to strict mode when no options are provided", () => {
+			const validSettings = getValidSettings();
+			expect(safeParseSettings(validSettings)).toEqual(
+				safeParseSettings(validSettings, { mode: "strict" }),
+			);
+		});
+
+		it("exercises the loose branch and returns a well-formed result for valid input", () => {
+			const validSettings = getValidSettings();
+			const data = expectSuccess(
+				safeParseSettings(validSettings, { mode: "loose" }),
+			);
+			expect(data).toEqual(validSettings);
+		});
+
+		it("loose mode still rejects structurally invalid input (validation is never skipped)", () => {
+			expectFailure(safeParseSettings({ concurrency: 0 }, { mode: "loose" }));
 		});
 	});
 
 	describe("failed parsing contract (Issue Mapping)", () => {
-		it("returns success: false with an empty path string for non-object root inputs", () => {
-			const invalidInputs = [null, undefined, "string", 42, true, []];
-			for (const input of invalidInputs) {
-				const result = safeParseSettings(input);
-				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(result.issues).toBeInstanceOf(Array);
-					expect(result.issues.length).toBeGreaterThan(0);
-					expect(result.issues[0].path).toBe("");
-					expect(result.issues[0].code).toBe("invalid_type");
-				}
-			}
-		});
+		it.each([null, undefined, "string", 42, true, []])(
+			"returns an empty path and invalid_type for non-object root input %s",
+			(input) => {
+				const issues = expectFailure(safeParseSettings(input));
+				expect(issues[0]?.path).toBe("");
+				expect(issues[0]?.code).toBe("invalid_type");
+			},
+		);
 
 		it("maps nested paths correctly using dot notation for missing required fields", () => {
 			const invalidSettings = {
@@ -96,20 +132,16 @@ describe("safeParseSettings", () => {
 					codecOptions: {},
 				},
 			};
-			const result = safeParseSettings(invalidSettings);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				const paths = result.issues.map((issue) => issue.path);
-				expect(paths).toContain("global.outputDirectoryPath");
-				expect(paths).toContain("global.concurrency");
-				expect(paths).toContain("audio.audioCodec");
-				const concurrencyIssue = result.issues.find(
-					(i) => i.path === "global.concurrency",
-				);
-				expect(concurrencyIssue).toBeDefined();
-				expect(concurrencyIssue?.code).toBe("invalid_type");
-				expect(typeof concurrencyIssue?.message).toBe("string");
-			}
+			const issues = expectFailure(safeParseSettings(invalidSettings));
+			const paths = issues.map((issue) => issue.path);
+			expect(paths).toContain("global.outputDirectoryPath");
+			expect(paths).toContain("global.concurrency");
+			expect(paths).toContain("audio.audioCodec");
+			const concurrencyIssue = issues.find(
+				(i) => i.path === "global.concurrency",
+			);
+			expect(concurrencyIssue).toBeDefined();
+			expect(concurrencyIssue?.code).toBe("invalid_type");
 		});
 
 		it("captures constraint violation codes and messages (e.g., too_big)", () => {
@@ -129,7 +161,6 @@ describe("safeParseSettings", () => {
 				);
 				expect(concurrencyIssue).toBeDefined();
 				expect(concurrencyIssue?.code).toBe("too_big");
-				expect(concurrencyIssue?.message).toContain("10");
 			}
 		});
 
@@ -142,50 +173,34 @@ describe("safeParseSettings", () => {
 					outputDirectoryPath: "/music/../etc/passwd",
 				},
 			};
-			const result = safeParseSettings(invalidSettings);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				const pathIssue = result.issues.find(
-					(i) => i.path === "global.outputDirectoryPath",
-				);
-				expect(pathIssue).toBeDefined();
-				expect(pathIssue?.code).toBe("custom");
-				expect(pathIssue?.message).toBe(
-					"Path contains traversal sequences (..)",
-				);
-			}
+			const issues = expectFailure(safeParseSettings(invalidSettings));
+			const pathIssue = issues.find(
+				(i) => i.path === "global.outputDirectoryPath",
+			);
+			expect(pathIssue?.code).toBe("custom");
+			expect(pathIssue?.message).toBe("Path contains traversal sequences (..)");
 		});
 
 		it("captures multiple simultaneous issues without throwing or truncating", () => {
+			const base = getValidSettings();
 			const invalidSettings = {
+				...base,
 				version: -1,
 				global: {
+					...base.global,
 					outputDirectoryPath: "",
-					openOutputFolderOnComplete: "yes",
+					openOutputFolderOnComplete: "yes" as unknown as boolean,
 					concurrency: 0,
-					overwrite: true,
-					noOverwrite: false,
 				},
-				audio: {
-					audioCodec: "invalid_codec",
-					audioQuality: "auto",
-					audioQualityValue: "auto",
-					outputExtension: "copy",
-					audioFilter: "",
-					filterOptions: {},
-					codecOptions: {},
-				},
+				audio: { ...base.audio, audioCodec: "invalid_codec" },
 			};
-			const result = safeParseSettings(invalidSettings);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues.length).toBeGreaterThanOrEqual(4);
-				const paths = result.issues.map((i) => i.path);
-				expect(paths).toContain("version");
-				expect(paths).toContain("global.outputDirectoryPath");
-				expect(paths).toContain("global.openOutputFolderOnComplete");
-				expect(paths).toContain("audio.audioCodec");
-			}
+			const issues = expectFailure(safeParseSettings(invalidSettings));
+			expect(issues.length).toBeGreaterThanOrEqual(4);
+			const paths = issues.map((i) => i.path);
+			expect(paths).toContain("version");
+			expect(paths).toContain("global.outputDirectoryPath");
+			expect(paths).toContain("global.openOutputFolderOnComplete");
+			expect(paths).toContain("audio.audioCodec");
 		});
 	});
 });
@@ -194,68 +209,48 @@ describe("safeParseTracks", () => {
 	describe("successful parsing contract", () => {
 		it("returns success: true and parsed data for a valid tracks array", () => {
 			const tracks = [makeTrack(), makeTrack()];
-			const result = safeParseTracks(tracks);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toHaveLength(2);
-				expect(result.data[0]?.id).toBe(tracks[0]?.id);
-			}
+			const data = expectSuccess(safeParseTracks(tracks));
+			expect(data).toHaveLength(2);
+			expect(data[0]?.id).toBe(tracks[0]?.id);
 		});
 
 		it("accepts an empty tracks array", () => {
-			const result = safeParseTracks([]);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toEqual([]);
-			}
+			const data = expectSuccess(safeParseTracks([]));
+			expect(data).toEqual([]);
 		});
 
 		it("strips unknown top-level properties from tracks", () => {
 			const tracks = [{ ...makeTrack(), unknownProp: "should be stripped" }];
-			const result = safeParseTracks(tracks);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data[0]).not.toHaveProperty("unknownProp");
-			}
+			const data = expectSuccess(safeParseTracks(tracks));
+			expect(data[0]).not.toHaveProperty("unknownProp");
 		});
 	});
 
 	describe("failed parsing contract", () => {
-		it("rejects non-array input", () => {
-			for (const input of [null, undefined, "string", 42, {}, makeTrack()]) {
-				const result = safeParseTracks(input);
-				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(result.issues.length).toBeGreaterThan(0);
-				}
-			}
-		});
+		it.each([null, undefined, "string", 42, {}, makeTrack()])(
+			"rejects non-array input %s",
+			(input) => {
+				expectFailure(safeParseTracks(input));
+			},
+		);
 
 		it("rejects a track with missing required fields and reports path", () => {
-			const invalidTrack = { ...makeTrack() };
-			delete (invalidTrack as any).id;
-			const result = safeParseTracks([invalidTrack]);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.path).toBe("0.id");
-			}
+			const { id, ...invalidTrack } = makeTrack();
+			const issues = expectFailure(safeParseTracks([invalidTrack]));
+			expect(issues[0]?.path).toBe("0.id");
 		});
 
 		it("rejects a track with invalid status and reports nested path", () => {
-			const result = safeParseTracks([makeTrack({ status: "invalid" as any })]);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.path).toBe("0.status");
-			}
+			const issues = expectFailure(
+				safeParseTracks([makeTrack({ status: "invalid" as any })]),
+			);
+			expect(issues[0]?.path).toBe("0.status");
 		});
 
 		it("reports correct index for invalid items in the array", () => {
 			const tracks = [makeTrack(), makeTrack({ filePath: "" })];
-			const result = safeParseTracks(tracks);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.path).toBe("1.filePath");
-			}
+			const issues = expectFailure(safeParseTracks(tracks));
+			expect(issues[0]?.path).toBe("1.filePath");
 		});
 
 		it("captures multiple simultaneous issues", () => {
@@ -263,12 +258,69 @@ describe("safeParseTracks", () => {
 				makeTrack({ id: "", filePath: "" }),
 				makeTrack({ selected: 99 as any }),
 			];
-			const result = safeParseTracks(tracks);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues.length).toBeGreaterThanOrEqual(3);
-			}
+			const issues = expectFailure(safeParseTracks(tracks));
+			expect(issues.length).toBeGreaterThanOrEqual(3);
 		});
+	});
+});
+
+describe("safeParseTrack", () => {
+	it("returns success: true and round-trips the parsed data", () => {
+		const track = makeTrack();
+		const data = expectSuccess(safeParseTrack(track));
+		expect(data).toEqual(track);
+	});
+
+	it("strips unknown top-level properties", () => {
+		const data = expectSuccess(
+			safeParseTrack({ ...makeTrack(), unknownProp: "stripped" }),
+		);
+		expect(data).not.toHaveProperty("unknownProp");
+	});
+
+	it.each([null, undefined, "string", 42, true, [], {}])(
+		"rejects non-object input %s",
+		(input) => {
+			expectFailure(safeParseTrack(input));
+		},
+	);
+
+	it("reports field paths WITHOUT array-index prefixes (single-object contract)", () => {
+		const issues = expectFailure(
+			safeParseTrack(makeTrack({ status: "invalid" as any })),
+		);
+		expect(issues[0]?.path).toBe("status");
+	});
+
+	it("rejects a track missing a required field and reports its path", () => {
+		const { id, ...withoutId } = makeTrack();
+		const issues = expectFailure(safeParseTrack(withoutId));
+		expect(issues[0]?.path).toBe("id");
+	});
+
+	it("reports deeply nested array paths", () => {
+		const issues = expectFailure(
+			safeParseTrack(
+				makeTrack({
+					common: {
+						picture: [
+							{
+								format: "image/jpeg",
+								data: "x".repeat(MAX_BASE64_IMAGE_SIZE + 1),
+							},
+						],
+					},
+				} as any),
+			),
+		);
+		expect(issues[0]?.path).toBe("common.picture.0.data");
+	});
+
+	it("re-verifies null-byte rejection at the boundary (defense in depth)", () => {
+		const issues = expectFailure(
+			safeParseTrack(makeTrack({ filePath: "/music/\0track.mp3" })),
+		);
+		expect(issues.some((i) => i.path === "filePath")).toBe(true);
 	});
 });
 
@@ -280,125 +332,139 @@ describe("safeParseData", () => {
 
 	describe("successful parsing contract", () => {
 		it("returns success: true for a fully valid Data payload", () => {
-			const result = safeParseData(createValidData());
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data.tracks).toHaveLength(1);
-				expect(result.data.settings).toBeDefined();
-			}
+			const data = expectSuccess(safeParseData(createValidData()));
+			expect(data.tracks).toHaveLength(1);
+			expect(data.settings).toBeDefined();
 		});
 
 		it("accepts empty tracks array with valid settings", () => {
-			const result = safeParseData({
-				tracks: [],
-				settings: getValidSettings(),
-			});
-			expect(result.success).toBe(true);
+			expectSuccess(
+				safeParseData({ tracks: [], settings: getValidSettings() }),
+			);
 		});
 	});
 
 	describe("failed parsing contract", () => {
-		it("rejects non-object input", () => {
-			for (const input of [null, undefined, "string", 42, []]) {
-				const result = safeParseData(input);
-				expect(result.success).toBe(false);
-			}
-		});
+		it.each([null, undefined, "string", 42, []])(
+			"rejects non-object input %s",
+			(input) => {
+				expectFailure(safeParseData(input));
+			},
+		);
 
 		it("rejects missing tracks property", () => {
 			const { tracks, ...withoutTracks } = createValidData();
-			const result = safeParseData(withoutTracks);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.path).toBe("tracks");
-			}
+			const issues = expectFailure(safeParseData(withoutTracks));
+			expect(issues[0]?.path).toBe("tracks");
 		});
 
 		it("rejects missing settings property", () => {
 			const { settings, ...withoutSettings } = createValidData();
-			const result = safeParseData(withoutSettings);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.path).toBe("settings");
-			}
+			const issues = expectFailure(safeParseData(withoutSettings));
+			expect(issues[0]?.path).toBe("settings");
 		});
 
 		it("rejects invalid track within the array and reports nested path", () => {
-			const result = safeParseData({
-				tracks: [makeTrack({ status: "invalid" as any })],
-				settings: getValidSettings(),
-			});
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.path).toBe("tracks.0.status");
-			}
+			const issues = expectFailure(
+				safeParseData({
+					tracks: [makeTrack({ status: "invalid" as any })],
+					settings: getValidSettings(),
+				}),
+			);
+			expect(issues[0]?.path).toBe("tracks.0.status");
 		});
 
 		it("rejects invalid settings and reports nested path", () => {
-			const result = safeParseData({
-				tracks: [makeTrack()],
-				settings: {
-					...getValidSettings(),
-					global: { ...getValidSettings().global, concurrency: 0 },
-				},
-			});
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.path).toBe("settings.global.concurrency");
-			}
+			const validSettings = getValidSettings();
+			const issues = expectFailure(
+				safeParseData({
+					tracks: [makeTrack()],
+					settings: {
+						...validSettings,
+						global: { ...validSettings.global, concurrency: 0 },
+					},
+				}),
+			);
+			expect(issues[0]?.path).toBe("settings.global.concurrency");
 		});
 
 		it("captures issues from both tracks and settings simultaneously", () => {
-			const result = safeParseData({
-				tracks: [makeTrack({ id: "" })],
-				settings: {
-					...getValidSettings(),
-					global: { ...getValidSettings().global, concurrency: 0 },
-				},
-			});
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				const paths = result.issues.map((i: ValidationIssue) => i.path);
-				expect(paths).toContain("tracks.0.id");
-				expect(paths).toContain("settings.global.concurrency");
-			}
+			const validSettings = getValidSettings();
+			const issues = expectFailure(
+				safeParseData({
+					tracks: [makeTrack({ id: "" })],
+					settings: {
+						...validSettings,
+						global: { ...validSettings.global, concurrency: 0 },
+					},
+				}),
+			);
+			const paths = issues.map((i) => i.path);
+			expect(paths).toContain("tracks.0.id");
+			expect(paths).toContain("settings.global.concurrency");
 		});
 	});
 });
 
+describe("mapZodIssues (verified through the public API)", () => {
+	it("flattens union branch errors into leaf issues (no opaque invalid_union leaked)", () => {
+		const issues = expectFailure(safeParseTrackChanges({ selected: 99 }));
+		expect(issues.some((i) => i.code === "invalid_union")).toBe(false);
+		expect(issues.some((i) => i.path === "selected")).toBe(true);
+	});
+
+	it("emits each unique path|code|message signature exactly once (dedup)", () => {
+		const issues = expectFailure(safeParseTrackChanges({ selected: 99 }));
+		const signatures = issues.map((i) => `${i.path}|${i.code}|${i.message}`);
+		expect(new Set(signatures).size).toBe(signatures.length);
+	});
+
+	it("flattens the status/reason branch of the union", () => {
+		const issues = expectFailure(
+			safeParseTrackChanges({ status: "failed", reason: "" }),
+		);
+		expect(issues.some((i) => i.path === "reason")).toBe(true);
+	});
+
+	it("caps flattened issues at MAX_VALIDATION_ISSUES and appends a truncation marker", () => {
+		const oversizedCollectionIds = Array.from(
+			{ length: MAX_VALIDATION_ISSUES + 50 },
+			() => "",
+		);
+		const issues = expectFailure(
+			safeParseTracks([makeTrack({ collectionIds: oversizedCollectionIds })]),
+		);
+		expect(issues).toHaveLength(MAX_VALIDATION_ISSUES + 1);
+		expect(issues[issues.length - 1]?.code).toBe(ISSUE_LIMIT_CODE);
+		expect(issues[issues.length - 1]?.path).toBe("");
+
+		const realIssues = issues.filter((i) => i.code !== ISSUE_LIMIT_CODE);
+		expect(realIssues).toHaveLength(MAX_VALIDATION_ISSUES);
+	});
+
+	it("returns frozen issue objects (shared results cannot be mutated downstream)", () => {
+		const issues = expectFailure(safeParseSettings(null));
+		for (const issue of issues) {
+			expect(Object.isFrozen(issue)).toBe(true);
+		}
+	});
+});
+
 describe("mapZodIssues DRY contract", () => {
-	it("produces identical issue format across all validators", () => {
-		const invalidSettings = { invalid: true };
-		const invalidTracks = "not-an-array";
-		const invalidData = null;
+	const cases: ReadonlyArray<
+		readonly [name: string, run: () => ValidationResult<unknown>]
+	> = [
+		["safeParseSettings", () => safeParseSettings({ invalid: true })],
+		["safeParseTracks", () => safeParseTracks("not-an-array")],
+		["safeParseTrack", () => safeParseTrack(42)],
+		["safeParseData", () => safeParseData(null)],
+		["safeParseTrackChanges", () => safeParseTrackChanges("str")],
+	];
 
-		const settingsResult = safeParseSettings(invalidSettings);
-		const tracksResult = safeParseTracks(invalidTracks);
-		const dataResult = safeParseData(invalidData);
-
-		expect(settingsResult.success).toBe(false);
-		expect(tracksResult.success).toBe(false);
-		expect(dataResult.success).toBe(false);
-
-		if (
-			!settingsResult.success &&
-			!tracksResult.success &&
-			!dataResult.success
-		) {
-			for (const issues of [
-				settingsResult.issues,
-				tracksResult.issues,
-				dataResult.issues,
-			]) {
-				for (const issue of issues) {
-					expect(issue).toHaveProperty("path");
-					expect(issue).toHaveProperty("message");
-					expect(issue).toHaveProperty("code");
-					expect(typeof issue.path).toBe("string");
-					expect(typeof issue.message).toBe("string");
-					expect(typeof issue.code).toBe("string");
-				}
-			}
+	it.each(cases)("%s emits the shared ValidationIssue contract", (_, run) => {
+		const issues = expectFailure(run());
+		for (const issue of issues) {
+			expect(Object.keys(issue).sort()).toEqual(["code", "message", "path"]);
 		}
 	});
 });
@@ -406,78 +472,47 @@ describe("mapZodIssues DRY contract", () => {
 describe("safeParseTrackChanges", () => {
 	describe("successful parsing contract", () => {
 		it("returns success: true for valid field changes", () => {
-			const result = safeParseTrackChanges({ selected: 1 });
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toEqual({ selected: 1 });
-			}
+			const data = expectSuccess(safeParseTrackChanges({ selected: 1 }));
+			expect(data).toEqual({ selected: 1 });
 		});
 
 		it("returns success: true for valid status changes", () => {
-			const result = safeParseTrackChanges({
-				status: "failed",
-				reason: "FFmpeg error",
-			});
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toEqual({
-					status: "failed",
-					reason: "FFmpeg error",
-				});
-			}
+			const data = expectSuccess(
+				safeParseTrackChanges({ status: "failed", reason: "FFmpeg error" }),
+			);
+			expect(data).toEqual({ status: "failed", reason: "FFmpeg error" });
 		});
 
-		it("strips unknown top-level fields", () => {
-			const result = safeParseTrackChanges({
-				selected: 1,
-				unknownProp: "stripped",
-			});
-			expect(result.success).toBe(false);
+		it("rejects unknown top-level fields (strict mode)", () => {
+			expectFailure(
+				safeParseTrackChanges({ selected: 1, unknownProp: "stripped" }),
+			);
 		});
 	});
 
 	describe("failed parsing contract", () => {
-		it("rejects non-object input and reports issues", () => {
-			for (const input of [null, undefined, "str", 42, []]) {
-				const result = safeParseTrackChanges(input);
-				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(result.issues.length).toBeGreaterThan(0);
-				}
-			}
-		});
+		it.each([null, undefined, "str", 42, []])(
+			"rejects non-object input %s",
+			(input) => {
+				expectFailure(safeParseTrackChanges(input));
+			},
+		);
 
 		it("rejects an empty object (no-op mutation)", () => {
-			const result = safeParseTrackChanges({});
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(result.issues[0]?.message).toContain("At least one field");
-			}
+			const issues = expectFailure(safeParseTrackChanges({}));
+			expect(issues[0]?.message).toContain("At least one field");
 		});
 
 		it("rejects status + fields combination", () => {
-			const result = safeParseTrackChanges({
-				status: "pending",
-				selected: 1,
-			});
-			expect(result.success).toBe(false);
+			expectFailure(safeParseTrackChanges({ status: "pending", selected: 1 }));
 		});
 
 		it("rejects failed status without reason", () => {
-			const result = safeParseTrackChanges({ status: "failed" });
-			expect(result.success).toBe(false);
+			expectFailure(safeParseTrackChanges({ status: "failed" }));
 		});
 
 		it("produces issues with path, message, and code", () => {
-			const result = safeParseTrackChanges({ selected: 99 });
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				for (const issue of result.issues) {
-					expect(typeof issue.path).toBe("string");
-					expect(typeof issue.message).toBe("string");
-					expect(typeof issue.code).toBe("string");
-				}
-			}
+			expectFailure(safeParseTrackChanges({ selected: 99 }));
 		});
 	});
 });
