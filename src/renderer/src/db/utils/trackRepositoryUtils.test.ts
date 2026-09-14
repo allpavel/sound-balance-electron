@@ -563,7 +563,7 @@ describe("trackRepositoryUtils", () => {
 			});
 		});
 
-		it("rejects invalid collection ids", () => {
+		it("rejects invalid collection ids and reports the precise indexed path", () => {
 			expect(() =>
 				validateTrackChanges(
 					{
@@ -599,15 +599,6 @@ describe("trackRepositoryUtils", () => {
 			expect(() => validateTrackChanges(42, "changes")).toThrow(
 				"changes must be a non-null object",
 			);
-		});
-
-		it("rejects invalid collectionIds via schema validation", () => {
-			expect(() =>
-				validateTrackChanges(
-					{ collectionIds: [SYSTEM_COLLECTION_ID, ""] },
-					"changes",
-				),
-			).toThrow(/changes is invalid/);
 		});
 
 		it("rejects invalid selected values via schema validation", () => {

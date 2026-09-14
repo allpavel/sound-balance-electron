@@ -330,23 +330,6 @@ describe("tracksRepository", () => {
 			]);
 		});
 
-		it("rejects invalid collectionIds values in update changes", async () => {
-			await db.tracks.add(
-				makeTrack({
-					id: "t1",
-					collectionIds: [SYSTEM_COLLECTION_ID],
-				}),
-			);
-			await expect(
-				tracksRepository.update("t1", {
-					collectionIds: [SYSTEM_COLLECTION_ID, ""],
-				}),
-			).rejects.toThrow(/changes is invalid/);
-			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
-				SYSTEM_COLLECTION_ID,
-			]);
-		});
-
 		it("rejects an empty changes object (no-op mutation)", async () => {
 			await db.tracks.add(makeTrack({ id: "t1", selected: 0 }));
 			await expect(tracksRepository.update("t1", {} as any)).rejects.toThrow(
@@ -489,28 +472,6 @@ describe("tracksRepository", () => {
 					},
 				]),
 			).rejects.toThrow("updates[0].changes is invalid: collectionIds.1:");
-			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
-				SYSTEM_COLLECTION_ID,
-			]);
-		});
-
-		it("rejects invalid collectionIds values in updateMany changes", async () => {
-			await db.tracks.add(
-				makeTrack({
-					id: "t1",
-					collectionIds: [SYSTEM_COLLECTION_ID],
-				}),
-			);
-			await expect(
-				tracksRepository.updateMany([
-					{
-						id: "t1",
-						changes: {
-							collectionIds: [SYSTEM_COLLECTION_ID, ""],
-						},
-					},
-				]),
-			).rejects.toThrow(/updates\[0\]\.changes is invalid/);
 			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 			]);
