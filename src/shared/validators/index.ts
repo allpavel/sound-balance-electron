@@ -28,16 +28,24 @@ import {
 	trackInputSchema,
 	tracksArraySchema,
 } from "@shared/schemas/track.schema";
-import type { ZodError, ZodSafeParseResult } from "zod";
+import type { ZodError, ZodSafeParseResult, ZodType } from "zod";
+
+export const MAX_VALIDATION_ISSUES = 100;
+export const ISSUE_LIMIT_CODE = "issue_limit_reached";
+
+const FALLBACK_MESSAGE = "Invalid input";
+const FALLBACK_CODE = "custom";
 
 export interface ValidationIssue {
-	path: string;
-	message: string;
-	code: string;
+	readonly path: string;
+	readonly message: string;
+	readonly code: string;
 }
 // Backward-compatible alias. Existing imports of
 // SettingsValidationIssue continue to work without modification.
 export type SettingsValidationIssue = ValidationIssue;
+
+export type SettingsParseMode = "strict" | "loose";
 
 export type ValidationResult<T> =
 	| { success: true; data: T }
@@ -49,12 +57,87 @@ export type TracksParseResult = ValidationResult<Metadata[]>;
 export type DataParseResult = ValidationResult<Data>;
 export type TrackChangesParseResult = ValidationResult<TrackChanges>;
 
+interface Issue {
+	readonly path?: PropertyKey[];
+	readonly message?: string;
+	readonly code?: string;
+	readonly errors?: readonly (readonly Issue[])[];
+}
+
+/**
+ * Flattens ZodError.issues into a list of frozen ValidationIssue objects,
+ * recursing into union branch errors and deduplicating by
+ * (path | code | message) signature.
+ */
 function mapZodIssues(error: ZodError): ValidationIssue[] {
-	return error.issues.map((issue) => ({
-		path: issue.path.join("."),
-		message: issue.message,
-		code: issue.code,
-	}));
+	const result: ValidationIssue[] = [];
+	const seen = new Set<string>();
+	let truncated = false;
+
+	const walk = (issues: Issue[], prefix: PropertyKey[] = []): void => {
+		if (!Array.isArray(issues)) return;
+
+		for (const issue of issues) {
+			if (result.length >= MAX_VALIDATION_ISSUES) {
+				truncated = true;
+				return;
+			}
+			if (!issue || typeof issue !== "object") continue;
+
+			const currentPath = [...prefix, ...(issue.path ?? [])];
+
+			if (issue.code === "invalid_union" && Array.isArray(issue.errors)) {
+				let flattened = false;
+				for (const branch of issue.errors) {
+					const leaves = Array.isArray(branch)
+						? (branch as readonly Issue[])
+						: null;
+					if (leaves && leaves.length > 0) {
+						walk(leaves as Issue[], currentPath);
+						flattened = true;
+					}
+				}
+				if (flattened) continue;
+			}
+
+			const path = currentPath.map((segment) => String(segment)).join(".");
+			const message = issue.message ?? FALLBACK_MESSAGE;
+			let code = issue.code ?? FALLBACK_CODE;
+			if (code === "invalid_union") {
+				code = "invalid_type";
+			}
+
+			const signature = `${path}|${code}|${message}`;
+			if (!seen.has(signature)) {
+				seen.add(signature);
+				result.push(Object.freeze({ path, message, code }));
+			}
+		}
+	};
+
+	walk(error.issues as unknown as Issue[]);
+
+	if (truncated) {
+		result.push(
+			Object.freeze({
+				path: "",
+				message: `Validation aborted after ${MAX_VALIDATION_ISSUES} issues; the payload may be malformed or hostile.`,
+				code: ISSUE_LIMIT_CODE,
+			}),
+		);
+	}
+
+	return result;
+}
+
+/**
+ * Single generic implementation for all validators.
+ */
+function validate<T>(schema: ZodType<T>, input: unknown): ValidationResult<T> {
+	const result: ZodSafeParseResult<T> = schema.safeParse(input);
+	return result.success
+		? { success: true, data: result.data }
+		: { success: false, issues: mapZodIssues(result.error) };
 }
 
 /**
@@ -62,36 +145,24 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
  */
 export function safeParseSettings(
 	input: unknown,
-	{ mode }: { mode: "strict" | "loose" } = { mode: "strict" },
+	{ mode }: { mode: SettingsParseMode } = { mode: "strict" },
 ): SettingsParseResult {
 	const schema = mode === "strict" ? strictSettingsSchema : looseSettingsSchema;
-	const result: ZodSafeParseResult<SettingsForm> = schema.safeParse(input);
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	return { success: false, issues: mapZodIssues(result.error) };
+	return validate(schema, input);
 }
 
 /**
  * Validates an array of track objects against trackInputSchema.
  */
 export function safeParseTracks(input: unknown): TracksParseResult {
-	const result = tracksArraySchema.safeParse(input);
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	return { success: false, issues: mapZodIssues(result.error) };
+	return validate(tracksArraySchema, input);
 }
 
 /**
  * Validates a track object against trackInputSchema.
  */
 export function safeParseTrack(input: unknown): TrackParseResult {
-	const result = trackInputSchema.safeParse(input);
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	return { success: false, issues: mapZodIssues(result.error) };
+	return validate(trackInputSchema, input);
 }
 
 /**
@@ -100,20 +171,12 @@ export function safeParseTrack(input: unknown): TrackParseResult {
  * Uses dataSchema which composes tracksArraySchema + strictSettingsSchema.
  */
 export function safeParseData(input: unknown): DataParseResult {
-	const result = dataSchema.safeParse(input);
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	return { success: false, issues: mapZodIssues(result.error) };
+	return validate(dataSchema, input);
 }
 
 /**
  * Validates partial track mutation payloads.
  */
 export function safeParseTrackChanges(input: unknown): TrackChangesParseResult {
-	const result = trackChangesSchema.safeParse(input);
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	return { success: false, issues: mapZodIssues(result.error) };
+	return validate(trackChangesSchema, input);
 }
