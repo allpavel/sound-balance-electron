@@ -84,19 +84,6 @@ function assertTrackInput(track: unknown, index: number): Metadata {
 	);
 }
 
-function assertTrackChanges(changes: unknown, context: string): TrackChanges {
-	if (!isPlainObject(changes)) {
-		throw new Error(`${context} must be a non-null object`);
-	}
-	const result = safeParseTrackChanges(changes);
-	if (result.success) {
-		return result.data;
-	}
-	throw new Error(
-		`${context} is invalid: ${formatValidationIssues(result.issues)}`,
-	);
-}
-
 function normalizeCollectionIds(
 	current: unknown,
 	targetCollectionId: string,
@@ -154,7 +141,17 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
 }
 
 function validateTrackChanges(changes: unknown, context: string): TrackChanges {
-	const validated = assertTrackChanges(changes, context);
+	if (!isPlainObject(changes)) {
+		throw new Error(`${context} must be a non-null object`);
+	}
+
+	const result = safeParseTrackChanges(changes);
+	if (!result.success) {
+		throw new Error(
+			`${context} is invalid: ${formatValidationIssues(result.issues)}`,
+		);
+	}
+	const validated = result.data;
 
 	if (
 		!("collectionIds" in validated) ||
