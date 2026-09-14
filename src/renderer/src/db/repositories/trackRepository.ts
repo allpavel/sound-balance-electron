@@ -30,11 +30,6 @@ import {
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
 
-type TrackUpdate = {
-	id: string;
-	changes: TrackChanges;
-};
-
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
 		if (!isNonEmptyString(id)) {
@@ -140,14 +135,14 @@ export const tracksRepository = {
 		});
 	},
 
-	async update(id: string, changes: TrackChanges): Promise<number> {
+	async update(id: string, changes: unknown): Promise<number> {
 		if (!isNonEmptyString(id)) {
 			throw new Error("ID must be a non-empty string");
 		}
 		return await db.tracks.update(id, validateTrackChanges(changes, "changes"));
 	},
 
-	async updateMany(updates: { id: string; changes: TrackChanges }[]) {
+	async updateMany(updates: unknown): Promise<number> {
 		if (!Array.isArray(updates)) {
 			throw new Error("Updates must be an array");
 		}
@@ -158,7 +153,7 @@ export const tracksRepository = {
 		const seenIds = new Set<string>();
 		const normalizedUpdates: {
 			id: string;
-			changes: Partial<Metadata>;
+			changes: TrackChanges;
 		}[] = [];
 
 		for (const [index, update] of updates.entries()) {
@@ -166,20 +161,16 @@ export const tracksRepository = {
 			if (!isPlainObject(update)) {
 				throw new Error(`${context} must be an object`);
 			}
-			const candidate = update as Partial<TrackUpdate>;
-			if (!isNonEmptyString(candidate.id)) {
+			if (!isNonEmptyString(update.id)) {
 				throw new Error(`${context}.id must be a non-empty string`);
 			}
-			if (seenIds.has(candidate.id)) {
-				throw new Error(`updates contains duplicate id: ${candidate.id}`);
+			if (seenIds.has(update.id)) {
+				throw new Error(`updates contains duplicate id: ${update.id}`);
 			}
-			seenIds.add(candidate.id);
+			seenIds.add(update.id);
 			normalizedUpdates.push({
-				id: candidate.id,
-				changes: validateTrackChanges(
-					candidate.changes as Partial<Metadata>,
-					`${context}.changes`,
-				),
+				id: update.id,
+				changes: validateTrackChanges(update.changes, `${context}.changes`),
 			});
 		}
 
