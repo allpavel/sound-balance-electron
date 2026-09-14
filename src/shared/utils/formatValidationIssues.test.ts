@@ -32,7 +32,7 @@ describe("formatValidationIssues", () => {
 		[
 			"an empty path (root-level issue)",
 			{ path: "", message: "Invalid root payload" },
-			": Invalid root payload",
+			"Invalid root payload",
 		],
 		[
 			"an empty message",
