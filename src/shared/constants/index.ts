@@ -34,3 +34,11 @@ export const MAX_PICTURE_COUNT = 20;
 export const MAX_REASON_LENGTH = 1000;
 export const MAX_PATH_LENGTH = 4096;
 export const NULL_BYTE_PATTERN = /\0/;
+
+export const PATH_TRAVERSAL_PATTERN = /\.\.[/\\]/;
+
+export const MIN_CONCURRENCY = 1;
+export const MAX_CONCURRENCY = 10;
+
+export const MIN_YEAR = 1000;
+export const MAX_YEAR = 9999;

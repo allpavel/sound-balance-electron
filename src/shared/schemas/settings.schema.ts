@@ -15,6 +15,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import {
+	MAX_CONCURRENCY,
+	MAX_PATH_LENGTH,
+	MIN_CONCURRENCY,
+	NULL_BYTE_PATTERN,
+	PATH_TRAVERSAL_PATTERN,
+} from "@shared/constants";
 import { optionsSchema } from "@shared/schemas/options.schema";
 import { z } from "zod";
 
@@ -185,10 +192,6 @@ const vbrSchema = z.enum(vbrValues);
 const encoderNames = z.enum(ENCODER_NAMES);
 const encoderCategorySchema = z.enum(ENCODER_CATEGORIES);
 
-const PATH_TRAVERSAL_PATTERN = /\.\.[/\\]/;
-const NULL_BYTE_PATTERN = /\0/;
-const MAX_PATH_LENGTH = 4096;
-
 const baseOutputDirectoryPathSchema = z
 	.string()
 	.max(MAX_PATH_LENGTH, `Path exceeds ${MAX_PATH_LENGTH} characters`);
@@ -214,8 +217,8 @@ const commonSettingsSchema = z.object({
 	concurrency: z.coerce
 		.number()
 		.int()
-		.min(1)
-		.max(10, "Concurrency must be between 1 and 10"),
+		.min(MIN_CONCURRENCY)
+		.max(MAX_CONCURRENCY, "Concurrency must be between 1 and 10"),
 	overwrite: z.boolean(),
 	noOverwrite: z.boolean(),
 });

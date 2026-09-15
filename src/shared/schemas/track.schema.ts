@@ -20,6 +20,8 @@ import {
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
+	MAX_YEAR,
+	MIN_YEAR,
 	NULL_BYTE_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
@@ -86,7 +88,7 @@ const commonSchema = z
 		artist: z.string().optional(),
 		title: z.string().optional(),
 		album: z.string().optional(),
-		year: z.number().int().min(1000).max(9999).optional(),
+		year: z.number().int().min(MIN_YEAR).max(MAX_YEAR).optional(),
 		track: z
 			.object({ no: z.number().nullable(), of: z.number().nullable() })
 			.optional(),
