@@ -23,12 +23,12 @@ import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
 import { getTrackTitle, isDirectory } from "@main/lib/utils";
 import { ProcessManager } from "@main/services/ffmpeg/processManager";
 import type { Data } from "@shared/schemas/data.schema";
-import type { Metadata } from "@shared/schemas/track.schema";
+import type { Metadata, ProcessingStatus } from "@shared/schemas/track.schema";
 import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
 import { safeParseSettings, safeParseTrack } from "@shared/validators";
 import type { IpcMainInvokeEvent } from "electron";
 import PQueue from "p-queue";
-import type { Failed, ProcessingStatus } from "@/types";
+import type { Failed } from "@/types";
 import { TwoPassProcessManager } from "./ffmpeg/twoPassProcessManager";
 
 const STOP_GRACE_PERIOD_MS = 100;
@@ -194,7 +194,7 @@ export const startProcessing = async (
 				event.sender.send(EVENT_CHANNELS.PROCESSING_RESULT, {
 					id: track.id,
 					status: "failed",
-					message: errorMessage,
+					reason: errorMessage,
 				} satisfies ProcessingStatus);
 			} finally {
 				processingState.activeProcesses.delete(track.id);

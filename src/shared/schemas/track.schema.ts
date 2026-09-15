@@ -408,4 +408,4 @@ export type TrackChanges = z.infer<typeof trackChangesSchema>;
 
 export type ProcessingStatus =
 	| { id: string; status: "processing" | "completed" }
-	| { id: string; status: "failed"; message: string };
+	| { id: string; status: "failed"; reason: string };

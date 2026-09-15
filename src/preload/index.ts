@@ -17,8 +17,9 @@
  */
 import { electronAPI } from "@electron-toolkit/preload";
 import { EVENT_CHANNELS, INVOKE_CHANNELS } from "@main/constants";
+import type { ProcessingStatus } from "@shared/schemas/track.schema";
 import { contextBridge, ipcRenderer } from "electron";
-import type { API, ProcessingStatus } from "@/types";
+import type { API } from "@/types";
 
 const api = {
 	showDialog: () => ipcRenderer.invoke(INVOKE_CHANNELS.SHOW_DIALOG),

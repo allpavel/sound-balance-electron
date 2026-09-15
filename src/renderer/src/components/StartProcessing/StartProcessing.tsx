@@ -25,11 +25,14 @@ import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
 import type { Data } from "@shared/schemas/data.schema";
-import type { TrackChanges } from "@shared/schemas/track.schema";
+import type {
+	ProcessingStatus,
+	TrackChanges,
+} from "@shared/schemas/track.schema";
 import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
 import { safeParseData } from "@shared/validators";
 import { useEffect, useState } from "react";
-import type { ProcessingStatus, StoppingStatus } from "@/types";
+import type { StoppingStatus } from "@/types";
 
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
@@ -53,7 +56,7 @@ export default function StartProcessing() {
 			(data: ProcessingStatus) => {
 				const trackChanges: TrackChanges =
 					data.status === "failed"
-						? { status: "failed", reason: data.message ?? "Unknown error" }
+						? { status: "failed", reason: data.reason ?? "Unknown error" }
 						: { status: data.status };
 				updateTrack({ id: data.id, changes: trackChanges });
 			},
