@@ -93,6 +93,10 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
 						? (branch as readonly Issue[])
 						: null;
 					if (leaves && leaves.length > 0) {
+						// Paths on invalid_union.errors sub-issues
+						// are relative to the union node, not absolute from the schema root.
+						// If a future Zod major version changes this to absolute
+						// paths, this recursion must be updated to avoid double-prefixing.
 						walk(leaves as Issue[], currentPath);
 						flattened = true;
 					}
