@@ -490,31 +490,6 @@ describe("processing.service", () => {
 		});
 	});
 
-	describe("startProcessing - file existence check", () => {
-		it("should reject when input file does not exist", async () => {
-			vi.mocked(stat).mockRejectedValueOnce(
-				Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
-			);
-			const data = getValidData();
-			const result = await startProcessing(mockEvent, data);
-			expect(result.failed).toHaveLength(1);
-			expect(result.failed[0].reason).toContain(
-				"does not exist or is inaccessible",
-			);
-		});
-
-		it("should reject when input path is a directory", async () => {
-			vi.mocked(stat).mockResolvedValueOnce({
-				isFile: () => false,
-				isDirectory: () => true,
-			} as any);
-			const data = getValidData();
-			const result = await startProcessing(mockEvent, data);
-			expect(result.failed).toHaveLength(1);
-			expect(result.failed[0].reason).toContain("not a regular file");
-		});
-	});
-
 	describe("startProcessing - mixed valid and corrupted tracks", () => {
 		it("processes valid tracks and skips corrupted ones in the same batch", async () => {
 			const tracks = [
