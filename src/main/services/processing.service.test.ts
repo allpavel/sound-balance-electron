@@ -788,7 +788,7 @@ describe("processing.service", () => {
 			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
 				id: "track-1",
 				status: "failed",
-				message: "FFmpeg crashed",
+				reason: "FFmpeg crashed",
 			});
 			expect(result.total).toBe(1);
 			expect(result.successful).toBe(0);
@@ -820,7 +820,7 @@ describe("processing.service", () => {
 			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
 				id: "track-1",
 				status: "failed",
-				message: "FFmpeg crashed",
+				reason: "FFmpeg crashed",
 			});
 			expect(result.total).toBe(1);
 			expect(result.successful).toBe(0);
