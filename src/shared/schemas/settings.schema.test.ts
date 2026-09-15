@@ -16,10 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import {
+	MAX_CONCURRENCY,
+	MAX_PATH_LENGTH,
+	MIN_CONCURRENCY,
+} from "@shared/constants";
 import { getValidSettings } from "@shared/utils/factories";
 import {
 	audioFilterConfigSchema,
 	FILTER_NAMES,
+	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
 	strictSettingsSchema as settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
@@ -29,12 +35,12 @@ describe("settingsSchema", () => {
 	it("validates a complete valid settings object", () => {
 		expect(() => settingsSchema.parse(validSettings)).not.toThrow();
 	});
-	it("accepts settings without a version field and defaults to 1", () => {
+	it("accepts settings without a version field and defaults to SETTINGS_SCHEMA_VERSION", () => {
 		const { version, ...withoutVersion } = validSettings;
 		const result = settingsSchema.safeParse(withoutVersion);
 		expect(result.success).toBe(true);
 		if (result.success) {
-			expect(result.data.version).toBe(1);
+			expect(result.data.version).toBe(SETTINGS_SCHEMA_VERSION);
 		}
 	});
 	it("rejects a non-integer version", () => {
@@ -89,12 +95,12 @@ describe("settingsSchema", () => {
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
 	});
-	it("rejects outputDirectoryPath exceeding maximum length", () => {
+	it("rejects outputDirectoryPath exceeding maximum length MAX_PATH_LENGTH", () => {
 		const invalid = {
 			...validSettings,
 			global: {
 				...validSettings.global,
-				outputDirectoryPath: `/music/${"a".repeat(4100)}`,
+				outputDirectoryPath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}`,
 			},
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
@@ -102,7 +108,14 @@ describe("settingsSchema", () => {
 	it("fails when concurrency is out of range", () => {
 		const invalid = {
 			...validSettings,
-			global: { ...validSettings.global, concurrency: 0 },
+			global: { ...validSettings.global, concurrency: MIN_CONCURRENCY - 1 },
+		};
+		expect(() => settingsSchema.parse(invalid)).toThrow();
+	});
+	it("fails when concurrency exceeds maximum", () => {
+		const invalid = {
+			...validSettings,
+			global: { ...validSettings.global, concurrency: MAX_CONCURRENCY + 1 },
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
 	});

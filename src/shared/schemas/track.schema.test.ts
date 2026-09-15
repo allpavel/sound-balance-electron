@@ -18,7 +18,10 @@
 
 import {
 	MAX_BASE64_IMAGE_SIZE,
+	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
+	MAX_REASON_LENGTH,
+	MAX_YEAR,
 	STATUS_VALUES,
 } from "@shared/constants";
 import { makeTrack } from "@shared/utils/factories";
@@ -50,9 +53,11 @@ describe("track.schema", () => {
 			}
 		});
 
-		it("rejects filePath exceeding 4096 characters", () => {
+		it("rejects filePath exceeding MAX_PATH_LENGTH", () => {
 			const result = trackInputSchema.safeParse(
-				makeTrack({ filePath: `/music/${"a".repeat(4100)}.mp3` }),
+				makeTrack({
+					filePath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}.mp3`,
+				}),
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -112,7 +117,7 @@ describe("track.schema", () => {
 
 		it("rejects year outside valid range", () => {
 			const result = trackInputSchema.safeParse(
-				makeTrack({ common: { year: 99999 } }),
+				makeTrack({ common: { year: MAX_YEAR + 1 } }),
 			);
 			expect(result.success).toBe(false);
 		});
@@ -726,7 +731,7 @@ describe("track.schema", () => {
 			it("rejects a reason exceeding MAX_REASON_LENGTH", () => {
 				const result = trackChangesSchema.safeParse({
 					status: "failed",
-					reason: "x".repeat(1001),
+					reason: "x".repeat(MAX_REASON_LENGTH + 1),
 				});
 				expect(result.success).toBe(false);
 			});
@@ -742,7 +747,7 @@ describe("track.schema", () => {
 			it("accepts a reason at exactly MAX_REASON_LENGTH", () => {
 				const result = trackChangesSchema.safeParse({
 					status: "failed",
-					reason: "x".repeat(1000),
+					reason: "x".repeat(MAX_REASON_LENGTH),
 				});
 				expect(result.success).toBe(true);
 			});
