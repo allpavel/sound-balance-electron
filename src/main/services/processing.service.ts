@@ -18,7 +18,11 @@
 
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { EVENT_CHANNELS, INITIALSETTINGS } from "@main/constants";
+import {
+	EVENT_CHANNELS,
+	INITIALSETTINGS,
+	STOP_GRACE_PERIOD_MS,
+} from "@main/constants";
 import { getGlobalSettings, getTrackSettings } from "@main/lib/ffmpeg";
 import { getTrackTitle, isDirectory } from "@main/lib/utils";
 import { ProcessManager } from "@main/services/ffmpeg/processManager";
@@ -30,8 +34,6 @@ import type { IpcMainInvokeEvent } from "electron";
 import PQueue from "p-queue";
 import type { Failed } from "@/types";
 import { TwoPassProcessManager } from "./ffmpeg/twoPassProcessManager";
-
-const STOP_GRACE_PERIOD_MS = 100;
 
 type ProcessingState = {
 	activeProcesses: Map<string, ProcessManager>;

@@ -17,6 +17,7 @@
  */
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import EventEmitter from "node:events";
+import { MAX_STDERR_BUFFER } from "@main/constants";
 import { parseFfmpegError } from "@main/lib/ffmpeg";
 import ffmpegStaticPath from "ffmpeg-static";
 
@@ -39,7 +40,6 @@ export abstract class BaseProcess extends EventEmitter {
 
 	protected runProcessing(args: string[]): Promise<void> {
 		let resolved = false;
-		const MAX_STDERR_BUFFER = 1024 * 1024;
 
 		return new Promise((resolve, reject) => {
 			this.stderrData = "";

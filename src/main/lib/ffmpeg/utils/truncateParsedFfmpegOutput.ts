@@ -15,8 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-const MAX_MESSAGE_LENGTH = 300;
-const ELLIPSIS = "…";
+
+import { ELLIPSIS, MAX_MESSAGE_LENGTH } from "@main/constants";
 
 export const truncateParsedFfmpegOutput = (message: string): string => {
 	if (message.length <= MAX_MESSAGE_LENGTH) {

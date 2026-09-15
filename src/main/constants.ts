@@ -70,3 +70,9 @@ export const ANSI_ESCAPE_PATTERN = new RegExp(
 );
 export const DIAGNOSTIC_HINT_PATTERN =
 	/\b(?:error|fail(?:ed|ure)?|cannot|denied|invalid|not found|no such file|unable to)\b/i;
+
+export const MAX_STDERR_BUFFER = 1024 * 1024;
+export const MAX_MESSAGE_LENGTH = 300;
+export const ELLIPSIS = "…";
+
+export const STOP_GRACE_PERIOD_MS = 100;
