@@ -18,7 +18,9 @@
 
 import { stat } from "node:fs/promises";
 import path from "node:path";
+import { STOP_GRACE_PERIOD_MS } from "@main/constants";
 import { isDirectory } from "@main/lib/utils";
+import { MAX_PATH_LENGTH } from "@shared/constants";
 import type { Data } from "@shared/schemas/data.schema";
 import {
 	getValidData,
@@ -399,9 +401,11 @@ describe("processing.service", () => {
 			expectSkippedTrackEntry(result.failed[0], "track-1");
 		});
 
-		it("skips a track with filePath exceeding 4096 characters", async () => {
+		it("skips a track with filePath exceeding MAX_PATH_LENGTH", async () => {
 			const tracks = [
-				makeTrack({ filePath: `/music/${"a".repeat(4100)}.mp3` }),
+				makeTrack({
+					filePath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}.mp3`,
+				}),
 			];
 			const data = getValidData({ tracks });
 			const result = await startProcessing(mockEvent, data);
@@ -857,7 +861,7 @@ describe("stopProcessing", () => {
 	});
 
 	const flush = async () => {
-		await vi.advanceTimersByTimeAsync(100);
+		await vi.advanceTimersByTimeAsync(STOP_GRACE_PERIOD_MS);
 	};
 
 	describe("AbortController", () => {
@@ -956,7 +960,7 @@ describe("stopProcessing", () => {
 	describe("timing/order", () => {
 		it("waits for the grace period before sending response", async () => {
 			const promise = stopProcessing(mockEvent);
-			await vi.advanceTimersByTimeAsync(99);
+			await vi.advanceTimersByTimeAsync(STOP_GRACE_PERIOD_MS - 1);
 			expect(mockEvent.sender.send).not.toHaveBeenCalled();
 			await flush();
 			await vi.advanceTimersByTimeAsync(1);

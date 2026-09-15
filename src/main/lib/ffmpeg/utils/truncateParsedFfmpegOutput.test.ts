@@ -15,10 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import { ELLIPSIS, MAX_MESSAGE_LENGTH } from "@main/constants";
 import { truncateParsedFfmpegOutput } from "./truncateParsedFfmpegOutput";
-
-const MAX_MESSAGE_LENGTH = 300;
-const ELLIPSIS = "…";
 
 describe("truncateParsedFfmpegOutput", () => {
 	it("returns empty string unchanged", () => {
