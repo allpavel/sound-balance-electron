@@ -92,9 +92,10 @@ describe("getMetadata", () => {
 		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
 		await getMetadata(filePaths, mockParser);
 		expect(processMetadata).toHaveBeenCalledTimes(3);
-		for (const call of vi.mocked(processMetadata).mock.calls) {
-			expect(call[1]).toBe(mockParser);
-		}
+		const parserArgs = vi
+			.mocked(processMetadata)
+			.mock.calls.map((call) => call[1]);
+		expect(parserArgs).toEqual([mockParser, mockParser, mockParser]);
 	});
 
 	it("works with different parser functions on different invocations", async () => {
@@ -201,29 +202,13 @@ describe("getMetadata", () => {
 		);
 	});
 
-	it("handles paths with spaces", async () => {
-		const trackPath = "/music/track with spaces.mp3";
-		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
-		await getMetadata([trackPath], mockParser);
-		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
-	});
-
-	it("handles unicode characters in paths", async () => {
-		const trackPath = "/music/ünïcödé_日本語.mp3";
-		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
-		await getMetadata([trackPath], mockParser);
-		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
-	});
-
-	it("handles paths with parentheses and special chars", async () => {
-		const trackPath = "/music/track(1)[feat. x]&y.mp3";
-		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
-		await getMetadata([trackPath], mockParser);
-		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
-	});
-
-	it("handles Windows-style paths", async () => {
-		const trackPath = "C:\\Users\\Music\\song.mp3";
+	it.each([
+		["spaces", "/music/track with spaces.mp3"],
+		["unicode characters", "/music/ünïcödé_日本語.mp3"],
+		["parentheses and special chars", "/music/track(1)[feat. x]&y.mp3"],
+		["Windows-style path", "C:\\Users\\Music\\song.mp3"],
+		["empty string path", ""],
+	])("handles path with %s", async (_desc, trackPath) => {
 		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
 		await getMetadata([trackPath], mockParser);
 		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
@@ -234,12 +219,5 @@ describe("getMetadata", () => {
 		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
 		await getMetadata(paths, mockParser);
 		expect(processMetadata).toHaveBeenCalledTimes(1000);
-	});
-
-	it("handles an empty string path", async () => {
-		const trackPath = "";
-		vi.mocked(processMetadata).mockResolvedValueOnce({} as any);
-		await getMetadata([trackPath], mockParser);
-		expect(processMetadata).toHaveBeenCalledWith(trackPath, mockParser);
 	});
 });
