@@ -271,14 +271,12 @@ describe("settingsSchema", () => {
 		};
 		expect(() => settingsSchema.parse(invalid)).toThrow();
 	});
-	it("accepts every known filter name", () => {
-		for (const filterName of FILTER_NAMES) {
-			const settings = {
-				...validSettings,
-				audio: { ...validSettings.audio, audioFilter: filterName },
-			};
-			expect(settingsSchema.safeParse(settings).success).toBe(true);
-		}
+	it.each(FILTER_NAMES)("accepts known filter name: %s", (filterName) => {
+		const settings = {
+			...validSettings,
+			audio: { ...validSettings.audio, audioFilter: filterName },
+		};
+		expect(settingsSchema.safeParse(settings).success).toBe(true);
 	});
 	it("accepts an empty audioFilter (no filter)", () => {
 		const settings = {

@@ -35,6 +35,17 @@ import {
 	tracksArraySchema,
 } from "./track.schema";
 
+const REQUIRED_FIELDS = [
+	"id",
+	"file",
+	"filePath",
+	"status",
+	"selected",
+	"collectionIds",
+] as const;
+
+const STRING_IDENTITY_FIELDS = ["id", "file", "filePath"] as const;
+
 function withoutField(field: string): Record<string, unknown> {
 	const track = makeTrack();
 	delete track[field];
@@ -283,78 +294,94 @@ describe("track.schema", () => {
 	});
 
 	describe("statusSchema", () => {
-		it("accepts every supported status", () => {
-			for (const status of STATUS_VALUES) {
-				expect(statusSchema.safeParse(status).success).toBe(true);
-			}
+		it.each(STATUS_VALUES)("accepts every supported status: %s", (status) => {
+			expect(statusSchema.safeParse(status).success).toBe(true);
 		});
 
-		it("rejects unsupported string values", () => {
-			expect(statusSchema.safeParse("").success).toBe(false);
-			expect(statusSchema.safeParse("   ").success).toBe(false);
-			expect(statusSchema.safeParse("done").success).toBe(false);
-			expect(statusSchema.safeParse("error").success).toBe(false);
-			expect(statusSchema.safeParse("PENDING").success).toBe(false);
+		it.each([
+			["empty string", ""],
+			["whitespace-only", "   "],
+			["unknown value", "done"],
+			["synonym", "error"],
+			["wrong case", "PENDING"],
+		])("rejects unsupported string value: %s", (_label, value) => {
+			expect(statusSchema.safeParse(value).success).toBe(false);
 		});
 
-		it("rejects non-string values", () => {
-			expect(statusSchema.safeParse(123).success).toBe(false);
-			expect(statusSchema.safeParse(null).success).toBe(false);
-			expect(statusSchema.safeParse(undefined).success).toBe(false);
-			expect(statusSchema.safeParse([]).success).toBe(false);
-			expect(statusSchema.safeParse({}).success).toBe(false);
+		it.each([
+			["number", 123],
+			["null", null],
+			["undefined", undefined],
+			["array", []],
+			["object", {}],
+		])("rejects non-string value: %s", (_label, value) => {
+			expect(statusSchema.safeParse(value).success).toBe(false);
 		});
 	});
 
 	describe("selectedSchema", () => {
-		it("accepts 0 and 1", () => {
-			expect(selectedSchema.safeParse(0).success).toBe(true);
-			expect(selectedSchema.safeParse(1).success).toBe(true);
+		it.each([
+			["0", 0],
+			["1", 1],
+		])("accepts %s", (_label, value) => {
+			expect(selectedSchema.safeParse(value).success).toBe(true);
 		});
 
-		it("rejects other numbers", () => {
-			expect(selectedSchema.safeParse(2).success).toBe(false);
-			expect(selectedSchema.safeParse(-1).success).toBe(false);
-			expect(selectedSchema.safeParse(1.5).success).toBe(false);
+		it.each([
+			["integer > 1", 2],
+			["negative integer", -1],
+			["float", 1.5],
+		])("rejects other number: %s", (_label, value) => {
+			expect(selectedSchema.safeParse(value).success).toBe(false);
 		});
 
-		it("rejects booleans", () => {
-			expect(selectedSchema.safeParse(true).success).toBe(false);
-			expect(selectedSchema.safeParse(false).success).toBe(false);
+		it.each([
+			["true", true],
+			["false", false],
+		])("rejects boolean: %s", (_label, value) => {
+			expect(selectedSchema.safeParse(value).success).toBe(false);
 		});
 
-		it("rejects strings", () => {
-			expect(selectedSchema.safeParse("0").success).toBe(false);
-			expect(selectedSchema.safeParse("1").success).toBe(false);
+		it.each([
+			['"0"', "0"],
+			['"1"', "1"],
+		])("rejects string: %s", (_label, value) => {
+			expect(selectedSchema.safeParse(value).success).toBe(false);
 		});
 
-		it("rejects null and undefined", () => {
-			expect(selectedSchema.safeParse(null).success).toBe(false);
-			expect(selectedSchema.safeParse(undefined).success).toBe(false);
+		it.each([
+			["null", null],
+			["undefined", undefined],
+		])("rejects %s", (_label, value) => {
+			expect(selectedSchema.safeParse(value).success).toBe(false);
 		});
 	});
 
 	describe("targetCollectionIdSchema", () => {
-		it("accepts non-empty strings", () => {
-			expect(targetCollectionIdSchema.safeParse("all").success).toBe(true);
-			expect(targetCollectionIdSchema.safeParse("mix-1").success).toBe(true);
-			expect(targetCollectionIdSchema.safeParse("  mix-1  ").success).toBe(
-				true,
-			);
+		it.each([
+			["system id", "all"],
+			["custom id", "mix-1"],
+			["id with surrounding whitespace", "  mix-1  "],
+		])("accepts non-empty string: %s", (_label, value) => {
+			expect(targetCollectionIdSchema.safeParse(value).success).toBe(true);
 		});
 
-		it("rejects empty and whitespace-only strings", () => {
-			expect(targetCollectionIdSchema.safeParse("").success).toBe(false);
-			expect(targetCollectionIdSchema.safeParse("   ").success).toBe(false);
-			expect(targetCollectionIdSchema.safeParse("\t\n").success).toBe(false);
+		it.each([
+			["empty string", ""],
+			["whitespace-only", "   "],
+			["tab and newline", "\t\n"],
+		])("rejects empty or whitespace-only string: %s", (_label, value) => {
+			expect(targetCollectionIdSchema.safeParse(value).success).toBe(false);
 		});
 
-		it("rejects non-string values", () => {
-			expect(targetCollectionIdSchema.safeParse(null).success).toBe(false);
-			expect(targetCollectionIdSchema.safeParse(undefined).success).toBe(false);
-			expect(targetCollectionIdSchema.safeParse(123).success).toBe(false);
-			expect(targetCollectionIdSchema.safeParse([]).success).toBe(false);
-			expect(targetCollectionIdSchema.safeParse({}).success).toBe(false);
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["number", 123],
+			["array", []],
+			["object", {}],
+		])("rejects non-string value: %s", (_label, value) => {
+			expect(targetCollectionIdSchema.safeParse(value).success).toBe(false);
 		});
 	});
 
@@ -363,11 +390,11 @@ describe("track.schema", () => {
 			expect(collectionIdsSchema.safeParse([]).success).toBe(true);
 		});
 
-		it("accepts an array of non-empty strings", () => {
-			expect(collectionIdsSchema.safeParse(["all"]).success).toBe(true);
-			expect(collectionIdsSchema.safeParse(["all", "mix-1"]).success).toBe(
-				true,
-			);
+		it.each([
+			["single element", ["all"]],
+			["multiple elements", ["all", "mix-1"]],
+		])("accepts an array of non-empty strings: %s", (_label, value) => {
+			expect(collectionIdsSchema.safeParse(value).success).toBe(true);
 		});
 
 		it("rejects undefined because collectionIds is required", () => {
@@ -378,10 +405,12 @@ describe("track.schema", () => {
 			expect(collectionIdsSchema.safeParse(null).success).toBe(false);
 		});
 
-		it("rejects non-array values", () => {
-			expect(collectionIdsSchema.safeParse("all").success).toBe(false);
-			expect(collectionIdsSchema.safeParse(123).success).toBe(false);
-			expect(collectionIdsSchema.safeParse({}).success).toBe(false);
+		it.each([
+			["string", "all"],
+			["number", 123],
+			["object", {}],
+		])("rejects non-array value: %s", (_label, value) => {
+			expect(collectionIdsSchema.safeParse(value).success).toBe(false);
 		});
 
 		it("rejects empty collection ids and reports the invalid index", () => {
@@ -410,15 +439,6 @@ describe("track.schema", () => {
 	});
 
 	describe("trackInputSchema", () => {
-		const requiredFields = [
-			"id",
-			"file",
-			"filePath",
-			"status",
-			"selected",
-			"collectionIds",
-		] as const;
-
 		it("accepts a complete application-owned track", () => {
 			const result = trackInputSchema.safeParse(makeTrack());
 			expect(result.success).toBe(true);
@@ -457,28 +477,25 @@ describe("track.schema", () => {
 			}
 		});
 
-		it("rejects missing required application-owned fields", () => {
-			for (const field of requiredFields) {
-				const result = trackInputSchema.safeParse(withoutField(field));
-				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual([field]);
-				}
+		it.each(REQUIRED_FIELDS)("rejects missing required field: %s", (field) => {
+			const result = trackInputSchema.safeParse(withoutField(field));
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual([field]);
 			}
 		});
 
-		it("rejects empty id, file, and filePath values", () => {
-			for (const field of ["id", "file", "filePath"] as const) {
-				const result = trackInputSchema.safeParse(makeTrack({ [field]: "" }));
-				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual([field]);
-				}
+		it.each(STRING_IDENTITY_FIELDS)("rejects empty %s value", (field) => {
+			const result = trackInputSchema.safeParse(makeTrack({ [field]: "" }));
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual([field]);
 			}
 		});
 
-		it("rejects whitespace-only id, file, and filePath values", () => {
-			for (const field of ["id", "file", "filePath"] as const) {
+		it.each(STRING_IDENTITY_FIELDS)(
+			"rejects whitespace-only %s value",
+			(field) => {
 				const result = trackInputSchema.safeParse(
 					makeTrack({ [field]: "   " }),
 				);
@@ -486,8 +503,8 @@ describe("track.schema", () => {
 				if (!result.success) {
 					expect(result.error.issues[0]?.path).toEqual([field]);
 				}
-			}
-		});
+			},
+		);
 
 		it("rejects invalid status values and reports the status path", () => {
 			const result = trackInputSchema.safeParse(
@@ -550,21 +567,19 @@ describe("track.schema", () => {
 			}
 		});
 
-		it("rejects non-array inputs", () => {
-			for (const input of [
-				null,
-				undefined,
-				"not-an-array",
-				42,
-				true,
-				{},
-				makeTrack(),
-			]) {
-				const result = tracksArraySchema.safeParse(input);
-				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(result.error.issues[0]?.code).toBe("invalid_type");
-				}
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["string", "not-an-array"],
+			["number", 42],
+			["boolean", true],
+			["object", {}],
+			["single track", makeTrack()],
+		])("rejects non-array input: %s", (_label, input) => {
+			const result = tracksArraySchema.safeParse(input);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.code).toBe("invalid_type");
 			}
 		});
 
@@ -611,13 +626,11 @@ describe("track.schema", () => {
 				expect(result.success).toBe(true);
 			});
 
-			it("accepts a valid selected change", () => {
-				expect(trackChangesSchema.safeParse({ selected: 1 }).success).toBe(
-					true,
-				);
-				expect(trackChangesSchema.safeParse({ selected: 0 }).success).toBe(
-					true,
-				);
+			it.each([
+				["selected: 1", { selected: 1 }],
+				["selected: 0", { selected: 0 }],
+			])("accepts a valid selected change: %s", (_label, value) => {
+				expect(trackChangesSchema.safeParse(value).success).toBe(true);
 			});
 
 			it("accepts a valid collectionIds change", () => {
@@ -654,22 +667,20 @@ describe("track.schema", () => {
 				expect(result.success).toBe(false);
 			});
 
-			it("rejects invalid filePath values", () => {
-				expect(trackChangesSchema.safeParse({ filePath: "" }).success).toBe(
-					false,
-				);
-				expect(trackChangesSchema.safeParse({ filePath: "   " }).success).toBe(
+			it.each([
+				["empty string", ""],
+				["whitespace-only", "   "],
+			])("rejects invalid filePath value: %s", (_label, value) => {
+				expect(trackChangesSchema.safeParse({ filePath: value }).success).toBe(
 					false,
 				);
 			});
 
-			it("rejects invalid selected values", () => {
-				expect(trackChangesSchema.safeParse({ selected: 2 }).success).toBe(
-					false,
-				);
-				expect(trackChangesSchema.safeParse({ selected: true }).success).toBe(
-					false,
-				);
+			it.each([
+				["number > 1", { selected: 2 }],
+				["boolean", { selected: true }],
+			])("rejects invalid selected value: %s", (_label, value) => {
+				expect(trackChangesSchema.safeParse(value).success).toBe(false);
 			});
 
 			it("rejects invalid collectionIds items", () => {
@@ -788,10 +799,15 @@ describe("track.schema", () => {
 		});
 
 		describe("non-object inputs", () => {
-			it("rejects null, undefined, primitives, and arrays", () => {
-				for (const input of [null, undefined, "str", 42, true, []]) {
-					expect(trackChangesSchema.safeParse(input).success).toBe(false);
-				}
+			it.each([
+				["null", null],
+				["undefined", undefined],
+				["string", "str"],
+				["number", 42],
+				["boolean", true],
+				["array", []],
+			])("rejects %s", (_label, input) => {
+				expect(trackChangesSchema.safeParse(input).success).toBe(false);
 			});
 		});
 	});
