@@ -53,15 +53,15 @@ describe("shared/utils/factories", () => {
 			expect(makeCollection()).toEqual({ id: "col-2", title: "Collection 2" });
 		});
 
-		it("applies partial overrides while preserving generated defaults", () => {
-			expect(makeCollection({ title: "Custom" })).toEqual({
-				id: "col-1",
-				title: "Custom",
-			});
-			expect(makeCollection({ id: "custom-id" })).toEqual({
-				id: "custom-id",
-				title: "Collection 2",
-			});
+		it.each([
+			["title override", { title: "Custom" }, { id: "col-1", title: "Custom" }],
+			[
+				"id override",
+				{ id: "custom-id" },
+				{ id: "custom-id", title: "Collection 1" },
+			],
+		])("applies partial override: %s", (_desc, overrides, expected) => {
+			expect(makeCollection(overrides)).toEqual(expected);
 		});
 
 		it("returns a distinct object on every call", () => {
