@@ -36,26 +36,32 @@ function createTrackWithoutField(field: string): Record<string, unknown> {
 
 describe("trackRepositoryUtils", () => {
 	describe("isPlainObject", () => {
-		it("returns true for plain objects", () => {
-			expect(isPlainObject({})).toBe(true);
-			expect(isPlainObject({ id: "track-1" })).toBe(true);
-			expect(isPlainObject({ collectionIds: ["all"] })).toBe(true);
+		it.each([
+			["empty object", {}],
+			["object with id", { id: "track-1" }],
+			["object with collectionIds", { collectionIds: ["all"] }],
+		])("returns true for %s", (_desc, value) => {
+			expect(isPlainObject(value)).toBe(true);
 		});
 
 		it("returns false for null", () => {
 			expect(isPlainObject(null)).toBe(false);
 		});
 
-		it("returns false for arrays", () => {
-			expect(isPlainObject([])).toBe(false);
-			expect(isPlainObject(["all"])).toBe(false);
+		it.each([
+			["empty array", []],
+			["non-empty array", ["all"]],
+		])("returns false for %s", (_desc, value) => {
+			expect(isPlainObject(value)).toBe(false);
 		});
 
-		it("returns false for primitives", () => {
-			expect(isPlainObject(undefined)).toBe(false);
-			expect(isPlainObject("string")).toBe(false);
-			expect(isPlainObject(123)).toBe(false);
-			expect(isPlainObject(true)).toBe(false);
+		it.each([
+			["undefined", undefined],
+			["string", "string"],
+			["number", 123],
+			["boolean", true],
+		])("returns false for primitive: %s", (_desc, value) => {
+			expect(isPlainObject(value)).toBe(false);
 		});
 
 		it("returns false for functions", () => {
@@ -66,11 +72,11 @@ describe("trackRepositoryUtils", () => {
 	describe("assertTargetCollectionId", () => {
 		const errorMsg = "targetCollectionId must be a non-empty string";
 
-		it("accepts a non-empty string", () => {
-			expect(() => assertTargetCollectionId("mix-1")).not.toThrow();
-			expect(() =>
-				assertTargetCollectionId(SYSTEM_COLLECTION_ID),
-			).not.toThrow();
+		it.each([
+			["custom collection id", "mix-1"],
+			["system collection id", SYSTEM_COLLECTION_ID],
+		])("accepts %s", (_desc, value) => {
+			expect(() => assertTargetCollectionId(value)).not.toThrow();
 		});
 
 		it("rejects an empty string", () => {
@@ -81,12 +87,14 @@ describe("trackRepositoryUtils", () => {
 			expect(() => assertTargetCollectionId("   ")).toThrow(errorMsg);
 		});
 
-		it("rejects non-string values", () => {
-			expect(() => assertTargetCollectionId(null)).toThrow(errorMsg);
-			expect(() => assertTargetCollectionId(undefined)).toThrow(errorMsg);
-			expect(() => assertTargetCollectionId(123)).toThrow(errorMsg);
-			expect(() => assertTargetCollectionId([])).toThrow(errorMsg);
-			expect(() => assertTargetCollectionId({})).toThrow(errorMsg);
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["number", 123],
+			["array", []],
+			["object", {}],
+		])("rejects non-string value: %s", (_desc, value) => {
+			expect(() => assertTargetCollectionId(value)).toThrow(errorMsg);
 		});
 	});
 
@@ -107,12 +115,10 @@ describe("trackRepositoryUtils", () => {
 		it("accepts a valid track", () => {
 			expect(() => assertTrackInput(makeTrack(), 0)).not.toThrow();
 		});
-		it("accepts every valid Status value", () => {
-			for (const status of STATUS_VALUES) {
-				const overrides =
-					status === "failed" ? { status, reason: "test error" } : { status };
-				expect(() => assertTrackInput(makeTrack(overrides), 0)).not.toThrow();
-			}
+		it.each(STATUS_VALUES)("accepts valid Status value: %s", (status) => {
+			const overrides =
+				status === "failed" ? { status, reason: "test error" } : { status };
+			expect(() => assertTrackInput(makeTrack(overrides), 0)).not.toThrow();
 		});
 
 		it("accepts unknown IAudioMetadata fields", () => {
@@ -131,13 +137,15 @@ describe("trackRepositoryUtils", () => {
 			).not.toThrow();
 		});
 
-		it("rejects a non-object track", () => {
-			expect(() => assertTrackInput(null, 0)).toThrow(objectErrorMessage);
-			expect(() => assertTrackInput(undefined, 0)).toThrow(objectErrorMessage);
-			expect(() => assertTrackInput("track", 0)).toThrow(objectErrorMessage);
-			expect(() => assertTrackInput(123, 0)).toThrow(objectErrorMessage);
-			expect(() => assertTrackInput(true, 0)).toThrow(objectErrorMessage);
-			expect(() => assertTrackInput([], 0)).toThrow(objectErrorMessage);
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["string", "track"],
+			["number", 123],
+			["boolean", true],
+			["array", []],
+		])("rejects a non-object track: %s", (_desc, value) => {
+			expect(() => assertTrackInput(value, 0)).toThrow(objectErrorMessage);
 		});
 
 		it("includes the provided index in the error context", () => {
@@ -218,47 +226,27 @@ describe("trackRepositoryUtils", () => {
 			).toThrow(statusErrorMessage);
 		});
 
-		it("rejects invalid status values", () => {
+		it.each([
+			["unknown value", "done"],
+			["empty string", ""],
+			["whitespace-only", "   "],
+			["number", 123],
+			["null", null],
+		])("rejects invalid status value: %s", (_desc, value) => {
 			expect(() =>
-				assertTrackInput(makeTrack({ status: "done" } as any), 0),
-			).toThrow(statusErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ status: "" } as any), 0),
-			).toThrow(statusErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ status: "   " } as any), 0),
-			).toThrow(statusErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ status: 123 } as any), 0),
-			).toThrow(statusErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ status: null } as any), 0),
+				assertTrackInput(makeTrack({ status: value } as any), 0),
 			).toThrow(statusErrorMessage);
 		});
 
-		it("rejects invalid selected values", () => {
+		it.each([
+			["number > 1", 2],
+			["boolean", true],
+			["string", "1"],
+			["null", null],
+			["undefined", undefined],
+		])("rejects invalid selected value: %s", (_desc, value) => {
 			expect(() =>
-				assertTrackInput(makeTrack({ selected: 2 } as any), 0),
-			).toThrow(selectedErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ selected: true } as any), 0),
-			).toThrow(selectedErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ selected: "1" } as any), 0),
-			).toThrow(selectedErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ selected: null } as any), 0),
-			).toThrow(selectedErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ selected: undefined }), 0),
+				assertTrackInput(makeTrack({ selected: value } as any), 0),
 			).toThrow(selectedErrorMessage);
 		});
 
@@ -268,25 +256,26 @@ describe("trackRepositoryUtils", () => {
 			).toThrow(selectedErrorMessage);
 		});
 
-		it("rejects invalid collectionIds", () => {
-			expect(() =>
-				assertTrackInput(
-					makeTrack({ collectionIds: SYSTEM_COLLECTION_ID } as any),
-					0,
-				),
-			).toThrow(collectionIdsArrayErrorMessage);
-
-			expect(() =>
-				assertTrackInput(makeTrack({ collectionIds: null } as any), 0),
-			).toThrow(collectionIdsArrayErrorMessage);
-
-			expect(() =>
-				assertTrackInput(
-					makeTrack({ collectionIds: [SYSTEM_COLLECTION_ID, ""] }),
-					0,
-				),
-			).toThrow(collectionIdsItemErrorMessage);
-		});
+		it.each([
+			[
+				"string instead of array",
+				SYSTEM_COLLECTION_ID as any,
+				collectionIdsArrayErrorMessage,
+			],
+			["null instead of array", null as any, collectionIdsArrayErrorMessage],
+			[
+				"empty string in array",
+				[SYSTEM_COLLECTION_ID, ""],
+				collectionIdsItemErrorMessage,
+			],
+		])(
+			"rejects invalid collectionIds: %s",
+			(_desc, collectionIds, expectedError) => {
+				expect(() => assertTrackInput(makeTrack({ collectionIds }), 0)).toThrow(
+					expectedError,
+				);
+			},
+		);
 
 		it("rejects a missing collectionIds value", () => {
 			expect(() =>
@@ -351,31 +340,25 @@ describe("trackRepositoryUtils", () => {
 			).toEqual([SYSTEM_COLLECTION_ID, "mix-1"]);
 		});
 
-		it("handles non-array current values safely", () => {
-			expect(normalizeCollectionIds(undefined, "mix-1")).toEqual([
-				SYSTEM_COLLECTION_ID,
-				"mix-1",
-			]);
-
-			expect(normalizeCollectionIds(null, "mix-1")).toEqual([
-				SYSTEM_COLLECTION_ID,
-				"mix-1",
-			]);
-
-			expect(normalizeCollectionIds("all", "mix-1")).toEqual([
-				SYSTEM_COLLECTION_ID,
-				"mix-1",
-			]);
-
-			expect(normalizeCollectionIds({ id: "all" }, "mix-1")).toEqual([
+		it.each([
+			["undefined", undefined],
+			["null", null],
+			["string", "all"],
+			["object", { id: "all" }],
+		])("handles non-array current value safely: %s", (_desc, current) => {
+			expect(normalizeCollectionIds(current, "mix-1")).toEqual([
 				SYSTEM_COLLECTION_ID,
 				"mix-1",
 			]);
 		});
 
-		it("ignores an empty target collection id if called without prior target validation", () => {
-			expect(normalizeCollectionIds([], "")).toEqual([SYSTEM_COLLECTION_ID]);
-			expect(normalizeCollectionIds([], "   ")).toEqual([SYSTEM_COLLECTION_ID]);
+		it.each([
+			["empty string", ""],
+			["whitespace-only string", "   "],
+		])("ignores an empty target collection id: %s", (_desc, targetId) => {
+			expect(normalizeCollectionIds([], targetId)).toEqual([
+				SYSTEM_COLLECTION_ID,
+			]);
 		});
 	});
 
@@ -389,90 +372,92 @@ describe("trackRepositoryUtils", () => {
 			).toBe(true);
 		});
 
-		it("returns true for the same unique ids regardless of order", () => {
-			expect(
-				areCollectionIdsEqual(
-					["mix-1", SYSTEM_COLLECTION_ID],
-					[SYSTEM_COLLECTION_ID, "mix-1"],
-				),
-			).toBe(true);
-
-			expect(
-				areCollectionIdsEqual(
-					["preexisting", SYSTEM_COLLECTION_ID, "mix-1"],
-					["mix-1", "preexisting", SYSTEM_COLLECTION_ID],
-				),
-			).toBe(true);
-		});
+		it.each([
+			[
+				"two collections in different order",
+				["mix-1", SYSTEM_COLLECTION_ID],
+				[SYSTEM_COLLECTION_ID, "mix-1"],
+			],
+			[
+				"three collections in different order",
+				["preexisting", SYSTEM_COLLECTION_ID, "mix-1"],
+				["mix-1", "preexisting", SYSTEM_COLLECTION_ID],
+			],
+		])(
+			"returns true for the same unique ids regardless of order: %s",
+			(_desc, current, next) => {
+				expect(areCollectionIdsEqual(current, next)).toBe(true);
+			},
+		);
 
 		it("returns true for two empty arrays", () => {
 			expect(areCollectionIdsEqual([], [])).toBe(true);
 		});
 
-		it("returns false when current is not an array", () => {
-			expect(areCollectionIdsEqual(undefined, [SYSTEM_COLLECTION_ID])).toBe(
-				false,
-			);
-			expect(areCollectionIdsEqual(null, [SYSTEM_COLLECTION_ID])).toBe(false);
-			expect(
-				areCollectionIdsEqual(SYSTEM_COLLECTION_ID, [SYSTEM_COLLECTION_ID]),
-			).toBe(false);
-			expect(
-				areCollectionIdsEqual({ id: SYSTEM_COLLECTION_ID }, [
-					SYSTEM_COLLECTION_ID,
-				]),
-			).toBe(false);
-		});
-
-		it("returns false when lengths differ", () => {
-			expect(
-				areCollectionIdsEqual(
-					[SYSTEM_COLLECTION_ID],
-					[SYSTEM_COLLECTION_ID, "mix-1"],
-				),
-			).toBe(false);
-
-			expect(
-				areCollectionIdsEqual(
-					[SYSTEM_COLLECTION_ID, "mix-1"],
-					[SYSTEM_COLLECTION_ID],
-				),
-			).toBe(false);
-		});
-
-		it("returns false when values differ", () => {
-			expect(areCollectionIdsEqual([SYSTEM_COLLECTION_ID], ["mix-1"])).toBe(
-				false,
-			);
-			expect(
-				areCollectionIdsEqual(
-					[SYSTEM_COLLECTION_ID, "mix-1"],
-					[SYSTEM_COLLECTION_ID, "mix-2"],
-				),
-			).toBe(false);
-		});
-
-		it("returns false when current contains duplicate ids", () => {
-			expect(
-				areCollectionIdsEqual(
-					[SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID],
-					[SYSTEM_COLLECTION_ID, "mix-1"],
-				),
-			).toBe(false);
-			expect(
-				areCollectionIdsEqual(
-					[SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID, "mix-1"],
-					[SYSTEM_COLLECTION_ID, "mix-1"],
-				),
-			).toBe(false);
-		});
-
-		it("returns false when values differ by type", () => {
-			expect(areCollectionIdsEqual([123], ["123"])).toBe(false);
-			expect(areCollectionIdsEqual(["123"], [123 as unknown as string])).toBe(
+		it.each([
+			["undefined", undefined],
+			["null", null],
+			["string", SYSTEM_COLLECTION_ID],
+			["object", { id: SYSTEM_COLLECTION_ID }],
+		])("returns false when current is not an array: %s", (_desc, current) => {
+			expect(areCollectionIdsEqual(current, [SYSTEM_COLLECTION_ID])).toBe(
 				false,
 			);
 		});
+
+		it.each([
+			[
+				"current shorter than next",
+				[SYSTEM_COLLECTION_ID],
+				[SYSTEM_COLLECTION_ID, "mix-1"],
+			],
+			[
+				"current longer than next",
+				[SYSTEM_COLLECTION_ID, "mix-1"],
+				[SYSTEM_COLLECTION_ID],
+			],
+		])("returns false when lengths differ: %s", (_desc, current, next) => {
+			expect(areCollectionIdsEqual(current, next)).toBe(false);
+		});
+
+		it.each([
+			["completely different values", [SYSTEM_COLLECTION_ID], ["mix-1"]],
+			[
+				"one value differs",
+				[SYSTEM_COLLECTION_ID, "mix-1"],
+				[SYSTEM_COLLECTION_ID, "mix-2"],
+			],
+		])("returns false when values differ: %s", (_desc, current, next) => {
+			expect(areCollectionIdsEqual(current, next)).toBe(false);
+		});
+
+		it.each([
+			[
+				"same length with duplicates",
+				[SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID],
+				[SYSTEM_COLLECTION_ID, "mix-1"],
+			],
+			[
+				"longer array with duplicates",
+				[SYSTEM_COLLECTION_ID, SYSTEM_COLLECTION_ID, "mix-1"],
+				[SYSTEM_COLLECTION_ID, "mix-1"],
+			],
+		])(
+			"returns false when current contains duplicate ids: %s",
+			(_desc, current, next) => {
+				expect(areCollectionIdsEqual(current, next)).toBe(false);
+			},
+		);
+
+		it.each([
+			["number vs string", [123], ["123"]],
+			["string vs number", ["123"], [123 as unknown as string]],
+		])(
+			"returns false when values differ by type: %s",
+			(_desc, current, next) => {
+				expect(areCollectionIdsEqual(current, next)).toBe(false);
+			},
+		);
 	});
 
 	describe("uniqueTracks", () => {
@@ -586,17 +571,13 @@ describe("trackRepositoryUtils", () => {
 			).toThrow(/changes is invalid/);
 		});
 
-		it("rejects non-object input with a clear error", () => {
-			expect(() => validateTrackChanges(null, "changes")).toThrow(
-				"changes must be a non-null object",
-			);
-			expect(() => validateTrackChanges(undefined, "changes")).toThrow(
-				"changes must be a non-null object",
-			);
-			expect(() => validateTrackChanges("string", "changes")).toThrow(
-				"changes must be a non-null object",
-			);
-			expect(() => validateTrackChanges(42, "changes")).toThrow(
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["string", "string"],
+			["number", 42],
+		])("rejects non-object input with a clear error: %s", (_desc, value) => {
+			expect(() => validateTrackChanges(value, "changes")).toThrow(
 				"changes must be a non-null object",
 			);
 		});
@@ -613,19 +594,13 @@ describe("trackRepositoryUtils", () => {
 			).toThrow(/changes is invalid/);
 		});
 
-		it("accepts valid status-only changes", () => {
-			expect(validateTrackChanges({ status: "pending" }, "changes")).toEqual({
-				status: "pending",
-			});
-			expect(validateTrackChanges({ status: "processing" }, "changes")).toEqual(
-				{ status: "processing" },
-			);
-			expect(validateTrackChanges({ status: "completed" }, "changes")).toEqual({
-				status: "completed",
-			});
-			expect(
-				validateTrackChanges({ status: "failed", reason: "error" }, "changes"),
-			).toEqual({ status: "failed", reason: "error" });
+		it.each([
+			["pending", { status: "pending" }],
+			["processing", { status: "processing" }],
+			["completed", { status: "completed" }],
+			["failed with reason", { status: "failed", reason: "error" }],
+		])("accepts valid status-only change: %s", (_desc, changes) => {
+			expect(validateTrackChanges(changes, "changes")).toEqual(changes);
 		});
 	});
 });
