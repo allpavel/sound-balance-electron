@@ -23,13 +23,14 @@ import { FILTER_OPTIONS } from "./settings.constants";
 
 describe("settings.constants - FILTER_OPTIONS contract", () => {
 	const entries = Object.entries(FILTER_OPTIONS);
+	const knownFilters = new Set<string>(FILTER_NAMES);
 
 	it("declares at least one filter configuration", () => {
 		expect(entries.length).toBeGreaterThan(0);
 	});
 
+	// refactor after removing satisfies Partial<AUDIO_FILTERS>
 	it("only declares filters that are members of FILTER_NAMES", () => {
-		const knownFilters = new Set<string>(FILTER_NAMES);
 		for (const [key] of entries) {
 			expect(
 				knownFilters.has(key),
@@ -38,6 +39,7 @@ describe("settings.constants - FILTER_OPTIONS contract", () => {
 		}
 	});
 
+	// refactor after removing satisfies Partial<AUDIO_FILTERS> - start
 	it("keeps the object key and the config name field in sync for every filter", () => {
 		for (const [key, config] of entries) {
 			expect(config.name, `Key "${key}" must match its config name`).toBe(key);
@@ -66,4 +68,5 @@ describe("settings.constants - FILTER_OPTIONS contract", () => {
 			).toBe(labels.length);
 		}
 	});
+	// refactor after removing satisfies Partial<AUDIO_FILTERS> - end
 });
