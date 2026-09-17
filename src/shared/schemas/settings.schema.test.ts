@@ -33,7 +33,8 @@ import {
 describe("settingsSchema", () => {
 	const validSettings: SettingsForm = getValidSettings();
 	it("validates a complete valid settings object", () => {
-		expect(() => settingsSchema.parse(validSettings)).not.toThrow();
+		const result = settingsSchema.safeParse(validSettings);
+		expect(result.success).toBe(true);
 	});
 	it("accepts settings without a version field and defaults to SETTINGS_SCHEMA_VERSION", () => {
 		const { version, ...withoutVersion } = validSettings;
@@ -45,24 +46,44 @@ describe("settingsSchema", () => {
 	});
 	it("rejects a non-integer version", () => {
 		const invalid = { ...validSettings, version: 1.5 };
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["version"]);
+		}
 	});
 
 	it("rejects a negative version", () => {
 		const invalid = { ...validSettings, version: -1 };
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["version"]);
+		}
 	});
 
 	it("rejects a version of zero", () => {
 		const invalid = { ...validSettings, version: 0 };
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["version"]);
+		}
 	});
+
 	it("fails when outputDirectoryPath is empty", () => {
 		const invalid = {
 			...validSettings,
 			global: { ...validSettings.global, outputDirectoryPath: "" },
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual([
+				"global",
+				"outputDirectoryPath",
+			]);
+		}
 	});
 
 	it("rejects outputDirectoryPath containing null bytes", () => {
@@ -73,8 +94,17 @@ describe("settingsSchema", () => {
 				outputDirectoryPath: "/music/\0output",
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual([
+				"global",
+				"outputDirectoryPath",
+			]);
+			expect(result.error.issues[0]?.code).toBe("custom");
+		}
 	});
+
 	it("rejects outputDirectoryPath containing traversal sequences", () => {
 		const invalid = {
 			...validSettings,
@@ -83,8 +113,17 @@ describe("settingsSchema", () => {
 				outputDirectoryPath: "/music/../../etc/passwd",
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual([
+				"global",
+				"outputDirectoryPath",
+			]);
+			expect(result.error.issues[0]?.code).toBe("custom");
+		}
 	});
+
 	it("rejects outputDirectoryPath with backslash traversal", () => {
 		const invalid = {
 			...validSettings,
@@ -93,8 +132,17 @@ describe("settingsSchema", () => {
 				outputDirectoryPath: "C:\\music\\..\\..\\Windows",
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual([
+				"global",
+				"outputDirectoryPath",
+			]);
+			expect(result.error.issues[0]?.code).toBe("custom");
+		}
 	});
+
 	it("rejects outputDirectoryPath exceeding maximum length MAX_PATH_LENGTH", () => {
 		const invalid = {
 			...validSettings,
@@ -103,22 +151,43 @@ describe("settingsSchema", () => {
 				outputDirectoryPath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}`,
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual([
+				"global",
+				"outputDirectoryPath",
+			]);
+			expect(result.error.issues[0]?.code).toBe("too_big");
+		}
 	});
-	it("fails when concurrency is out of range", () => {
+
+	it("fails when concurrency is below minimum", () => {
 		const invalid = {
 			...validSettings,
 			global: { ...validSettings.global, concurrency: MIN_CONCURRENCY - 1 },
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["global", "concurrency"]);
+			expect(result.error.issues[0]?.code).toBe("too_small");
+		}
 	});
+
 	it("fails when concurrency exceeds maximum", () => {
 		const invalid = {
 			...validSettings,
 			global: { ...validSettings.global, concurrency: MAX_CONCURRENCY + 1 },
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["global", "concurrency"]);
+			expect(result.error.issues[0]?.code).toBe("too_big");
+		}
 	});
+
 	it("fails when audioQualityValue doesn't match the selected quality mode", () => {
 		const invalid = {
 			...validSettings,
@@ -128,10 +197,18 @@ describe("settingsSchema", () => {
 				audioQualityValue: "9",
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual([
+				"audio",
+				"audioQualityValue",
+			]);
+		}
 	});
+
 	it("accepts auto quality with 'auto' value", () => {
-		const invalid = {
+		const valid = {
 			...validSettings,
 			audio: {
 				...validSettings.audio,
@@ -139,8 +216,10 @@ describe("settingsSchema", () => {
 				audioQualityValue: "auto",
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).not.toThrow();
+		const result = settingsSchema.safeParse(valid);
+		expect(result.success).toBe(true);
 	});
+
 	it("accepts 'copy' as audioCodec", () => {
 		const withCopy = {
 			...validSettings,
@@ -149,8 +228,10 @@ describe("settingsSchema", () => {
 				audioCodec: "copy",
 			},
 		};
-		expect(() => settingsSchema.parse(withCopy)).not.toThrow();
+		const result = settingsSchema.safeParse(withCopy);
+		expect(result.success).toBe(true);
 	});
+
 	it("accepts filterOptions with string, number, and boolean values", () => {
 		const valid = {
 			...validSettings,
@@ -159,8 +240,10 @@ describe("settingsSchema", () => {
 				filterOptions: { I: "-24", LRA: 7, linear: true },
 			},
 		};
-		expect(() => settingsSchema.parse(valid)).not.toThrow();
+		const result = settingsSchema.safeParse(valid);
+		expect(result.success).toBe(true);
 	});
+
 	it("accepts codecOptions with string, number, and boolean values", () => {
 		const valid = {
 			...validSettings,
@@ -169,98 +252,90 @@ describe("settingsSchema", () => {
 				codecOptions: { b: "320k", compression_level: 5, reservoir: false },
 			},
 		};
-		expect(() => settingsSchema.parse(valid)).not.toThrow();
+		const result = settingsSchema.safeParse(valid);
+		expect(result.success).toBe(true);
 	});
-	it("rejects filterOptions with non-permitted types", () => {
-		const invalid = {
-			...validSettings,
-			audio: {
-				...validSettings.audio,
-				filterOptions: { mockProperty: ["1", "2"] },
-			},
-		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
-	});
-	it("rejects codecOptions with non-permitted types", () => {
-		const invalid = {
-			...validSettings,
-			audio: {
-				...validSettings.audio,
-				codecOptions: { mockProperty: ["1", "2"] },
-			},
-		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
-	});
+
+	it.each([
+		[
+			"filterOptions",
+			{ mockProperty: ["1", "2"] },
+			["audio", "filterOptions", "mockProperty"],
+		],
+		[
+			"codecOptions",
+			{ mockProperty: ["1", "2"] },
+			["audio", "codecOptions", "mockProperty"],
+		],
+	])(
+		"rejects %s with non-permitted types",
+		(_label, optionsValue, expectedPath) => {
+			const invalid = {
+				...validSettings,
+				audio: {
+					...validSettings.audio,
+					[_label === "filterOptions" ? "filterOptions" : "codecOptions"]:
+						optionsValue,
+				},
+			};
+			const result = settingsSchema.safeParse(invalid);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(expectedPath);
+			}
+		},
+	);
+
 	it("allows empty objects for filterOptions and codecOptions", () => {
 		const empty = {
 			...validSettings,
 			audio: { ...validSettings.audio, filterOptions: {}, codecOptions: {} },
 		};
-		expect(() => settingsSchema.parse(empty)).not.toThrow();
-	});
-	it("rejects null for filterOptions", () => {
-		const invalid = {
-			...validSettings,
-			audio: {
-				...validSettings.audio,
-				filterOptions: null,
-			},
-		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(empty);
+		expect(result.success).toBe(true);
 	});
 
-	it("rejects undefined for filterOptions", () => {
+	it.each([
+		["filterOptions", null, ["audio", "filterOptions"]],
+		["filterOptions", undefined, ["audio", "filterOptions"]],
+		["codecOptions", null, ["audio", "codecOptions"]],
+		["codecOptions", undefined, ["audio", "codecOptions"]],
+	])("rejects %s set to %s", (_field, value, expectedPath) => {
 		const invalid = {
 			...validSettings,
 			audio: {
 				...validSettings.audio,
-				filterOptions: undefined,
+				[_field]: value,
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
-	});
-	it("rejects null for codecOptions", () => {
-		const invalid = {
-			...validSettings,
-			audio: {
-				...validSettings.audio,
-				codecOptions: null,
-			},
-		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
-	});
-
-	it("rejects undefined for codecOptions", () => {
-		const invalid = {
-			...validSettings,
-			audio: {
-				...validSettings.audio,
-				codecOptions: undefined,
-			},
-		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(expectedPath);
+		}
 	});
 
-	it("rejects a record value that is null", () => {
-		const invalid = {
-			...validSettings,
-			audio: {
-				...validSettings.audio,
-				filterOptions: { I: null },
-			},
-		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
-	});
-	it("rejects a record value that is undefined", () => {
-		const invalid = {
-			...validSettings,
-			audio: {
-				...validSettings.audio,
-				filterOptions: { I: undefined },
-			},
-		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
-	});
+	it.each([
+		["filterOptions", { I: null }, ["audio", "filterOptions", "I"]],
+		["filterOptions", { I: undefined }, ["audio", "filterOptions", "I"]],
+	])(
+		"rejects a record value that is null/undefined in %s",
+		(_field, optionsValue, expectedPath) => {
+			const invalid = {
+				...validSettings,
+				audio: {
+					...validSettings.audio,
+					filterOptions: optionsValue,
+				},
+			};
+			const result = settingsSchema.safeParse(invalid);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.issues[0]?.path).toEqual(expectedPath);
+			}
+		},
+	);
+
 	it("rejects null for global.outputDirectoryPath", () => {
 		const invalid = {
 			...validSettings,
@@ -269,8 +344,17 @@ describe("settingsSchema", () => {
 				outputDirectoryPath: null,
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual([
+				"global",
+				"outputDirectoryPath",
+			]);
+			expect(result.error.issues[0]?.code).toBe("invalid_type");
+		}
 	});
+
 	it.each(FILTER_NAMES)("accepts known filter name: %s", (filterName) => {
 		const settings = {
 			...validSettings,
@@ -278,13 +362,16 @@ describe("settingsSchema", () => {
 		};
 		expect(settingsSchema.safeParse(settings).success).toBe(true);
 	});
+
 	it("accepts an empty audioFilter (no filter)", () => {
 		const settings = {
 			...validSettings,
 			audio: { ...validSettings.audio, audioFilter: "" },
 		};
-		expect(() => settingsSchema.parse(settings)).not.toThrow();
+		const result = settingsSchema.safeParse(settings);
+		expect(result.success).toBe(true);
 	});
+
 	it("rejects an unknown audioFilter string", () => {
 		const invalid = {
 			...validSettings,
@@ -293,8 +380,13 @@ describe("settingsSchema", () => {
 				audioFilter: "malicious;rm -rf /",
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["audio", "audioFilter"]);
+		}
 	});
+
 	it("rejects an audioFilter with shell metacharacters", () => {
 		const invalid = {
 			...validSettings,
@@ -303,7 +395,11 @@ describe("settingsSchema", () => {
 				audioFilter: "loudnorm$(whoami)",
 			},
 		};
-		expect(() => settingsSchema.parse(invalid)).toThrow();
+		const result = settingsSchema.safeParse(invalid);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.path).toEqual(["audio", "audioFilter"]);
+		}
 	});
 });
 
