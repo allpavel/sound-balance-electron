@@ -72,7 +72,6 @@ describe("settingsRepository", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
-		3;
 	});
 
 	describe("getSettings", () => {
