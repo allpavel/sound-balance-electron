@@ -18,6 +18,12 @@
 import type { ValidationIssue } from "@shared/validators";
 import { formatValidationIssues } from "./formatValidationIssues";
 
+const makeIssue = (
+	path: string,
+	message: string,
+	code: ValidationIssue["code"] = "custom",
+): ValidationIssue => ({ path, message, code });
+
 describe("formatValidationIssues", () => {
 	it("returns an empty string for an empty issue list", () => {
 		expect(formatValidationIssues([])).toBe("");
@@ -26,17 +32,17 @@ describe("formatValidationIssues", () => {
 	it.each([
 		[
 			"a standard path and message",
-			{ path: "global.concurrency", message: "Too small" },
+			makeIssue("global.concurrency", "Too small", "too_small"),
 			"global.concurrency: Too small",
 		],
 		[
 			"an empty path (root-level issue)",
-			{ path: "", message: "Invalid root payload" },
+			makeIssue("", "Invalid root payload"),
 			"Invalid root payload",
 		],
 		[
 			"an empty message",
-			{ path: "audio.audioCodec", message: "" },
+			makeIssue("audio.audioCodec", "", "invalid_type"),
 			"audio.audioCodec: ",
 		],
 	])("formats %s as 'path: message'", (_name, issue, expected) => {
@@ -45,9 +51,9 @@ describe("formatValidationIssues", () => {
 
 	it("joins multiple issues with '; ' and preserves input order", () => {
 		const issues = [
-			{ path: "version", message: "Invalid" },
-			{ path: "global.outputDirectoryPath", message: "Required" },
-			{ path: "audio.audioCodec", message: "Unrecognized" },
+			makeIssue("version", "Invalid", "too_small"),
+			makeIssue("global.outputDirectoryPath", "Required", "invalid_type"),
+			makeIssue("audio.audioCodec", "Unrecognized", "invalid_value"),
 		];
 		expect(formatValidationIssues(issues)).toBe(
 			"version: Invalid; global.outputDirectoryPath: Required; audio.audioCodec: Unrecognized",
@@ -55,11 +61,11 @@ describe("formatValidationIssues", () => {
 	});
 
 	it("uses only path and message, ignoring additional ValidationIssue fields", () => {
-		const issue: ValidationIssue = {
-			path: "settings.global.concurrency",
-			message: "Number must be greater than or equal to 1",
-			code: "too_small",
-		};
+		const issue: ValidationIssue = makeIssue(
+			"settings.global.concurrency",
+			"Number must be greater than or equal to 1",
+			"too_small",
+		);
 		expect(formatValidationIssues([issue])).toBe(
 			"settings.global.concurrency: Number must be greater than or equal to 1",
 		);

@@ -1,3 +1,5 @@
+import type { ValidationIssue } from "@shared/validators";
+
 /*
  * sound-balance-electron
  * Copyright (C) 2026 Pavel Alloyarov
@@ -16,7 +18,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 export function formatValidationIssues(
-	issues: ReadonlyArray<{ path: string; message: string }>,
+	issues: readonly ValidationIssue[],
 ): string {
 	return issues
 		.map((i) => (i.path ? `${i.path}: ${i.message}` : i.message))
