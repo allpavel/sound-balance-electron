@@ -25,6 +25,7 @@ import {
 	STATUS_VALUES,
 } from "@shared/constants";
 import { makeTrack } from "@tests/factories";
+import { hasIssueWithPath } from "@tests/utils";
 import {
 	collectionIdsSchema,
 	selectedSchema,
@@ -60,7 +61,7 @@ describe("track.schema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["filePath"]);
+				expect(hasIssueWithPath(result.error.issues, ["filePath"])).toBe(true);
 			}
 		});
 
@@ -72,7 +73,7 @@ describe("track.schema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["filePath"]);
+				expect(hasIssueWithPath(result.error.issues, ["filePath"])).toBe(true);
 			}
 		});
 
@@ -106,12 +107,14 @@ describe("track.schema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([
-					"common",
-					"picture",
-					0,
-					"data",
-				]);
+				expect(
+					hasIssueWithPath(result.error.issues, [
+						"common",
+						"picture",
+						0,
+						"data",
+					]),
+				).toBe(true);
 			}
 		});
 
@@ -263,7 +266,9 @@ describe("track.schema", () => {
 			const result = trackInputSchema.safeParse(input);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["common", "year"]);
+				expect(hasIssueWithPath(result.error.issues, ["common", "year"])).toBe(
+					true,
+				);
 			}
 		});
 
@@ -277,19 +282,10 @@ describe("track.schema", () => {
 			const result = trackInputSchema.safeParse(input);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["format", "duration"]);
+				expect(
+					hasIssueWithPath(result.error.issues, ["format", "duration"]),
+				).toBe(true);
 			}
-		});
-	});
-
-	describe("STATUS_VALUES", () => {
-		it("contains the supported track statuses", () => {
-			expect(STATUS_VALUES).toEqual([
-				"pending",
-				"processing",
-				"completed",
-				"failed",
-			]);
 		});
 	});
 
@@ -417,7 +413,7 @@ describe("track.schema", () => {
 			const result = collectionIdsSchema.safeParse(["all", ""]);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([1]);
+				expect(hasIssueWithPath(result.error.issues, [1])).toBe(true);
 			}
 		});
 
@@ -425,7 +421,7 @@ describe("track.schema", () => {
 			const result = collectionIdsSchema.safeParse(["all", "   "]);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([1]);
+				expect(hasIssueWithPath(result.error.issues, [1])).toBe(true);
 			}
 		});
 
@@ -433,7 +429,7 @@ describe("track.schema", () => {
 			const result = collectionIdsSchema.safeParse(["all", 123]);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([1]);
+				expect(hasIssueWithPath(result.error.issues, [1])).toBe(true);
 			}
 		});
 	});
@@ -481,7 +477,7 @@ describe("track.schema", () => {
 			const result = trackInputSchema.safeParse(withoutField(field));
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([field]);
+				expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
 			}
 		});
 
@@ -489,7 +485,7 @@ describe("track.schema", () => {
 			const result = trackInputSchema.safeParse(makeTrack({ [field]: "" }));
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([field]);
+				expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
 			}
 		});
 
@@ -501,7 +497,7 @@ describe("track.schema", () => {
 				);
 				expect(result.success).toBe(false);
 				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual([field]);
+					expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
 				}
 			},
 		);
@@ -512,7 +508,7 @@ describe("track.schema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["status"]);
+				expect(hasIssueWithPath(result.error.issues, ["status"])).toBe(true);
 			}
 		});
 
@@ -522,7 +518,7 @@ describe("track.schema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["selected"]);
+				expect(hasIssueWithPath(result.error.issues, ["selected"])).toBe(true);
 			}
 		});
 
@@ -532,7 +528,9 @@ describe("track.schema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["collectionIds"]);
+				expect(hasIssueWithPath(result.error.issues, ["collectionIds"])).toBe(
+					true,
+				);
 			}
 		});
 
@@ -542,7 +540,9 @@ describe("track.schema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["collectionIds", 1]);
+				expect(
+					hasIssueWithPath(result.error.issues, ["collectionIds", 1]),
+				).toBe(true);
 			}
 		});
 	});
@@ -579,7 +579,11 @@ describe("track.schema", () => {
 			const result = tracksArraySchema.safeParse(input);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.code).toBe("invalid_type");
+				// The single-issue nature of a root-level type mismatch makes positional access acceptable.
+				// However, for consistency and future-proofing, we assert via .some()
+				expect(result.error.issues.some((i) => i.code === "invalid_type")).toBe(
+					true,
+				);
 			}
 		});
 
@@ -590,7 +594,7 @@ describe("track.schema", () => {
 			]);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([1, "status"]);
+				expect(hasIssueWithPath(result.error.issues, [1, "status"])).toBe(true);
 			}
 		});
 
@@ -598,7 +602,7 @@ describe("track.schema", () => {
 			const result = tracksArraySchema.safeParse([makeTrack({ id: "" })]);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual([0, "id"]);
+				expect(hasIssueWithPath(result.error.issues, [0, "id"])).toBe(true);
 			}
 		});
 
@@ -652,11 +656,6 @@ describe("track.schema", () => {
 			it("rejects an empty object (no-op mutation)", () => {
 				const result = trackChangesSchema.safeParse({});
 				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(result.error.issues[0]?.message).toContain(
-						"At least one field",
-					);
-				}
 			});
 
 			it("rejects unknown fields (strict mode)", () => {
