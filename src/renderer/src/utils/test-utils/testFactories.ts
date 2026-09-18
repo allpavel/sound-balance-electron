@@ -17,7 +17,7 @@
  */
 
 import { db } from "@renderer/db/db";
-import { resetFactorySequences } from "@shared/utils/factories";
+import { resetFactorySequences } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 
 let uuidSeq = 0;

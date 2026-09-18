@@ -23,7 +23,7 @@ import {
 	resetTestState,
 } from "@renderer/utils/test-utils/testFactories";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { makeTrack } from "@shared/utils/factories";
+import { makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 
 const TITLE_VALIDATION_ERROR = /title.*empty/;

@@ -17,7 +17,7 @@
  */
 
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { makeTrack } from "@shared/utils/factories";
+import { makeTrack } from "@tests/factories";
 import {
 	areCollectionIdsEqual,
 	assertTargetCollectionId,

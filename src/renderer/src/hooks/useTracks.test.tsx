@@ -22,9 +22,9 @@ import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetTestState } from "@renderer/utils/test-utils/testFactories";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
-import { makeTrack } from "@shared/utils/factories";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { makeTrack } from "@tests/factories";
 import type { PropsWithChildren } from "react";
 import {
 	type AddTracksPayload,

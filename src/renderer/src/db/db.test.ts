@@ -19,7 +19,7 @@
 import { db } from "@renderer/db/db";
 import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { makeTrack } from "@shared/utils/factories";
+import { makeTrack } from "@tests/factories";
 
 describe("AudioDB", () => {
 	describe("database initialization and populate hook", () => {

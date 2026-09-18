@@ -28,7 +28,7 @@ import {
 	makeCollection,
 	makeTrack,
 	resetFactorySequences,
-} from "./factories";
+} from ".";
 
 describe("shared/utils/factories", () => {
 	beforeEach(() => {

@@ -22,8 +22,8 @@ import {
 	type SettingsForm,
 } from "@shared/schemas/settings.schema";
 import type { Metadata } from "@shared/schemas/track.schema";
+import { deepMerge } from "@tests/utils";
 import type { CollectionType } from "@/types";
-import { deepMerge } from "./deepMerge";
 
 let collectionSeq = 0;
 let trackSeq = 0;

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { getValidSettings, makeTrack } from "@shared/utils/factories";
+import { getValidSettings, makeTrack } from "@tests/factories";
 import { dataSchema } from "./data.schema";
 
 function createValidData(overrides: Record<string, unknown> = {}) {

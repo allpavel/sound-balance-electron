@@ -23,8 +23,8 @@ import {
 	type TrackChanges,
 	targetCollectionIdSchema,
 } from "@shared/schemas/track.schema";
-import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
 import { safeParseTrack, safeParseTrackChanges } from "@shared/validators";
+import { formatValidationIssues } from "@tests/utils";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;

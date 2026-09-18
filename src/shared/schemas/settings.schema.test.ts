@@ -21,7 +21,7 @@ import {
 	MAX_PATH_LENGTH,
 	MIN_CONCURRENCY,
 } from "@shared/constants";
-import { getValidSettings } from "@shared/utils/factories";
+import { getValidSettings } from "@tests/factories";
 import {
 	audioFilterConfigSchema,
 	FILTER_NAMES,

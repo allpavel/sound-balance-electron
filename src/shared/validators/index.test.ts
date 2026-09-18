@@ -17,7 +17,7 @@
  */
 
 import { MAX_BASE64_IMAGE_SIZE } from "@shared/constants";
-import { getValidSettings, makeTrack } from "@shared/utils/factories";
+import { getValidSettings, makeTrack } from "@tests/factories";
 import {
 	ISSUE_LIMIT_CODE,
 	MAX_VALIDATION_ISSUES,

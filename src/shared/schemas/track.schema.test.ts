@@ -24,7 +24,7 @@ import {
 	MAX_YEAR,
 	STATUS_VALUES,
 } from "@shared/constants";
-import { makeTrack } from "@shared/utils/factories";
+import { makeTrack } from "@tests/factories";
 import {
 	collectionIdsSchema,
 	selectedSchema,

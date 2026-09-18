@@ -21,7 +21,7 @@ import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
-import { makeTrack } from "@shared/utils/factories";
+import { makeTrack } from "@tests/factories";
 
 describe("tracksRepository", () => {
 	beforeEach(async () => {

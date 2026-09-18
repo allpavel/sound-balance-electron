@@ -17,7 +17,7 @@
  */
 
 import { db } from "@renderer/db/db";
-import { makeCollection, makeTrack } from "@shared/utils/factories";
+import { makeCollection, makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 import {
 	type SettingsForm,

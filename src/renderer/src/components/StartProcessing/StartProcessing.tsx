@@ -29,8 +29,8 @@ import type {
 	ProcessingStatus,
 	TrackChanges,
 } from "@shared/schemas/track.schema";
-import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
 import { safeParseData } from "@shared/validators";
+import { formatValidationIssues } from "@tests/utils";
 import { useEffect, useState } from "react";
 import type { StoppingStatus } from "@/types";
 

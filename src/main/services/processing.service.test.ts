@@ -26,7 +26,7 @@ import {
 	getValidData,
 	makeTrack,
 	resetFactorySequences,
-} from "@shared/utils/factories";
+} from "@tests/factories";
 import PQueue from "p-queue";
 import { ProcessManager } from "./ffmpeg/processManager";
 import { TwoPassProcessManager } from "./ffmpeg/twoPassProcessManager";
