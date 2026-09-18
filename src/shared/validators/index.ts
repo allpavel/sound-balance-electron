@@ -28,7 +28,7 @@ import {
 	trackInputSchema,
 	tracksArraySchema,
 } from "@shared/schemas/track.schema";
-import type { ZodError, ZodSafeParseResult, ZodType } from "zod";
+import type { ZodError, ZodSafeParseResult, ZodType, z } from "zod";
 
 export const MAX_VALIDATION_ISSUES = 100;
 export const ISSUE_LIMIT_CODE = "issue_limit_reached";
@@ -57,10 +57,10 @@ export type TracksParseResult = ValidationResult<Metadata[]>;
 export type DataParseResult = ValidationResult<Data>;
 export type TrackChangesParseResult = ValidationResult<TrackChanges>;
 
-interface Issue {
+export interface Issue {
 	readonly path?: PropertyKey[];
 	readonly message?: string;
-	readonly code?: string;
+	readonly code?: z.core.$ZodIssue["code"];
 	readonly errors?: readonly (readonly Issue[])[];
 }
 
