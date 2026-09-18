@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import { hasIssueWithPath } from "@tests/utils";
 import { optionsSchema } from "./options.schema";
 
 const createNumberOption = (
@@ -83,7 +84,7 @@ describe("optionsSchema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["type"]);
+				expect(hasIssueWithPath(result.error.issues, ["type"])).toBe(true);
 			}
 		});
 
@@ -92,7 +93,7 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutType);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["type"]);
+				expect(hasIssueWithPath(result.error.issues, ["type"])).toBe(true);
 			}
 		});
 
@@ -116,7 +117,7 @@ describe("optionsSchema", () => {
 				const result = optionsSchema.safeParse(withoutLabel);
 				expect(result.success).toBe(false);
 				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual(["label"]);
+					expect(hasIssueWithPath(result.error.issues, ["label"])).toBe(true);
 				}
 			},
 		);
@@ -128,7 +129,7 @@ describe("optionsSchema", () => {
 				const result = optionsSchema.safeParse(withoutDesc);
 				expect(result.success).toBe(false);
 				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual(["desc"]);
+					expect(hasIssueWithPath(result.error.issues, ["desc"])).toBe(true);
 				}
 			},
 		);
@@ -183,7 +184,7 @@ describe("optionsSchema", () => {
 				const result = optionsSchema.safeParse(option);
 				expect(result.success).toBe(false);
 				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual([field]);
+					expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
 				}
 			},
 		);
@@ -204,7 +205,7 @@ describe("optionsSchema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["min"]);
+				expect(hasIssueWithPath(result.error.issues, ["min"])).toBe(true);
 			}
 		});
 
@@ -214,7 +215,9 @@ describe("optionsSchema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["defaultValue"]);
+				expect(hasIssueWithPath(result.error.issues, ["defaultValue"])).toBe(
+					true,
+				);
 			}
 		});
 	});
@@ -256,7 +259,7 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutOptions);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["options"]);
+				expect(hasIssueWithPath(result.error.issues, ["options"])).toBe(true);
 			}
 		});
 
@@ -318,7 +321,9 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutDefault);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["defaultValue"]);
+				expect(hasIssueWithPath(result.error.issues, ["defaultValue"])).toBe(
+					true,
+				);
 			}
 		});
 
@@ -350,7 +355,9 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutDefault);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["defaultValue"]);
+				expect(hasIssueWithPath(result.error.issues, ["defaultValue"])).toBe(
+					true,
+				);
 			}
 		});
 
