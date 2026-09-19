@@ -1,5 +1,3 @@
-import type { ValidationIssue } from "@shared/validators";
-
 /*
  * sound-balance-electron
  * Copyright (C) 2026 Pavel Alloyarov
@@ -17,6 +15,8 @@ import type { ValidationIssue } from "@shared/validators";
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import type { ValidationIssue } from "@shared/validators";
+
 export function formatValidationIssues(
 	issues: readonly ValidationIssue[],
 ): string {
