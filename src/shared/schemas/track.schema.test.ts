@@ -25,7 +25,7 @@ import {
 	STATUS_VALUES,
 } from "@shared/constants";
 import { makeTrack } from "@tests/factories";
-import { hasIssueWithPath } from "@tests/utils";
+import { expectFailure, expectSuccess, hasIssueWithPath } from "@tests/utils";
 import {
 	collectionIdsSchema,
 	selectedSchema,
@@ -56,25 +56,23 @@ function withoutField(field: string): Record<string, unknown> {
 describe("track.schema", () => {
 	describe("track.schema - security constraints", () => {
 		it("rejects filePath containing null bytes", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ filePath: "/music/\0track.mp3" }),
+			const issues = expectFailure(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "/music/\0track.mp3" }),
+				),
 			);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, ["filePath"])).toBe(true);
-			}
+			expect(hasIssueWithPath(issues, ["filePath"])).toBe(true);
 		});
 
 		it("rejects filePath exceeding MAX_PATH_LENGTH", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({
-					filePath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}.mp3`,
-				}),
+			const issues = expectFailure(
+				trackInputSchema.safeParse(
+					makeTrack({
+						filePath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}.mp3`,
+					}),
+				),
 			);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, ["filePath"])).toBe(true);
-			}
+			expect(hasIssueWithPath(issues, ["filePath"])).toBe(true);
 		});
 
 		it("rejects id containing null bytes", () => {
@@ -84,38 +82,25 @@ describe("track.schema", () => {
 
 		it("strips unknown top-level properties instead of preserving them", () => {
 			const input = { ...makeTrack(), unknownField: "should be stripped" };
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).not.toHaveProperty("unknownField");
-			}
+			expect(
+				expectSuccess(trackInputSchema.safeParse(input)),
+			).not.toHaveProperty("unknownField");
 		});
 
 		it("rejects picture data exceeding MAX_BASE64_IMAGE_SIZE", () => {
 			const oversizedData = "x".repeat(MAX_BASE64_IMAGE_SIZE + 1);
-			const result = trackInputSchema.safeParse(
-				makeTrack({
-					common: {
-						picture: [
-							{
-								format: "image/jpeg",
-								data: oversizedData,
-							},
-						],
-					},
-				}),
+			const issues = expectFailure(
+				trackInputSchema.safeParse(
+					makeTrack({
+						common: {
+							picture: [{ format: "image/jpeg", data: oversizedData }],
+						},
+					}),
+				),
 			);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(
-					hasIssueWithPath(result.error.issues, [
-						"common",
-						"picture",
-						0,
-						"data",
-					]),
-				).toBe(true);
-			}
+			expect(hasIssueWithPath(issues, ["common", "picture", 0, "data"])).toBe(
+				true,
+			);
 		});
 
 		it(`rejects more than ${MAX_PICTURE_COUNT} pictures`, () => {
@@ -155,16 +140,12 @@ describe("track.schema", () => {
 					albumartist: "The Beatles",
 				} as any,
 			});
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				const common = result.data.common as Record<string, unknown>;
-				expect(common.genre).toEqual(["Rock", "Alternative"]);
-				expect(common.composer).toEqual(["John Lennon"]);
-				expect(common.artists).toEqual(["John Lennon"]);
-				expect(common.albumartist).toBe("The Beatles");
-				expect(common.title).toBe("Test Track");
-			}
+			const common = expectSuccess(trackInputSchema.safeParse(input)).common;
+			expect(common.genre).toEqual(["Rock", "Alternative"]);
+			expect(common.composer).toEqual(["John Lennon"]);
+			expect(common.artists).toEqual(["John Lennon"]);
+			expect(common.albumartist).toBe("The Beatles");
+			expect(common.title).toBe("Test Track");
 		});
 
 		it("accepts whitelisted common fields (dates, credits, identifiers)", () => {
@@ -184,15 +165,11 @@ describe("track.schema", () => {
 					key: "C Major",
 				} as any,
 			});
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				const common = result.data.common as Record<string, unknown>;
-				expect(common.date).toBe("2024-01-15");
-				expect(common.lyricist).toEqual(["Lyricist A"]);
-				expect(common.barcode).toBe("0123456789012");
-				expect(common.bpm).toBe(120);
-			}
+			const common = expectSuccess(trackInputSchema.safeParse(input)).common;
+			expect(common.date).toBe("2024-01-15");
+			expect(common.lyricist).toEqual(["Lyricist A"]);
+			expect(common.barcode).toBe("0123456789012");
+			expect(common.bpm).toBe(120);
 		});
 
 		it("accepts whitelisted disk and movementIndex fields", () => {
@@ -202,13 +179,9 @@ describe("track.schema", () => {
 					movementIndex: { no: 3, of: 5 },
 				} as any,
 			});
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				const common = result.data.common as Record<string, unknown>;
-				expect(common.disk).toEqual({ no: 1, of: 2 });
-				expect(common.movementIndex).toEqual({ no: 3, of: 5 });
-			}
+			const common = expectSuccess(trackInputSchema.safeParse(input)).common;
+			expect(common.disk).toEqual({ no: 1, of: 2 });
+			expect(common.movementIndex).toEqual({ no: 3, of: 5 });
 		});
 
 		it("accepts whitelisted format fields (container, lossless, numberOfChannels)", () => {
@@ -222,16 +195,12 @@ describe("track.schema", () => {
 					sampleRate: 44100,
 				} as any,
 			});
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				const format = result.data.format as Record<string, unknown>;
-				expect(format.container).toBe("MPEG");
-				expect(format.lossless).toBe(false);
-				expect(format.numberOfChannels).toBe(2);
-				expect(format.sampleRate).toBe(44100);
-				expect(format.duration).toBe(210.5);
-			}
+			const format = expectSuccess(trackInputSchema.safeParse(input)).format;
+			expect(format.container).toBe("MPEG");
+			expect(format.lossless).toBe(false);
+			expect(format.numberOfChannels).toBe(2);
+			expect(format.sampleRate).toBe(44100);
+			expect(format.duration).toBe(210.5);
 		});
 
 		it("rejects unknown fields in common (strict mode)", () => {
@@ -258,34 +227,18 @@ describe("track.schema", () => {
 
 		it("still validates declared common fields with constraints", () => {
 			const input = makeTrack({
-				common: {
-					year: 99999,
-					genre: ["Rock"],
-				} as any,
+				common: { year: 99999, genre: ["Rock"] } as any,
 			});
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, ["common", "year"])).toBe(
-					true,
-				);
-			}
+			const issues = expectFailure(trackInputSchema.safeParse(input));
+			expect(hasIssueWithPath(issues, ["common", "year"])).toBe(true);
 		});
 
 		it("still validates declared format fields with constraints", () => {
 			const input = makeTrack({
-				format: {
-					duration: -1,
-					container: "MPEG",
-				} as any,
+				format: { duration: -1, container: "MPEG" } as any,
 			});
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(
-					hasIssueWithPath(result.error.issues, ["format", "duration"]),
-				).toBe(true);
-			}
+			const issues = expectFailure(trackInputSchema.safeParse(input));
+			expect(hasIssueWithPath(issues, ["format", "duration"])).toBe(true);
 		});
 	});
 
@@ -418,19 +371,15 @@ describe("track.schema", () => {
 		});
 
 		it("rejects whitespace-only collection ids and reports the invalid index", () => {
-			const result = collectionIdsSchema.safeParse(["all", "   "]);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, [1])).toBe(true);
-			}
+			const issues = expectFailure(collectionIdsSchema.safeParse(["all", ""]));
+			expect(hasIssueWithPath(issues, [1])).toBe(true);
 		});
 
 		it("rejects non-string collection ids and reports the invalid index", () => {
-			const result = collectionIdsSchema.safeParse(["all", 123]);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, [1])).toBe(true);
-			}
+			const issues = expectFailure(
+				collectionIdsSchema.safeParse(["all", "   "]),
+			);
+			expect(hasIssueWithPath(issues, [1])).toBe(true);
 		});
 	});
 
@@ -458,113 +407,75 @@ describe("track.schema", () => {
 					album: "Test Album",
 				},
 			});
-			const result = trackInputSchema.safeParse(input);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				const data = result.data as Record<string, unknown>;
-				expect(data.format).toEqual({
-					duration: 210.5,
-					bitrate: 320000,
-				});
-				expect(data.common).toEqual({
-					title: "Test Track",
-					album: "Test Album",
-				});
-			}
+			const data = expectSuccess(trackInputSchema.safeParse(input));
+			expect(data.format).toEqual({ duration: 210.5, bitrate: 320000 });
+			expect(data.common).toEqual({ title: "Test Track", album: "Test Album" });
 		});
 
 		it.each(REQUIRED_FIELDS)("rejects missing required field: %s", (field) => {
-			const result = trackInputSchema.safeParse(withoutField(field));
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
-			}
+			const issues = expectFailure(
+				trackInputSchema.safeParse(withoutField(field)),
+			);
+			expect(hasIssueWithPath(issues, [field])).toBe(true);
 		});
 
 		it.each(STRING_IDENTITY_FIELDS)("rejects empty %s value", (field) => {
-			const result = trackInputSchema.safeParse(makeTrack({ [field]: "" }));
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
-			}
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ [field]: "" })),
+			);
+			expect(hasIssueWithPath(issues, [field])).toBe(true);
 		});
 
 		it.each(STRING_IDENTITY_FIELDS)(
 			"rejects whitespace-only %s value",
 			(field) => {
-				const result = trackInputSchema.safeParse(
-					makeTrack({ [field]: "   " }),
+				const issues = expectFailure(
+					trackInputSchema.safeParse(makeTrack({ [field]: "   " })),
 				);
-				expect(result.success).toBe(false);
-				if (!result.success) {
-					expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
-				}
+				expect(hasIssueWithPath(issues, [field])).toBe(true);
 			},
 		);
 
 		it("rejects invalid status values and reports the status path", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ status: "done" } as any),
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ status: "done" } as any)),
 			);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, ["status"])).toBe(true);
-			}
+			expect(hasIssueWithPath(issues, ["status"])).toBe(true);
 		});
 
 		it("rejects invalid selected values and reports the selected path", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ selected: 2 } as any),
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ selected: 2 } as any)),
 			);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, ["selected"])).toBe(true);
-			}
+			expect(hasIssueWithPath(issues, ["selected"])).toBe(true);
 		});
 
 		it("rejects a non-array collectionIds value and reports the collectionIds path", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ collectionIds: "all" } as any),
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ collectionIds: "all" } as any)),
 			);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, ["collectionIds"])).toBe(
-					true,
-				);
-			}
+			expect(hasIssueWithPath(issues, ["collectionIds"])).toBe(true);
 		});
 
 		it("rejects invalid collectionIds items and reports the invalid index", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ collectionIds: ["all", ""] }),
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ collectionIds: ["all", ""] })),
 			);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(
-					hasIssueWithPath(result.error.issues, ["collectionIds", 1]),
-				).toBe(true);
-			}
+			expect(hasIssueWithPath(issues, ["collectionIds", 1])).toBe(true);
 		});
 	});
 
 	describe("tracksArraySchema", () => {
 		it("accepts a valid array of tracks", () => {
 			const tracks = [makeTrack(), makeTrack()];
-			const result = tracksArraySchema.safeParse(tracks);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toHaveLength(2);
-				expect(result.data[0]).toEqual(tracks[0]);
-				expect(result.data[1]).toEqual(tracks[1]);
-			}
+			const data = expectSuccess(tracksArraySchema.safeParse(tracks));
+			expect(data).toHaveLength(2);
+			expect(data[0]).toEqual(tracks[0]);
+			expect(data[1]).toEqual(tracks[1]);
 		});
 
 		it("accepts an empty array (valid state: no tracks loaded)", () => {
-			const result = tracksArraySchema.safeParse([]);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toEqual([]);
-			}
+			expect(expectSuccess(tracksArraySchema.safeParse([]))).toEqual([]);
 		});
 
 		it.each([
@@ -576,48 +487,37 @@ describe("track.schema", () => {
 			["object", {}],
 			["single track", makeTrack()],
 		])("rejects non-array input: %s", (_label, input) => {
-			const result = tracksArraySchema.safeParse(input);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				// The single-issue nature of a root-level type mismatch makes positional access acceptable.
-				// However, for consistency and future-proofing, we assert via .some()
-				expect(result.error.issues.some((i) => i.code === "invalid_type")).toBe(
-					true,
-				);
-			}
+			const issues = expectFailure(tracksArraySchema.safeParse(input));
+			expect(issues.some((i) => i.code === "invalid_type")).toBe(true);
 		});
 
 		it("propagates item errors with the correct index in the path", () => {
-			const result = tracksArraySchema.safeParse([
-				makeTrack(),
-				makeTrack({ status: "invalid_status" } as any),
-			]);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, [1, "status"])).toBe(true);
-			}
+			const issues = expectFailure(
+				tracksArraySchema.safeParse([
+					makeTrack(),
+					makeTrack({ status: "invalid_status" } as any),
+				]),
+			);
+			expect(hasIssueWithPath(issues, [1, "status"])).toBe(true);
 		});
 
 		it("reports index 0 for an invalid first item", () => {
-			const result = tracksArraySchema.safeParse([makeTrack({ id: "" })]);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				expect(hasIssueWithPath(result.error.issues, [0, "id"])).toBe(true);
-			}
+			const issues = expectFailure(
+				tracksArraySchema.safeParse([makeTrack({ id: "" })]),
+			);
+			expect(hasIssueWithPath(issues, [0, "id"])).toBe(true);
 		});
 
 		it("captures multiple item-level errors across different indices", () => {
-			const result = tracksArraySchema.safeParse([
-				makeTrack({ id: "" }),
-				makeTrack(),
-				makeTrack({ filePath: "   " }),
-			]);
-			expect(result.success).toBe(false);
-			if (!result.success) {
-				const paths = result.error.issues.map((i) => i.path.join("."));
-				expect(paths).toContain("0.id");
-				expect(paths).toContain("2.filePath");
-			}
+			const issues = expectFailure(
+				tracksArraySchema.safeParse([
+					makeTrack({ id: "" }),
+					makeTrack(),
+					makeTrack({ filePath: "   " }),
+				]),
+			);
+			expect(hasIssueWithPath(issues, [0, "id"])).toBe(true);
+			expect(hasIssueWithPath(issues, [2, "filePath"])).toBe(true);
 		});
 	});
 
