@@ -408,6 +408,8 @@ export type Metadata = TrackInput;
 
 export type TrackChanges = z.infer<typeof trackChangesSchema>;
 
+export type Status = z.infer<typeof statusSchema>;
+
 export type ProcessingStatus =
 	| { id: string; status: "processing" | "completed" }
 	| { id: string; status: "failed"; reason: string };
