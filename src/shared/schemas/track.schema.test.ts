@@ -710,4 +710,91 @@ describe("track.schema", () => {
 			});
 		});
 	});
+
+	describe("trackInputSchema - statusSeq", () => {
+		it("accepts a track without statusSeq (optional field)", () => {
+			expect(trackInputSchema.safeParse(makeTrack()).success).toBe(true);
+		});
+
+		it("accepts statusSeq 0 and preserves it", () => {
+			const data = expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ statusSeq: 0 })),
+			);
+			expect(data.statusSeq).toBe(0);
+		});
+
+		it("accepts a positive integer statusSeq and preserves it", () => {
+			const data = expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ statusSeq: 42 })),
+			);
+			expect(data.statusSeq).toBe(42);
+		});
+
+		it.each([
+			["negative", -1],
+			["fractional", 2.5],
+			["string", "3"],
+			["null", null],
+			["boolean", true],
+		])("rejects %s statusSeq", (_label, value) => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ statusSeq: value } as any),
+			);
+			expect(result.success).toBe(false);
+		});
+	});
+
+	describe("trackChangesSchema - seq (status event sequencing)", () => {
+		it.each([
+			["pending", { status: "pending", seq: 1 }],
+			["processing", { status: "processing", seq: 1 }],
+			["completed", { status: "completed", seq: 42 }],
+		])("accepts %s status with a non-negative integer seq", (_label, value) => {
+			expect(trackChangesSchema.safeParse(value).success).toBe(true);
+		});
+
+		it("accepts failed status with reason and seq", () => {
+			const result = trackChangesSchema.safeParse({
+				status: "failed",
+				reason: "FFmpeg exited with code 1",
+				seq: 3,
+			});
+			expect(result.success).toBe(true);
+		});
+
+		it("accepts seq 0 as the sequence floor", () => {
+			expect(
+				trackChangesSchema.safeParse({ status: "processing", seq: 0 }).success,
+			).toBe(true);
+		});
+
+		it("keeps seq optional for backward compatibility", () => {
+			expect(
+				trackChangesSchema.safeParse({ status: "processing" }).success,
+			).toBe(true);
+		});
+
+		it.each([
+			["negative", -1],
+			["fractional", 1.5],
+			["string", "2"],
+			["null", null],
+			["boolean", true],
+		])("rejects %s seq", (_label, seq) => {
+			const result = trackChangesSchema.safeParse({
+				status: "processing",
+				seq,
+			});
+			expect(result.success).toBe(false);
+		});
+		it("rejects failed status with seq but missing reason", () => {
+			const result = trackChangesSchema.safeParse({ status: "failed", seq: 1 });
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects seq on the fields branch", () => {
+			const result = trackChangesSchema.safeParse({ selected: 1, seq: 2 });
+			expect(result.success).toBe(false);
+		});
+	});
 });

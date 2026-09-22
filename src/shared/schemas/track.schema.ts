@@ -49,6 +49,7 @@ export const collectionIdsSchema = z.array(nonEmptyStringSchema);
 export const targetCollectionIdSchema = nonEmptyStringSchema;
 export const selectedSchema = z.union([z.literal(0), z.literal(1)]);
 export const statusSchema = z.enum(STATUS_VALUES);
+export const eventSeqSchema = z.number().int().min(0).optional();
 export const pictureSchema = z
 	.object({
 		format: z.string().min(1).max(50),
@@ -342,13 +343,14 @@ const trackBaseSchema = z
 		filePath: nonEmptyStringSchema,
 		selected: selectedSchema,
 		collectionIds: collectionIdsSchema,
+		statusSeq: eventSeqSchema,
 		common: commonSchema.default({}),
 		format: formatSchema.default({}),
 	})
 	.strip();
 
 export const trackInputSchema = z.discriminatedUnion("status", [
-	trackBaseSchema.extend({ status: z.literal("pending") }),
+	trackBaseSchema.extend({ status: z.literal("pending"), seq: eventSeqSchema }),
 	trackBaseSchema.extend({ status: z.literal("processing") }),
 	trackBaseSchema.extend({ status: z.literal("completed") }),
 	trackBaseSchema.extend({
@@ -380,13 +382,14 @@ const trackChangesFieldsSchema = z
 	});
 
 const trackChangesStatusSchema = z.discriminatedUnion("status", [
-	z.object({ status: z.literal("pending") }).strict(),
-	z.object({ status: z.literal("processing") }).strict(),
-	z.object({ status: z.literal("completed") }).strict(),
+	z.object({ status: z.literal("pending"), seq: eventSeqSchema }).strict(),
+	z.object({ status: z.literal("processing"), seq: eventSeqSchema }).strict(),
+	z.object({ status: z.literal("completed"), seq: eventSeqSchema }).strict(),
 	z
 		.object({
 			status: z.literal("failed"),
 			reason: reasonSchema,
+			seq: eventSeqSchema,
 		})
 		.strict(),
 ]);
@@ -411,5 +414,5 @@ export type TrackChanges = z.infer<typeof trackChangesSchema>;
 export type Status = z.infer<typeof statusSchema>;
 
 export type ProcessingStatus =
-	| { id: string; status: "processing" | "completed" }
-	| { id: string; status: "failed"; reason: string };
+	| { id: string; status: "processing" | "completed"; seq?: number }
+	| { id: string; status: "failed"; reason: string; seq?: number };
