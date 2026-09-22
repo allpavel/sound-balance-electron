@@ -38,11 +38,25 @@ import { TwoPassProcessManager } from "./ffmpeg/twoPassProcessManager";
 type ProcessingState = {
 	activeProcesses: Map<string, ProcessManager>;
 	abortController: AbortController | null;
+
+	// Per-track high-water counters for status-event sequence numbers.
+	// Deliberately NOT cleaned up when a track finishes or a batch completes:
+	//
+	// 1. Cleaning up would allow a subsequent batch within the same
+	//    main-process session to reuse a sequence number, causing the
+	//    renderer's sequence guard to reject the event as stale.
+	// 2. Memory is bounded by the number of unique tracks processed per
+	//    session (a desktop-app scale, not an unbounded stream).
+	// 3. Across main-process restarts the in-memory counter is lost, but
+	//    `nextEventSeq` seeds from the renderer-persisted `statusSeq`
+	//    carried in the IPC payload, restoring continuity via Math.max.
+	statusSeq: Map<string, number>;
 };
 
 export const processingState: ProcessingState = {
 	activeProcesses: new Map(),
 	abortController: null,
+	statusSeq: new Map(),
 };
 
 function extractTrackId(rawTrack: unknown, index: number): string {
@@ -53,6 +67,25 @@ function extractTrackId(rawTrack: unknown, index: number): string {
 		}
 	}
 	return `unknown-track-at-index-${index}`;
+}
+
+/**
+ * Produces the next strictly-increasing sequence number for a track.
+ *
+ * The seed is the renderer-persisted `statusSeq` carried on the IPC payload.
+ * `Math.max(current, seed)` guarantees monotonicity in both directions:
+ * - After a main restart (counter empty, seed dominates).
+ * - When the renderer lags behind the in-memory counter (counter dominates).
+ *
+ * @param trackId - The track whose sequence is being advanced.
+ * @param seed - The renderer-persisted high-water mark, or `undefined` if absent.
+ * @returns The next sequence number (strictly greater than both current and seed).
+ */
+function nextEventSeq(trackId: string, seed: number | undefined): number {
+	const current = processingState.statusSeq.get(trackId) ?? 0;
+	const next = Math.max(current, seed ?? 0) + 1;
+	processingState.statusSeq.set(trackId, next);
+	return next;
 }
 
 export const startProcessing = async (
@@ -135,6 +168,7 @@ export const startProcessing = async (
 				event.sender.send(EVENT_CHANNELS.PROCESSING_RESULT, {
 					id: track.id,
 					status: "processing",
+					seq: nextEventSeq(track.id, track.statusSeq),
 				} satisfies ProcessingStatus);
 
 				const inputFile = track.filePath;
@@ -179,6 +213,7 @@ export const startProcessing = async (
 				event.sender.send(EVENT_CHANNELS.PROCESSING_RESULT, {
 					id: track.id,
 					status: "completed",
+					seq: nextEventSeq(track.id, track.statusSeq),
 				} satisfies ProcessingStatus);
 			} catch (error) {
 				const errorMessage =
@@ -197,6 +232,7 @@ export const startProcessing = async (
 					id: track.id,
 					status: "failed",
 					reason: errorMessage,
+					seq: nextEventSeq(track.id, track.statusSeq),
 				} satisfies ProcessingStatus);
 			} finally {
 				processingState.activeProcesses.delete(track.id);

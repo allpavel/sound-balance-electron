@@ -94,6 +94,7 @@ describe("processing.service", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 		activeProcesses.length = 0;
+		processingState.statusSeq.clear();
 		resetFactorySequences();
 
 		vi.mocked(stat).mockResolvedValue({
@@ -733,10 +734,12 @@ describe("processing.service", () => {
 			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
 				id: "track-1",
 				status: "processing",
+				seq: 1,
 			});
 			expect(mockEvent.sender.send).toHaveBeenCalledWith("processing-result", {
 				id: "track-1",
 				status: "completed",
+				seq: 2,
 			});
 		});
 
@@ -768,6 +771,7 @@ describe("processing.service", () => {
 				id: "track-1",
 				status: "failed",
 				reason: "FFmpeg crashed",
+				seq: 2,
 			});
 			expect(result.total).toBe(1);
 			expect(result.successful).toBe(0);
@@ -800,6 +804,7 @@ describe("processing.service", () => {
 				id: "track-1",
 				status: "failed",
 				reason: "FFmpeg crashed",
+				seq: 2,
 			});
 			expect(result.total).toBe(1);
 			expect(result.successful).toBe(0);
@@ -842,6 +847,78 @@ describe("processing.service", () => {
 				title: "Artist - Title",
 				reason: "FFmpeg crashed",
 			});
+		});
+	});
+
+	describe("startProcessing - status event sequencing (seq)", () => {
+		const singleTrackData = (settings?: object) =>
+			getValidData({
+				tracks: [makeTrack()],
+				settings: { audio: (settings ?? { audioFilter: "volume" }) as any },
+			});
+
+		const emittedSeqs = (trackId?: string): (number | undefined)[] =>
+			vi
+				.mocked(mockEvent.sender.send)
+				.mock.calls.filter((call) => call[0] === "processing-result")
+				.map((call) => call[1])
+				.filter((payload) => !trackId || payload.id === trackId)
+				.map((payload) => payload.seq);
+
+		it("assigns strictly increasing seq across the success lifecycle", async () => {
+			await startProcessing(mockEvent, singleTrackData(twoPassArgs));
+			expect(emittedSeqs("track-1")).toEqual([1, 2]);
+		});
+
+		it("continues the sequence on failure (processing=1, failed=2)", async () => {
+			mockProcessManager.run.mockRejectedValueOnce(new Error("FFmpeg crashed"));
+			await startProcessing(mockEvent, singleTrackData());
+			expect(emittedSeqs("track-1")).toEqual([1, 2]);
+		});
+
+		it("keeps independent counters per track", async () => {
+			const data = getValidData({
+				tracks: [makeTrack(), makeTrack()],
+				settings: { audio: { audioFilter: "volume" } as any },
+			});
+			await startProcessing(mockEvent, data);
+			expect(emittedSeqs("track-1")).toEqual([1, 2]);
+			expect(emittedSeqs("track-2")).toEqual([1, 2]);
+		});
+
+		it("seeds the sequence from the renderer-persisted statusSeq", async () => {
+			const data = getValidData({
+				tracks: [makeTrack({ id: "track-1", statusSeq: 5 })],
+				settings: { audio: { audioFilter: "volume" } as any },
+			});
+			await startProcessing(mockEvent, data);
+			expect(emittedSeqs("track-1")).toEqual([6, 7]);
+		});
+
+		it("never reuses a sequence number across consecutive batches in one session", async () => {
+			const data = singleTrackData();
+			await startProcessing(mockEvent, data);
+			await startProcessing(mockEvent, data);
+			expect(emittedSeqs("track-1")).toEqual([1, 2, 3, 4]);
+		});
+
+		it("merges counters with the higher of in-memory value and incoming statusSeq", async () => {
+			await startProcessing(mockEvent, singleTrackData()); // counter -> 2
+			const aheadData = getValidData({
+				tracks: [makeTrack({ id: "track-1", statusSeq: 9 })],
+				settings: { audio: { audioFilter: "volume" } as any },
+			});
+			await startProcessing(mockEvent, aheadData);
+			expect(emittedSeqs("track-1")).toEqual([1, 2, 10, 11]);
+		});
+
+		it("does not advance any counter for skipped tracks", async () => {
+			const data = getValidData({
+				tracks: [makeTrack({ status: "completed" })],
+			});
+			await startProcessing(mockEvent, data);
+			expect(emittedSeqs()).toEqual([]);
+			expect(processingState.statusSeq.size).toBe(0);
 		});
 	});
 });
