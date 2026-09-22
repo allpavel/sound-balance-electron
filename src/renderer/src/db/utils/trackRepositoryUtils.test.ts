@@ -17,8 +17,11 @@
  */
 
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import type { Metadata } from "@shared/schemas/track.schema";
 import { makeTrack } from "@tests/factories";
+import type { EntityTable } from "dexie";
 import {
+	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertTargetCollectionId,
 	assertTrackInput,
@@ -601,6 +604,159 @@ describe("trackRepositoryUtils", () => {
 			["failed with reason", { status: "failed", reason: "error" }],
 		])("accepts valid status-only change: %s", (_desc, changes) => {
 			expect(validateTrackChanges(changes, "changes")).toEqual(changes);
+		});
+
+		it.each([
+			["processing", { status: "processing", seq: 1 }],
+			["completed", { status: "completed", seq: 7 }],
+			["failed with reason", { status: "failed", reason: "boom", seq: 3 }],
+		])("accepts %s change with a valid seq", (_label, changes) => {
+			expect(validateTrackChanges(changes, "changes")).toEqual(changes);
+		});
+
+		it("accepts seq 0 as the sequence floor", () => {
+			expect(
+				validateTrackChanges({ status: "processing", seq: 0 }, "changes"),
+			).toEqual({ status: "processing", seq: 0 });
+		});
+
+		it.each([
+			["negative", -1],
+			["fractional", 1.5],
+			["string", "2"],
+			["null", null],
+			["boolean", true],
+		])("rejects %s seq", (_label, seq) => {
+			expect(() =>
+				validateTrackChanges({ status: "processing", seq }, "changes"),
+			).toThrow(/changes is invalid/);
+		});
+
+		it("rejects seq on the fields branch", () => {
+			expect(() =>
+				validateTrackChanges({ selected: 1, seq: 2 }, "changes"),
+			).toThrow(/changes is invalid/);
+		});
+	});
+
+	describe("applyGuardedTrackUpdate", () => {
+		let mockTable: any;
+
+		beforeEach(() => {
+			mockTable = {
+				get: vi.fn(),
+				update: vi.fn(),
+			} as unknown as EntityTable<Metadata, "id">;
+		});
+
+		it("applies field-only changes without checking the state machine", async () => {
+			vi.mocked(mockTable.update).mockResolvedValue(1);
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				selected: 1,
+			});
+			expect(result).toBe(1);
+			expect(mockTable.get).not.toHaveBeenCalled();
+			expect(mockTable.update).toHaveBeenCalledWith("t1", { selected: 1 });
+		});
+
+		it("returns 0 if the track does not exist (idempotent no-op)", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue(undefined);
+			const result = await applyGuardedTrackUpdate(mockTable, "missing", {
+				status: "processing",
+			});
+			expect(result).toBe(0);
+			expect(mockTable.update).not.toHaveBeenCalled();
+		});
+
+		it("returns 0 for an illegal state transition (e.g., completed -> pending)", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue({
+				id: "t1",
+				status: "completed",
+			});
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "pending",
+			});
+			expect(result).toBe(0);
+			expect(mockTable.update).not.toHaveBeenCalled();
+		});
+
+		it("applies a legal state transition and returns 1", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue({
+				id: "t1",
+				status: "pending",
+			});
+			vi.mocked(mockTable.update).mockResolvedValue(1);
+
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "processing",
+			});
+			expect(result).toBe(1);
+			expect(mockTable.update).toHaveBeenCalledWith("t1", {
+				status: "processing",
+			});
+		});
+
+		it("returns 0 for a stale sequence number (out-of-order event)", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue({
+				id: "t1",
+				status: "processing",
+				statusSeq: 5,
+			});
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "completed",
+				seq: 4,
+			});
+			expect(result).toBe(0);
+			expect(mockTable.update).not.toHaveBeenCalled();
+		});
+
+		it("rejects an event whose seq equals the stored high-water mark (replay protection)", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue({
+				id: "t1",
+				status: "processing",
+				statusSeq: 5,
+			});
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "completed",
+				seq: 5,
+			});
+			expect(result).toBe(0);
+			expect(mockTable.update).not.toHaveBeenCalled();
+		});
+
+		it("applies update and advances statusSeq for a fresh sequence number", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue({
+				id: "t1",
+				status: "processing",
+				statusSeq: 5,
+			});
+			vi.mocked(mockTable.update).mockResolvedValue(1);
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "completed",
+				seq: 6,
+			});
+			expect(result).toBe(1);
+			expect(mockTable.update).toHaveBeenCalledWith("t1", {
+				status: "completed",
+				statusSeq: 6,
+			});
+		});
+
+		it("does not advance statusSeq if the event lacks a seq (graceful degradation)", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue({
+				id: "t1",
+				status: "processing",
+				statusSeq: 5,
+			});
+			vi.mocked(mockTable.update).mockResolvedValue(1);
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "completed",
+			});
+
+			expect(result).toBe(1);
+			expect(mockTable.update).toHaveBeenCalledWith("t1", {
+				status: "completed",
+			});
 		});
 	});
 });

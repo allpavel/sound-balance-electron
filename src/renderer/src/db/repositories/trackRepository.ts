@@ -18,6 +18,7 @@
 
 import { db } from "@renderer/db/db";
 import {
+	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertTargetCollectionId,
 	assertTrackInput,
@@ -139,7 +140,10 @@ export const tracksRepository = {
 		if (!isNonEmptyString(id)) {
 			throw new Error("ID must be a non-empty string");
 		}
-		return await db.tracks.update(id, validateTrackChanges(changes, "changes"));
+		const validated = validateTrackChanges(changes, "changes");
+		return db.transaction("rw", db.tracks, () =>
+			applyGuardedTrackUpdate(db.tracks, id, validated),
+		);
 	},
 
 	async updateMany(updates: unknown): Promise<number> {
@@ -177,7 +181,7 @@ export const tracksRepository = {
 		let total = 0;
 		await db.transaction("rw", db.tracks, async () => {
 			for (const { id, changes } of normalizedUpdates) {
-				total += await db.tracks.update(id, changes);
+				total += await applyGuardedTrackUpdate(db.tracks, id, changes);
 			}
 		});
 		return total;

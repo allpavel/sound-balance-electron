@@ -23,8 +23,10 @@ import {
 	type TrackChanges,
 	targetCollectionIdSchema,
 } from "@shared/schemas/track.schema";
+import { isLegalStatusTransition } from "@shared/utils";
 import { safeParseTrack, safeParseTrackChanges } from "@shared/validators";
 import { formatValidationIssues } from "@tests/utils";
+import type { EntityTable } from "dexie";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -169,7 +171,63 @@ function validateTrackChanges(changes: unknown, context: string): TrackChanges {
 	};
 }
 
+/**
+ * Applies a guarded track update, enforcing state machine legality and sequence monotonicity.
+ *
+ * This function acts as the final defensive layer (Defense in Depth) before persisting
+ * status changes to IndexedDB. It evaluates two distinct guard layers:
+ *
+ * 1. **State Machine (Layer 1):** Validates that the requested status transition is legally
+ *    permitted by the shared lifecycle matrix. Rejects backward edges, self-transitions
+ *    (duplicates), and illegal skips.
+ * 2. **Sequence Guard (Layer 2):** If the incoming event carries a Lamport logical clock
+ *    sequence number (`seq`), it ensures the event is strictly newer than the persisted
+ *    high-water mark (`statusSeq`).
+ *
+ * This function performs a read-check-write cycle. To prevent Time-of-Check to Time-of-Use
+ * (TOCTOU) race conditions under concurrent mutations, it must be invoked inside a
+ * Dexie `db.transaction("rw", ...)` boundary by the calling repository.
+ *
+ * @param tracksTable - The injected Dexie `EntityTable` for tracks. Injected via DI to
+ *                      decouple the utility from the global `db` singleton and enable
+ *                      fast, isolated unit testing.
+ * @param id - The primary key (`id`) of the track to update.
+ * @param changes - The shape-validated track mutation payload (`TrackChanges`).
+ * @returns A promise resolving to `1` if the database was updated, or `0` if the update
+ *          was gracefully rejected (missing row, illegal transition, or stale sequence).
+ * @throws Only throws if the underlying Dexie `update` operation encounters an unexpected
+ *         database error (e.g., disk I/O failure, ConstraintError on unique indexes).
+ */
+async function applyGuardedTrackUpdate(
+	tracksTable: EntityTable<Metadata, "id">,
+	id: string,
+	changes: TrackChanges,
+): Promise<number> {
+	if (!("status" in changes)) {
+		return await tracksTable.update(id, changes);
+	}
+
+	const track = await tracksTable.get(id);
+	if (track === undefined) return 0;
+
+	if (!isLegalStatusTransition(track.status, changes.status)) {
+		return 0;
+	}
+	const currentSeq = track.statusSeq ?? 0;
+	if (changes.seq !== undefined && changes.seq <= currentSeq) {
+		return 0;
+	}
+
+	const { seq, ...statusPatch } = changes;
+	const patch = {
+		...statusPatch,
+		...(seq !== undefined ? { statusSeq: seq } : {}),
+	};
+	return await tracksTable.update(id, patch as Partial<Metadata>);
+}
+
 export {
+	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertTargetCollectionId,
 	assertTrackInput,
