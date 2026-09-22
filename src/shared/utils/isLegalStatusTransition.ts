@@ -50,5 +50,5 @@ export const STATUS_TRANSITIONS: Record<Status, readonly Status[]> = {
  * @returns `true` if the transition is legal; `false` otherwise.
  */
 export function isLegalStatusTransition(from: Status, to: Status): boolean {
-	return STATUS_TRANSITIONS[from]?.includes(to) ?? false;
+	return STATUS_TRANSITIONS[from].includes(to);
 }

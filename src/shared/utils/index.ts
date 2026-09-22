@@ -1,0 +1,1 @@
+export { isLegalStatusTransition } from "./isLegalStatusTransition";
