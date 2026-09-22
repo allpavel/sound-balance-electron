@@ -25,14 +25,12 @@ import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
 import type { Data } from "@shared/schemas/data.schema";
-import type {
-	ProcessingStatus,
-	TrackChanges,
-} from "@shared/schemas/track.schema";
+import type { ProcessingStatus } from "@shared/schemas/track.schema";
 import { safeParseData } from "@shared/validators";
 import { formatValidationIssues } from "@tests/utils";
 import { useEffect, useState } from "react";
 import type { StoppingStatus } from "@/types";
+import { processingStatusToTrackChanges } from "./utils/processingStatusToTrackChanges";
 
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
@@ -54,11 +52,10 @@ export default function StartProcessing() {
 	useEffect(() => {
 		const unsubscribe = window.api.processingResult(
 			(data: ProcessingStatus) => {
-				const trackChanges: TrackChanges =
-					data.status === "failed"
-						? { status: "failed", reason: data.reason ?? "Unknown error" }
-						: { status: data.status };
-				updateTrack({ id: data.id, changes: trackChanges });
+				updateTrack({
+					id: data.id,
+					changes: processingStatusToTrackChanges(data),
+				});
 			},
 		);
 		return () => unsubscribe();
