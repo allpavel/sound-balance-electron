@@ -716,11 +716,11 @@ describe("track.schema", () => {
 			expect(trackInputSchema.safeParse(makeTrack()).success).toBe(true);
 		});
 
-		it("accepts statusSeq 0 and preserves it", () => {
-			const data = expectSuccess(
-				trackInputSchema.safeParse(makeTrack({ statusSeq: 0 })),
+		it("rejects statusSeq 0 (must be >= 1)", () => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ statusSeq: 0 } as any),
 			);
-			expect(data.statusSeq).toBe(0);
+			expect(result.success).toBe(false);
 		});
 
 		it("accepts a positive integer statusSeq and preserves it", () => {
@@ -746,7 +746,6 @@ describe("track.schema", () => {
 
 	describe("trackChangesSchema - seq (status event sequencing)", () => {
 		it.each([
-			["pending", { status: "pending", seq: 1 }],
 			["processing", { status: "processing", seq: 1 }],
 			["completed", { status: "completed", seq: 42 }],
 		])("accepts %s status with a non-negative integer seq", (_label, value) => {
@@ -762,10 +761,16 @@ describe("track.schema", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("accepts seq 0 as the sequence floor", () => {
+		it("rejects seq 0 (must be >= 1)", () => {
 			expect(
 				trackChangesSchema.safeParse({ status: "processing", seq: 0 }).success,
-			).toBe(true);
+			).toBe(false);
+		});
+
+		it("rejects pending status in changes (no implicit re-queue)", () => {
+			expect(
+				trackChangesSchema.safeParse({ status: "pending", seq: 1 }).success,
+			).toBe(false);
 		});
 
 		it("keeps seq optional for backward compatibility", () => {

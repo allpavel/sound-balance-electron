@@ -20,18 +20,9 @@ import { STATUS_VALUES } from "@shared/constants";
 import type { Status } from "@shared/schemas/track.schema";
 import {
 	isLegalStatusTransition,
+	LEGAL_TRANSITION_EDGES,
 	STATUS_TRANSITIONS,
 } from "./isLegalStatusTransition";
-
-const LEGAL_EDGES: ReadonlySet<string> = new Set([
-	"pending->processing",
-	"pending->completed", // forward-skip
-	"pending->failed", // forward-skip
-	"processing->completed",
-	"processing->failed",
-	"completed->processing", // re-run
-	"failed->processing", // retry
-]);
 
 const edgeKey = (from: Status, to: Status): string => `${from}->${to}`;
 
@@ -44,7 +35,7 @@ const matrixCases = STATUS_VALUES.flatMap((from) =>
 	STATUS_VALUES.map((to) => ({
 		from,
 		to,
-		legal: LEGAL_EDGES.has(edgeKey(from, to)),
+		legal: LEGAL_TRANSITION_EDGES.has(edgeKey(from, to)),
 	})),
 );
 
@@ -99,7 +90,7 @@ describe("STATUS_TRANSITIONS — structural invariants", () => {
 			(sum, status) => sum + STATUS_TRANSITIONS[status].length,
 			0,
 		);
-		expect(totalEdges).toBe(LEGAL_EDGES.size);
+		expect(totalEdges).toBe(LEGAL_TRANSITION_EDGES.size);
 	});
 });
 

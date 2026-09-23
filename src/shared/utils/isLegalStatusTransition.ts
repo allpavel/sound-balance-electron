@@ -16,15 +16,40 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { STATUS_VALUES } from "@shared/constants";
 import type { Status } from "@shared/schemas/track.schema";
 
-export const STATUS_TRANSITIONS: Record<Status, readonly Status[]> = {
-	pending: ["processing", "completed", "failed"],
-	processing: ["completed", "failed"],
-	completed: ["processing"],
-	failed: ["processing"],
-} as const;
+/**
+ * Legal state transitions.
+ */
+export const LEGAL_TRANSITION_EDGES: ReadonlySet<string> = new Set([
+	"pending->processing",
+	"pending->completed", // forward-skip
+	"pending->failed", // forward-skip
+	"processing->completed",
+	"processing->failed",
+	"completed->processing", // re-run
+	"failed->processing", // retry
+]);
 
+/**
+ * Derives the adjacency list matrix from the LEGAL_TRANSITION_EDGES set.
+ * Ensures the transition map is always in sync with the legal edges definition.
+ */
+export const STATUS_TRANSITIONS: Record<Status, readonly Status[]> = {
+	pending: STATUS_VALUES.filter((to): to is Status =>
+		LEGAL_TRANSITION_EDGES.has(`pending->${to}`),
+	),
+	processing: STATUS_VALUES.filter((to): to is Status =>
+		LEGAL_TRANSITION_EDGES.has(`processing->${to}`),
+	),
+	completed: STATUS_VALUES.filter((to): to is Status =>
+		LEGAL_TRANSITION_EDGES.has(`completed->${to}`),
+	),
+	failed: STATUS_VALUES.filter((to): to is Status =>
+		LEGAL_TRANSITION_EDGES.has(`failed->${to}`),
+	),
+};
 /**
  * Checks whether a status transition is permitted by the track lifecycle state machine.
  *
