@@ -21,6 +21,7 @@ import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
+import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeTrack } from "@tests/factories";
 
 // Seeds a row in the given status. "failed" requires a reason (schema
@@ -597,21 +598,11 @@ describe("tracksRepository", () => {
 	});
 
 	describe("status transition guard (update)", () => {
-		const LEGAL_EDGES: ReadonlySet<string> = new Set([
-			"pending->processing",
-			"pending->completed",
-			"pending->failed",
-			"processing->completed",
-			"processing->failed",
-			"completed->processing",
-			"failed->processing",
-		]);
-
 		const transitionMatrix = STATUS_VALUES.flatMap((from) =>
 			STATUS_VALUES.map((to) => ({
 				from,
 				to,
-				legal: LEGAL_EDGES.has(`${from}->${to}`),
+				legal: LEGAL_TRANSITION_EDGES.has(`${from}->${to}`),
 			})),
 		);
 
@@ -685,6 +676,25 @@ describe("tracksRepository", () => {
 			const before = await db.tracks.get("t1");
 			await tracksRepository.update("t1", { status: "pending" });
 			expect(await db.tracks.get("t1")).toEqual(before);
+		});
+
+		it("clears stale reason when transitioning from failed to processing", async () => {
+			await seedTrackWithStatus("t1", "failed");
+			await tracksRepository.update("t1", { status: "processing" });
+			const track = await db.tracks.get("t1");
+			expect(track?.status).toBe("processing");
+			expect(
+				(track as { reason?: string } | undefined)?.reason,
+			).toBeUndefined();
+		});
+
+		it("persists statusSeq across multiple updates", async () => {
+			await seedTrackWithStatus("t1", "pending");
+			await tracksRepository.update("t1", statusChange("processing", 1));
+			await tracksRepository.update("t1", statusChange("completed", 2));
+			const track = await db.tracks.get("t1");
+			expect(track?.status).toBe("completed");
+			expect(track?.statusSeq).toBe(2);
 		});
 	});
 

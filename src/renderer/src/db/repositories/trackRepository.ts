@@ -141,6 +141,10 @@ export const tracksRepository = {
 			throw new Error("ID must be a non-empty string");
 		}
 		const validated = validateTrackChanges(changes, "changes");
+		if (!("status" in validated)) {
+			return db.tracks.update(id, validated);
+		}
+
 		return db.transaction("rw", db.tracks, () =>
 			applyGuardedTrackUpdate(db.tracks, id, validated),
 		);

@@ -55,15 +55,17 @@ import type {
 export function processingStatusToTrackChanges(
 	data: ProcessingStatus,
 ): TrackChanges {
+	const seqProp = data.seq !== undefined ? { seq: data.seq } : {};
+
 	if (data.status === "failed") {
 		return {
 			status: "failed",
 			reason: data.reason ?? "Unknown error",
-			...(data.seq !== undefined ? { seq: data.seq } : {}),
+			...seqProp,
 		};
 	}
 	return {
 		status: data.status,
-		...(data.seq !== undefined ? { seq: data.seq } : {}),
+		...seqProp,
 	};
 }

@@ -172,31 +172,68 @@ function validateTrackChanges(changes: unknown, context: string): TrackChanges {
 }
 
 /**
+ * Evaluates whether a track update should be applied based on state machine and sequence guards.
+ * Returns the patch to apply if valid, or null if the update should be rejected.
+ *
+ * @param track - The current track state from the DB, or undefined if missing.
+ * @param changes - The validated track changes payload.
+ * @returns The partial patch to apply, or null if the update is rejected.
+ */
+function shouldApplyUpdate(
+	track: Metadata | undefined,
+	changes: TrackChanges,
+): Partial<Metadata> | null {
+	if (track === undefined) return null;
+
+	if (!("status" in changes)) {
+		return changes;
+	}
+
+	if (!isLegalStatusTransition(track.status, changes.status)) {
+		return null;
+	}
+
+	const currentSeq = track.statusSeq ?? 0;
+	if (
+		"seq" in changes &&
+		changes.seq !== undefined &&
+		changes.seq <= currentSeq
+	) {
+		return null;
+	}
+
+	const patch: Record<string, unknown> = {
+		status: changes.status,
+	};
+
+	// [FIX #2] Clear stale reason when leaving the failed state.
+	if (changes.status === "failed") {
+		patch.reason = changes.reason;
+	} else {
+		// Assigning undefined triggers Dexie/IndexedDB structured clone to remove the property.
+		patch.reason = undefined;
+	}
+
+	// Apply sequence number if provided.
+	if ("seq" in changes && changes.seq !== undefined) {
+		patch.statusSeq = changes.seq;
+	}
+
+	return patch;
+}
+
+/**
  * Applies a guarded track update, enforcing state machine legality and sequence monotonicity.
  *
  * This function acts as the final defensive layer (Defense in Depth) before persisting
  * status changes to IndexedDB. It evaluates two distinct guard layers:
+ * 1. State Machine: Validates status transition legality.
+ * 2. Sequence Guard: Ensures event is strictly newer than persisted high-water mark.
  *
- * 1. **State Machine (Layer 1):** Validates that the requested status transition is legally
- *    permitted by the shared lifecycle matrix. Rejects backward edges, self-transitions
- *    (duplicates), and illegal skips.
- * 2. **Sequence Guard (Layer 2):** If the incoming event carries a Lamport logical clock
- *    sequence number (`seq`), it ensures the event is strictly newer than the persisted
- *    high-water mark (`statusSeq`).
- *
- * This function performs a read-check-write cycle. To prevent Time-of-Check to Time-of-Use
- * (TOCTOU) race conditions under concurrent mutations, it must be invoked inside a
- * Dexie `db.transaction("rw", ...)` boundary by the calling repository.
- *
- * @param tracksTable - The injected Dexie `EntityTable` for tracks. Injected via DI to
- *                      decouple the utility from the global `db` singleton and enable
- *                      fast, isolated unit testing.
- * @param id - The primary key (`id`) of the track to update.
- * @param changes - The shape-validated track mutation payload (`TrackChanges`).
- * @returns A promise resolving to `1` if the database was updated, or `0` if the update
- *          was gracefully rejected (missing row, illegal transition, or stale sequence).
- * @throws Only throws if the underlying Dexie `update` operation encounters an unexpected
- *         database error (e.g., disk I/O failure, ConstraintError on unique indexes).
+ * @param tracksTable - The injected Dexie EntityTable for tracks.
+ * @param id - The primary key of the track to update.
+ * @param changes - The shape-validated track mutation payload.
+ * @returns A promise resolving to 1 if updated, or 0 if rejected.
  */
 async function applyGuardedTrackUpdate(
 	tracksTable: EntityTable<Metadata, "id">,
@@ -208,22 +245,11 @@ async function applyGuardedTrackUpdate(
 	}
 
 	const track = await tracksTable.get(id);
-	if (track === undefined) return 0;
+	const patch = shouldApplyUpdate(track, changes);
 
-	if (!isLegalStatusTransition(track.status, changes.status)) {
-		return 0;
-	}
-	const currentSeq = track.statusSeq ?? 0;
-	if (changes.seq !== undefined && changes.seq <= currentSeq) {
-		return 0;
-	}
+	if (patch === null) return 0;
 
-	const { seq, ...statusPatch } = changes;
-	const patch = {
-		...statusPatch,
-		...(seq !== undefined ? { statusSeq: seq } : {}),
-	};
-	return await tracksTable.update(id, patch as Partial<Metadata>);
+	return await tracksTable.update(id, patch);
 }
 
 export {
@@ -234,6 +260,7 @@ export {
 	isNonEmptyString,
 	isPlainObject,
 	normalizeCollectionIds,
+	shouldApplyUpdate,
 	uniqueTracks,
 	validateTrackChanges,
 };

@@ -27,6 +27,7 @@ import {
 	assertTrackInput,
 	isPlainObject,
 	normalizeCollectionIds,
+	shouldApplyUpdate,
 	uniqueTracks,
 	validateTrackChanges,
 } from "./trackRepositoryUtils";
@@ -614,10 +615,10 @@ describe("trackRepositoryUtils", () => {
 			expect(validateTrackChanges(changes, "changes")).toEqual(changes);
 		});
 
-		it("accepts seq 0 as the sequence floor", () => {
-			expect(
+		it("rejects seq 0 (must be >= 1)", () => {
+			expect(() =>
 				validateTrackChanges({ status: "processing", seq: 0 }, "changes"),
-			).toEqual({ status: "processing", seq: 0 });
+			).toThrow(/changes is invalid/);
 		});
 
 		it.each([
@@ -738,6 +739,7 @@ describe("trackRepositoryUtils", () => {
 			expect(result).toBe(1);
 			expect(mockTable.update).toHaveBeenCalledWith("t1", {
 				status: "completed",
+				reason: undefined,
 				statusSeq: 6,
 			});
 		});
@@ -756,6 +758,76 @@ describe("trackRepositoryUtils", () => {
 			expect(result).toBe(1);
 			expect(mockTable.update).toHaveBeenCalledWith("t1", {
 				status: "completed",
+				reason: undefined,
+			});
+		});
+	});
+
+	describe("shouldApplyUpdate", () => {
+		it("returns changes for field-only updates", () => {
+			const track = makeTrack({ id: "t1" });
+			expect(shouldApplyUpdate(track, { selected: 1 })).toEqual({
+				selected: 1,
+			});
+		});
+
+		it("returns null if track is undefined", () => {
+			expect(shouldApplyUpdate(undefined, { status: "processing" })).toBeNull();
+		});
+
+		it("returns null for illegal state transition", () => {
+			const track = makeTrack({ id: "t1", status: "completed" });
+			expect(shouldApplyUpdate(track, { status: "pending" })).toBeNull();
+		});
+
+		it("returns null for stale sequence number", () => {
+			const track = makeTrack({ id: "t1", status: "processing", statusSeq: 5 });
+			expect(
+				shouldApplyUpdate(track, { status: "completed", seq: 4 }),
+			).toBeNull();
+		});
+
+		it("returns null for duplicate sequence number", () => {
+			const track = makeTrack({ id: "t1", status: "processing", statusSeq: 5 });
+			expect(
+				shouldApplyUpdate(track, { status: "completed", seq: 5 }),
+			).toBeNull();
+		});
+
+		it("returns patch with statusSeq for fresh sequence number", () => {
+			const track = makeTrack({ id: "t1", status: "processing", statusSeq: 5 });
+			expect(shouldApplyUpdate(track, { status: "completed", seq: 6 })).toEqual(
+				{
+					status: "completed",
+					reason: undefined,
+					statusSeq: 6,
+				},
+			);
+		});
+
+		it("does not advance statusSeq if event lacks seq", () => {
+			const track = makeTrack({ id: "t1", status: "processing", statusSeq: 5 });
+			expect(shouldApplyUpdate(track, { status: "completed" })).toEqual({
+				status: "completed",
+				reason: undefined,
+			});
+		});
+
+		it("clears stale reason when transitioning from failed to processing", () => {
+			const track = makeTrack({ id: "t1", status: "failed", reason: "boom" });
+			expect(shouldApplyUpdate(track, { status: "processing" })).toEqual({
+				status: "processing",
+				reason: undefined,
+			});
+		});
+
+		it("does not clear reason when transitioning to failed", () => {
+			const track = makeTrack({ id: "t1", status: "processing" });
+			expect(
+				shouldApplyUpdate(track, { status: "failed", reason: "new boom" }),
+			).toEqual({
+				status: "failed",
+				reason: "new boom",
 			});
 		});
 	});
