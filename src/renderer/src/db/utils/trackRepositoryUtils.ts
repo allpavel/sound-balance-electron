@@ -17,13 +17,13 @@
  */
 
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-
+import { TrackValidationError } from "@shared/errors";
 import {
 	type Metadata,
 	type TrackChanges,
 	targetCollectionIdSchema,
 } from "@shared/schemas/track.schema";
-import { formatValidationIssues, isLegalStatusTransition } from "@shared/utils";
+import { isLegalStatusTransition } from "@shared/utils";
 import { safeParseTrack, safeParseTrackChanges } from "@shared/validators";
 import type { EntityTable } from "dexie";
 
@@ -42,47 +42,23 @@ function assertTargetCollectionId(value: unknown): void {
 	}
 }
 
+/**
+ * Validates a single track object against `trackInputSchema` and returns
+ * the parsed `Metadata` on success.
+ *
+ * @param track - Untrusted input to validate.
+ * @param index - Positional index for the error context prefix.
+ * @returns The parsed, schema-validated `Metadata`.
+ * @throws {TrackValidationError} When validation fails. Carries the full
+ *         structured issue list — no issues are discarded.
+ */
 function assertTrackInput(track: unknown, index: number): Metadata {
 	const context = `tracks[${index}]`;
-	if (!isPlainObject(track)) {
-		throw new Error(`${context} must be an object`);
-	}
-
 	const result = safeParseTrack(track);
 	if (result.success) {
 		return result.data;
 	}
-
-	const [field, collectionIndex] = (result.issues[0]?.path ?? "").split(".");
-
-	if (field === "id") {
-		throw new Error(`${context}.id must be a non-empty string`);
-	}
-	if (field === "file") {
-		throw new Error(`${context}.file must be a non-empty string`);
-	}
-	if (field === "filePath") {
-		throw new Error(`${context}.filePath must be a non-empty string`);
-	}
-	if (field === "status") {
-		throw new Error(
-			`${context}.status must be one of: pending, processing, completed, failed`,
-		);
-	}
-	if (field === "selected") {
-		throw new Error(`${context}.selected must be 0 or 1`);
-	}
-	if (field === "collectionIds") {
-		if (collectionIndex === undefined) {
-			throw new Error(`${context}.collectionIds must be an array of strings`);
-		}
-		throw new Error(
-			`${context}.collectionIds[${String(collectionIndex)}] must be a non-empty string`,
-		);
-	}
-	throw new Error(
-		`${context} is invalid: ${formatValidationIssues(result.issues)}`,
-	);
+	throw new TrackValidationError(context, result.issues);
 }
 
 function normalizeCollectionIds(
@@ -141,6 +117,14 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
 	return [...byId.values()];
 }
 
+/**
+ * Validates a partial track mutation payload and normalises collectionIds.
+ *
+ * @param changes - Untrusted mutation payload.
+ * @param context - Location prefix for error messages (e.g. `"changes"`).
+ * @returns The validated and normalised `TrackChanges`.
+ * @throws {TrackValidationError} When validation fails.
+ */
 function validateTrackChanges(changes: unknown, context: string): TrackChanges {
 	if (!isPlainObject(changes)) {
 		throw new Error(`${context} must be a non-null object`);
@@ -148,12 +132,10 @@ function validateTrackChanges(changes: unknown, context: string): TrackChanges {
 
 	const result = safeParseTrackChanges(changes);
 	if (!result.success) {
-		throw new Error(
-			`${context} is invalid: ${formatValidationIssues(result.issues)}`,
-		);
+		throw new TrackValidationError(context, result.issues);
 	}
-	const validated = result.data;
 
+	const validated = result.data;
 	if (
 		!("collectionIds" in validated) ||
 		validated.collectionIds === undefined
