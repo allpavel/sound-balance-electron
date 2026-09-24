@@ -36,8 +36,13 @@ export const ISSUE_LIMIT_CODE = "issue_limit_reached";
 const FALLBACK_MESSAGE = "Invalid input";
 const FALLBACK_CODE = "custom";
 
+/**
+ * A single, frozen validation issue produced by {@link mapZodIssues}.
+ *
+ */
 export interface ValidationIssue {
-	readonly path: string;
+	readonly pathString: string;
+	readonly path: readonly PropertyKey[];
 	readonly message: string;
 	readonly code: string;
 }
@@ -104,17 +109,26 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
 				if (flattened) continue;
 			}
 
-			const path = currentPath.map((segment) => String(segment)).join(".");
+			const pathString = currentPath
+				.map((segment) => String(segment))
+				.join(".");
 			const message = issue.message ?? FALLBACK_MESSAGE;
 			let code = issue.code ?? FALLBACK_CODE;
 			if (code === "invalid_union") {
 				code = "invalid_type";
 			}
 
-			const signature = `${path}|${code}|${message}`;
+			const signature = `${JSON.stringify(currentPath)}|${code}|${message}`;
 			if (!seen.has(signature)) {
 				seen.add(signature);
-				result.push(Object.freeze({ path, message, code }));
+				result.push(
+					Object.freeze({
+						path: Object.freeze([...currentPath]),
+						pathString,
+						message,
+						code,
+					}),
+				);
 			}
 		}
 	};
@@ -124,7 +138,8 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
 	if (truncated) {
 		result.push(
 			Object.freeze({
-				path: "",
+				path: Object.freeze([]),
+				pathString: "",
 				message: `Validation aborted after ${MAX_VALIDATION_ISSUES} issues; the payload may be malformed or hostile.`,
 				code: ISSUE_LIMIT_CODE,
 			}),
