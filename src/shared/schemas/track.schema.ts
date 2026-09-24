@@ -29,15 +29,23 @@ import z from "zod";
 
 export const nonEmptyStringSchema = z
 	.string()
-	.min(1)
-	.max(MAX_PATH_LENGTH)
-	.refine((val) => val.trim().length > 0)
-	.refine((val) => !NULL_BYTE_PATTERN.test(val));
+	.min(1, { error: "Must not be empty" })
+	.max(MAX_PATH_LENGTH, {
+		error: `Must not exceed ${MAX_PATH_LENGTH} characters`,
+	})
+	.refine((val) => val.trim().length > 0, {
+		message: "Must not be blank",
+	})
+	.refine((val) => !NULL_BYTE_PATTERN.test(val), {
+		message: "Must not contain null bytes",
+	});
 
 export const reasonSchema = z
 	.string()
-	.min(1)
-	.max(MAX_REASON_LENGTH)
+	.min(1, { error: "Reason must not be empty" })
+	.max(MAX_REASON_LENGTH, {
+		error: `Reason must not exceed ${MAX_REASON_LENGTH} characters`,
+	})
 	.refine((val) => val.trim().length > 0, {
 		message: "Reason must not be blank",
 	})
@@ -47,8 +55,12 @@ export const reasonSchema = z
 
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
 export const targetCollectionIdSchema = nonEmptyStringSchema;
-export const selectedSchema = z.union([z.literal(0), z.literal(1)]);
-export const statusSchema = z.enum(STATUS_VALUES);
+export const selectedSchema = z.union([z.literal(0), z.literal(1)], {
+	error: "Must be 0 or 1",
+});
+export const statusSchema = z.enum(STATUS_VALUES, {
+	error: `Must be one of: ${STATUS_VALUES.join(", ")}`,
+});
 export const eventSeqSchema = z.number().int().min(1).optional();
 export const pictureSchema = z
 	.object({
