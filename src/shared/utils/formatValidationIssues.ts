@@ -15,12 +15,26 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import type { ValidationIssue } from "@shared/validators";
 
+/**
+ * Formats a list of structured validation issues into a single
+ * human-readable string suitable for error messages and logs.
+ *
+ * @param issues - Frozen validation issues produced by `mapZodIssues`.
+ * @returns Semicolon-delimited `path: message` pairs, or bare messages
+ *          for root-level issues (empty path).
+ *
+ * @example
+ * formatValidationIssues([
+ *   { path: ["id"], pathString: "id", message: "Must not be empty", code: "too_small" },
+ * ]) // → "id: Must not be empty"
+ */
 export function formatValidationIssues(
 	issues: readonly ValidationIssue[],
 ): string {
 	return issues
-		.map((i) => (i.path ? `${i.path}: ${i.message}` : i.message))
+		.map((i) => (i.pathString ? `${i.pathString}: ${i.message}` : i.message))
 		.join("; ");
 }

@@ -23,9 +23,8 @@ import {
 	type TrackChanges,
 	targetCollectionIdSchema,
 } from "@shared/schemas/track.schema";
-import { isLegalStatusTransition } from "@shared/utils";
+import { formatValidationIssues, isLegalStatusTransition } from "@shared/utils";
 import { safeParseTrack, safeParseTrackChanges } from "@shared/validators";
-import { formatValidationIssues } from "@tests/utils";
 import type { EntityTable } from "dexie";
 
 function isNonEmptyString(value: unknown): value is string {
