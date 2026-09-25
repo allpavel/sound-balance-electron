@@ -21,10 +21,7 @@ import {
 	type PayloadAction,
 } from "@reduxjs/toolkit";
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
-import {
-	type SettingsValidationIssue,
-	safeParseSettings,
-} from "@shared/validators";
+import { safeParseSettings, type ValidationIssue } from "@shared/validators";
 import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
@@ -85,7 +82,7 @@ export const getSettings = createAsyncThunk(
 export const saveSettings = createAsyncThunk<
 	SettingsForm,
 	SettingsForm,
-	{ rejectValue: SettingsValidationIssue[] }
+	{ rejectValue: readonly ValidationIssue[] }
 >(
 	SETTINGS_ACTIONS.saveToDB,
 	async (settings: SettingsForm, { rejectWithValue }) => {
@@ -98,7 +95,8 @@ export const saveSettings = createAsyncThunk<
 		} catch (error) {
 			return rejectWithValue([
 				{
-					path: "",
+					path: Object.freeze([]),
+					pathString: "",
 					code: "persist_error",
 					message:
 						error instanceof Error
@@ -172,9 +170,8 @@ const settingsSlice = createSlice({
 			})
 			.addCase(saveSettings.rejected, (state, action) => {
 				state.loading = false;
-				const payload = action.payload as SettingsValidationIssue[] | undefined;
 				state.error =
-					payload?.[0]?.message ??
+					action.payload?.[0]?.message ??
 					action.error.message ??
 					"Unable to save settings.";
 			});

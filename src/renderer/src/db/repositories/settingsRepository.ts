@@ -17,6 +17,7 @@
  */
 
 import { db } from "@renderer/db/db";
+import { formatValidationIssues } from "@shared/utils";
 import { safeParseSettings } from "@shared/validators";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 
@@ -37,9 +38,7 @@ export const settingsRepository = {
 		if (!parsedData.success) {
 			return {
 				status: "invalid",
-				issues: parsedData.issues
-					.map((i) => `${i.path}: ${i.message}`)
-					.join("; "),
+				issues: formatValidationIssues(parsedData.issues),
 			};
 		}
 		return { status: "valid", data: parsedData.data };
@@ -49,7 +48,7 @@ export const settingsRepository = {
 		const parsedData = safeParseSettings(settings, { mode: "loose" });
 		if (!parsedData.success) {
 			throw new Error(
-				`Invalid settings:  ${parsedData.issues.map((i) => `${i.path}: ${i.message}`).join("; ")}`,
+				`Invalid settings:  ${formatValidationIssues(parsedData.issues)}`,
 			);
 		}
 		await db.settings.put({ id: SETTINGS_ID, settings: parsedData.data });
