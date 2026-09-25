@@ -20,7 +20,8 @@ import { formatValidationIssues } from "@shared/utils/formatValidationIssues";
 import type { ValidationIssue } from "@shared/validators";
 
 /**
- * Structured validation error carrying the full set of schema-authored issues.
+ * Structured validation error carrying the full set of schema-authored
+ * or synthetic issues.
  *
  * @example
  * ```ts
@@ -38,21 +39,61 @@ import type { ValidationIssue } from "@shared/validators";
 export class TrackValidationError extends Error {
 	/**
 	 * Human-readable location prefix, e.g. `"tracks[3]"` or `"changes"`.
+	 * Indicates where in the payload the validation failure occurred.
 	 */
 	readonly context: string;
 	/**
-	 * Complete, frozen list of validation issues.
+	 * Complete, frozen list of validation issues. Callers cannot mutate the
+	 * array or its elements after construction.
 	 */
 	readonly issues: readonly ValidationIssue[];
 
 	/**
+	 * Constructs a `TrackValidationError` with a defensive copy of the
+	 * issues list.
+	 *
 	 * @param context - Location prefix for the error (e.g. `"tracks[0]"`).
-	 * @param issues  - Structured issues from `safeParseTrack` / `safeParseTrackChanges`.
+	 * @param issues  - Structured issues from `safeParseTrack` /
+	 * `safeParseTrackChanges`, or a synthetic root issue  created
+	 *  via {@link createRootIssue} for precondition failures that
+	 *  do not originate from Zod schema validation.
 	 */
 	constructor(context: string, issues: readonly ValidationIssue[]) {
-		super(`${context}: ${formatValidationIssues(issues)}`);
+		const formatted = formatValidationIssues(issues);
+		super(formatted.length === 0 ? context : `${context}: ${formatted}`);
+
+		// Restore prototype chain for `instanceof` reliability
+		// under down-leveled transpilation (ES5/Babel/SWC).
+		Object.setPrototypeOf(this, TrackValidationError.prototype);
 		this.name = "TrackValidationError";
 		this.context = context;
-		this.issues = issues;
+
+		// The caller retains a reference to the source array and could
+		// mutate it after the throw, retroactively altering this error's
+		// payload. This spread copy breaks that reference alias and the
+		// freeze makes any downstream mutation attempt a silent no-op
+		// (or a hard throw in strict mode).
+		this.issues = Object.freeze([...issues]);
+	}
+
+	/**
+	 * Returns a sanitized plain-object representation suitable for IPC
+	 * serialization or logging surfaces.
+	 *
+	 * The `stack` property and other `Error` internals are intentionally
+	 * omitted to prevent leaking internal file paths across boundaries.
+	 *
+	 * @returns A plain object with `name`, `context`, and `issues`.
+	 */
+	toJSON(): {
+		name: string;
+		context: string;
+		issues: readonly ValidationIssue[];
+	} {
+		return {
+			name: this.name,
+			context: this.context,
+			issues: this.issues,
+		};
 	}
 }
