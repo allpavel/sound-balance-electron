@@ -29,7 +29,9 @@ import {
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { TrackValidationError } from "@shared/errors";
 import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
+import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
@@ -49,12 +51,14 @@ export const tracksRepository = {
 
 	async addMany(
 		tracks: Metadata[],
-		{ targetCollectionId = SYSTEM_COLLECTION_ID } = {},
+		{ targetCollectionId: rawId = SYSTEM_COLLECTION_ID } = {},
 	): Promise<string[]> {
-		assertTargetCollectionId(targetCollectionId);
+		const targetCollectionId = assertTargetCollectionId(rawId);
 
 		if (!Array.isArray(tracks)) {
-			throw new Error("Tracks must be an array");
+			throw new TrackValidationError("tracks", [
+				createRootIssue("invalid_type", "Tracks must be an array"),
+			]);
 		}
 		if (tracks.length === 0) {
 			return [];
@@ -67,7 +71,12 @@ export const tracksRepository = {
 			const parsedTrack = assertTrackInput(track, index);
 			const filePath = parsedTrack.filePath;
 			if (seenFilePaths.has(filePath)) {
-				throw new Error(`tracks contains duplicate filePath: ${filePath}`);
+				throw new TrackValidationError(`tracks[${index}].filePath`, [
+					createRootIssue(
+						"duplicate_file_path",
+						`Tracks contains duplicate filePath: ${filePath}`,
+					),
+				]);
 			}
 			seenFilePaths.add(filePath);
 			parsedTracks.push(parsedTrack);
@@ -138,7 +147,9 @@ export const tracksRepository = {
 
 	async update(id: string, changes: unknown): Promise<number> {
 		if (!isNonEmptyString(id)) {
-			throw new Error("ID must be a non-empty string");
+			throw new TrackValidationError("id", [
+				createRootIssue("invalid_type", "ID must be a non-empty string"),
+			]);
 		}
 		const validated = validateTrackChanges(changes, "changes");
 		if (!("status" in validated)) {
@@ -152,7 +163,9 @@ export const tracksRepository = {
 
 	async updateMany(updates: unknown): Promise<number> {
 		if (!Array.isArray(updates)) {
-			throw new Error("Updates must be an array");
+			throw new TrackValidationError("updates", [
+				createRootIssue("invalid_type", "Updates must be an array"),
+			]);
 		}
 		if (updates.length === 0) {
 			return 0;
@@ -167,13 +180,25 @@ export const tracksRepository = {
 		for (const [index, update] of updates.entries()) {
 			const context = `updates[${index}]`;
 			if (!isPlainObject(update)) {
-				throw new Error(`${context} must be an object`);
+				throw new TrackValidationError(context, [
+					createRootIssue("invalid_type", `${context} must be an object`),
+				]);
 			}
 			if (!isNonEmptyString(update.id)) {
-				throw new Error(`${context}.id must be a non-empty string`);
+				throw new TrackValidationError(`${context}.id`, [
+					createRootIssue(
+						"invalid_type",
+						`${context}.id must be a non-empty string`,
+					),
+				]);
 			}
 			if (seenIds.has(update.id)) {
-				throw new Error(`updates contains duplicate id: ${update.id}`);
+				throw new TrackValidationError(`updates[${index}].id`, [
+					createRootIssue(
+						"duplicate_id",
+						`Updates contains duplicate id: ${update.id}`,
+					),
+				]);
 			}
 			seenIds.add(update.id);
 			normalizedUpdates.push({

@@ -18,13 +18,17 @@
 
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
-import {
-	type Metadata,
-	type TrackChanges,
-	targetCollectionIdSchema,
+import type {
+	CollectionId,
+	Metadata,
+	TrackChanges,
 } from "@shared/schemas/track.schema";
 import { isLegalStatusTransition } from "@shared/utils";
-import { safeParseTrack, safeParseTrackChanges } from "@shared/validators";
+import {
+	safeParseTargetCollectionId,
+	safeParseTrack,
+	safeParseTrackChanges,
+} from "@shared/validators";
 import type { EntityTable } from "dexie";
 
 function isNonEmptyString(value: unknown): value is string {
@@ -35,11 +39,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function assertTargetCollectionId(value: unknown): void {
-	const result = targetCollectionIdSchema.safeParse(value);
+/**
+ * Validates that the target collection ID is a non-empty string.
+ *
+ * @param value - Untrusted input to validate.
+ * @throws {TrackValidationError} When validation fails. Carries the
+ *         full structured issue list from `targetCollectionIdSchema`.
+ */
+function assertTargetCollectionId(value: unknown): CollectionId {
+	const result = safeParseTargetCollectionId(value);
 	if (!result.success) {
-		throw new Error("targetCollectionId must be a non-empty string");
+		throw new TrackValidationError("targetCollectionId", result.issues);
 	}
+	return result.data;
 }
 
 /**
@@ -55,10 +67,10 @@ function assertTargetCollectionId(value: unknown): void {
 function assertTrackInput(track: unknown, index: number): Metadata {
 	const context = `tracks[${index}]`;
 	const result = safeParseTrack(track);
-	if (result.success) {
-		return result.data;
+	if (!result.success) {
+		throw new TrackValidationError(context, result.issues);
 	}
-	throw new TrackValidationError(context, result.issues);
+	return result.data;
 }
 
 function normalizeCollectionIds(
@@ -126,10 +138,6 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
  * @throws {TrackValidationError} When validation fails.
  */
 function validateTrackChanges(changes: unknown, context: string): TrackChanges {
-	if (!isPlainObject(changes)) {
-		throw new Error(`${context} must be a non-null object`);
-	}
-
 	const result = safeParseTrackChanges(changes);
 	if (!result.success) {
 		throw new TrackValidationError(context, result.issues);
