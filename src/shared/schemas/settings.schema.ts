@@ -199,10 +199,10 @@ const baseOutputDirectoryPathSchema = z
 const schemaWithRefine = (schema: z.ZodString) =>
 	schema
 		.refine((path) => !NULL_BYTE_PATTERN.test(path), {
-			message: "Path contains null bytes",
+			error: "Path contains null bytes",
 		})
 		.refine((path) => !PATH_TRAVERSAL_PATTERN.test(path), {
-			message: "Path contains traversal sequences (..)",
+			error: "Path contains traversal sequences (..)",
 		});
 
 const looseOutputDirectoryPathSchema = schemaWithRefine(

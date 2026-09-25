@@ -34,10 +34,10 @@ export const nonEmptyStringSchema = z
 		error: `Must not exceed ${MAX_PATH_LENGTH} characters`,
 	})
 	.refine((val) => val.trim().length > 0, {
-		message: "Must not be blank",
+		error: "Must not be blank",
 	})
 	.refine((val) => !NULL_BYTE_PATTERN.test(val), {
-		message: "Must not contain null bytes",
+		error: "Must not contain null bytes",
 	});
 
 export const reasonSchema = z
@@ -47,10 +47,10 @@ export const reasonSchema = z
 		error: `Reason must not exceed ${MAX_REASON_LENGTH} characters`,
 	})
 	.refine((val) => val.trim().length > 0, {
-		message: "Reason must not be blank",
+		error: "Reason must not be blank",
 	})
 	.refine((val) => !NULL_BYTE_PATTERN.test(val), {
-		message: "Reason must not contain null bytes",
+		error: "Reason must not contain null bytes",
 	});
 
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
@@ -424,6 +424,8 @@ export type Metadata = TrackInput;
 export type TrackChanges = z.infer<typeof trackChangesSchema>;
 
 export type Status = z.infer<typeof statusSchema>;
+
+export type CollectionId = z.infer<typeof targetCollectionIdSchema>;
 
 export type ProcessingStatus =
 	| { id: string; status: "processing" | "completed"; seq?: number }
