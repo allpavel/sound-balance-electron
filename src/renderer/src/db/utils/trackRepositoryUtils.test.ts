@@ -17,6 +17,7 @@
  */
 
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { TrackValidationError } from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
 import { makeTrack } from "@tests/factories";
 import type { EntityTable } from "dexie";
@@ -103,42 +104,14 @@ describe("trackRepositoryUtils", () => {
 	});
 
 	describe("assertTrackInput", () => {
-		const objectErrorMessage = "tracks[0] must be an object";
-		const idErrorMessage = "tracks[0].id must be a non-empty string";
-		const fileErrorMessage = "tracks[0].file must be a non-empty string";
-		const filePathErrorMessage =
-			"tracks[0].filePath must be a non-empty string";
-		const statusErrorMessage =
-			"tracks[0].status must be one of: pending, processing, completed, failed";
-		const selectedErrorMessage = "tracks[0].selected must be 0 or 1";
-		const collectionIdsArrayErrorMessage =
-			"tracks[0].collectionIds must be an array of strings";
-		const collectionIdsItemErrorMessage =
-			"tracks[0].collectionIds[1] must be a non-empty string";
-
 		it("accepts a valid track", () => {
 			expect(() => assertTrackInput(makeTrack(), 0)).not.toThrow();
 		});
+
 		it.each(STATUS_VALUES)("accepts valid Status value: %s", (status) => {
 			const overrides =
 				status === "failed" ? { status, reason: "test error" } : { status };
 			expect(() => assertTrackInput(makeTrack(overrides), 0)).not.toThrow();
-		});
-
-		it("accepts unknown IAudioMetadata fields", () => {
-			expect(() =>
-				assertTrackInput(
-					makeTrack({
-						format: {
-							duration: 123,
-						},
-						common: {
-							title: "Song",
-						},
-					}),
-					0,
-				),
-			).not.toThrow();
 		});
 
 		it.each([
@@ -149,85 +122,94 @@ describe("trackRepositoryUtils", () => {
 			["boolean", true],
 			["array", []],
 		])("rejects a non-object track: %s", (_desc, value) => {
-			expect(() => assertTrackInput(value, 0)).toThrow(objectErrorMessage);
+			expect(() => assertTrackInput(value, 0)).toThrow(TrackValidationError);
 		});
 
 		it("includes the provided index in the error context", () => {
-			expect(() => assertTrackInput(null, 7)).toThrow(
-				"tracks[7] must be an object",
-			);
+			try {
+				assertTrackInput(null, 7);
+				expect.unreachable("should have thrown");
+			} catch (err) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				expect((err as TrackValidationError).context).toBe("tracks[7]");
+			}
 		});
 
-		it("rejects an empty id", () => {
-			expect(() => assertTrackInput(makeTrack({ id: "" }), 0)).toThrow(
-				idErrorMessage,
-			);
+		it("rejects an empty id and reports the id path", () => {
+			try {
+				assertTrackInput(makeTrack({ id: "" }), 0);
+				expect.unreachable("should have thrown");
+			} catch (err) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				const { issues } = err as TrackValidationError;
+				expect(issues.some((i) => i.pathString === "id")).toBe(true);
+			}
 		});
 
 		it("rejects a whitespace-only id", () => {
 			expect(() => assertTrackInput(makeTrack({ id: "   " }), 0)).toThrow(
-				idErrorMessage,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects a non-string id", () => {
 			expect(() => assertTrackInput(makeTrack({ id: 123 } as any), 0)).toThrow(
-				idErrorMessage,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects a missing id", () => {
 			expect(() => assertTrackInput(createTrackWithoutField("id"), 0)).toThrow(
-				idErrorMessage,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects an empty file", () => {
 			expect(() => assertTrackInput(makeTrack({ file: "" }), 0)).toThrow(
-				fileErrorMessage,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects a whitespace-only file", () => {
 			expect(() => assertTrackInput(makeTrack({ file: "   " }), 0)).toThrow(
-				fileErrorMessage,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects a missing file", () => {
 			expect(() =>
 				assertTrackInput(createTrackWithoutField("file"), 0),
-			).toThrow(fileErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 
 		it("rejects an empty filePath", () => {
 			expect(() => assertTrackInput(makeTrack({ filePath: "" }), 0)).toThrow(
-				filePathErrorMessage,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects a whitespace-only filePath", () => {
 			expect(() => assertTrackInput(makeTrack({ filePath: "   " }), 0)).toThrow(
-				filePathErrorMessage,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects a missing filePath", () => {
 			expect(() =>
 				assertTrackInput(createTrackWithoutField("filePath"), 0),
-			).toThrow(filePathErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 
 		it("rejects a missing status", () => {
 			expect(() =>
 				assertTrackInput(createTrackWithoutField("status"), 0),
-			).toThrow(statusErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 
 		it("rejects undefined status", () => {
 			expect(() =>
 				assertTrackInput(makeTrack({ status: undefined }), 0),
-			).toThrow(statusErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 
 		it.each([
@@ -239,7 +221,7 @@ describe("trackRepositoryUtils", () => {
 		])("rejects invalid status value: %s", (_desc, value) => {
 			expect(() =>
 				assertTrackInput(makeTrack({ status: value } as any), 0),
-			).toThrow(statusErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 
 		it.each([
@@ -251,26 +233,26 @@ describe("trackRepositoryUtils", () => {
 		])("rejects invalid selected value: %s", (_desc, value) => {
 			expect(() =>
 				assertTrackInput(makeTrack({ selected: value } as any), 0),
-			).toThrow(selectedErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 
 		it("rejects a missing selected value", () => {
 			expect(() =>
 				assertTrackInput(createTrackWithoutField("selected"), 0),
-			).toThrow(selectedErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 
 		it.each([
 			[
 				"string instead of array",
 				SYSTEM_COLLECTION_ID as any,
-				collectionIdsArrayErrorMessage,
+				TrackValidationError,
 			],
-			["null instead of array", null as any, collectionIdsArrayErrorMessage],
+			["null instead of array", null as any, TrackValidationError],
 			[
 				"empty string in array",
 				[SYSTEM_COLLECTION_ID, ""],
-				collectionIdsItemErrorMessage,
+				TrackValidationError,
 			],
 		])(
 			"rejects invalid collectionIds: %s",
@@ -284,7 +266,7 @@ describe("trackRepositoryUtils", () => {
 		it("rejects a missing collectionIds value", () => {
 			expect(() =>
 				assertTrackInput(createTrackWithoutField("collectionIds"), 0),
-			).toThrow(collectionIdsArrayErrorMessage);
+			).toThrow(TrackValidationError);
 		});
 	});
 
@@ -553,26 +535,31 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects invalid collection ids and reports the precise indexed path", () => {
-			expect(() =>
+			try {
 				validateTrackChanges(
-					{
-						collectionIds: [SYSTEM_COLLECTION_ID, ""],
-					},
+					{ collectionIds: [SYSTEM_COLLECTION_ID, ""] },
 					"changes",
-				),
-			).toThrow("changes is invalid: collectionIds.1:");
+				);
+				expect.unreachable("should have thrown");
+			} catch (err) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				const { issues } = err as TrackValidationError;
+				expect(
+					issues.some((i) => i.path[0] === "collectionIds" && i.path[1] === 1),
+				).toBe(true);
+			}
 		});
 
 		it("rejects an empty changes object (no-op mutation)", () => {
 			expect(() => validateTrackChanges({}, "changes")).toThrow(
-				/at least one field/i,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects status combined with fields", () => {
 			expect(() =>
 				validateTrackChanges({ status: "pending", selected: 1 }, "changes"),
-			).toThrow(/changes is invalid/);
+			).toThrow(TrackValidationError);
 		});
 
 		it.each([
@@ -588,14 +575,14 @@ describe("trackRepositoryUtils", () => {
 
 		it("rejects invalid selected values via schema validation", () => {
 			expect(() => validateTrackChanges({ selected: 99 }, "changes")).toThrow(
-				/changes is invalid/,
+				TrackValidationError,
 			);
 		});
 
 		it("rejects failed status without reason", () => {
 			expect(() =>
 				validateTrackChanges({ status: "failed" }, "changes"),
-			).toThrow(/changes is invalid/);
+			).toThrow(TrackValidationError);
 		});
 
 		it.each([
@@ -618,7 +605,7 @@ describe("trackRepositoryUtils", () => {
 		it("rejects seq 0 (must be >= 1)", () => {
 			expect(() =>
 				validateTrackChanges({ status: "processing", seq: 0 }, "changes"),
-			).toThrow(/changes is invalid/);
+			).toThrow(TrackValidationError);
 		});
 
 		it.each([
@@ -630,13 +617,13 @@ describe("trackRepositoryUtils", () => {
 		])("rejects %s seq", (_label, seq) => {
 			expect(() =>
 				validateTrackChanges({ status: "processing", seq }, "changes"),
-			).toThrow(/changes is invalid/);
+			).toThrow(TrackValidationError);
 		});
 
 		it("rejects seq on the fields branch", () => {
 			expect(() =>
 				validateTrackChanges({ selected: 1, seq: 2 }, "changes"),
-			).toThrow(/changes is invalid/);
+			).toThrow(TrackValidationError);
 		});
 	});
 

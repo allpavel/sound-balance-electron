@@ -20,12 +20,14 @@ import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { TrackValidationError } from "@shared/errors";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeTrack } from "@tests/factories";
 
-// Seeds a row in the given status. "failed" requires a reason (schema
-// invariant), supplied once here for the whole suite.
+/** Seeds a row in the given status. "failed" requires a reason (schema
+ *  invariant), supplied once here for the whole suite.
+ */
 async function seedTrackWithStatus(id: string, status: Status): Promise<void> {
 	const overrides = {
 		status,
@@ -34,7 +36,9 @@ async function seedTrackWithStatus(id: string, status: Status): Promise<void> {
 	await db.tracks.add(makeTrack({ id, ...overrides }));
 }
 
-// Builds a shape-valid status-change payload for the target status.
+/**
+ * Builds a shape-valid status-change payload for the target status.
+ */
 function statusChange(to: Status, seq?: number): Record<string, unknown> {
 	const base = seq === undefined ? { status: to } : { status: to, seq };
 	return to === "failed" ? { ...base, reason: "processing failed" } : base;
@@ -341,7 +345,7 @@ describe("tracksRepository", () => {
 				tracksRepository.update("t1", {
 					collectionIds: [SYSTEM_COLLECTION_ID, ""],
 				}),
-			).rejects.toThrow("changes is invalid: collectionIds.1:");
+			).rejects.toThrow(TrackValidationError);
 			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 			]);
@@ -350,7 +354,7 @@ describe("tracksRepository", () => {
 		it("rejects an empty changes object (no-op mutation)", async () => {
 			await db.tracks.add(makeTrack({ id: "t1", selected: 0 }));
 			await expect(tracksRepository.update("t1", {} as any)).rejects.toThrow(
-				/at least one field/i,
+				TrackValidationError,
 			);
 			expect((await db.tracks.get("t1"))?.selected).toBe(0);
 		});
@@ -488,7 +492,7 @@ describe("tracksRepository", () => {
 						},
 					},
 				]),
-			).rejects.toThrow("updates[0].changes is invalid: collectionIds.1:");
+			).rejects.toThrow(TrackValidationError);
 			expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 			]);
@@ -498,7 +502,7 @@ describe("tracksRepository", () => {
 			await db.tracks.add(makeTrack({ id: "t1", selected: 0 }));
 			await expect(
 				tracksRepository.updateMany([{ id: "t1", changes: {} as any }]),
-			).rejects.toThrow(/at least one field/i);
+			).rejects.toThrow(TrackValidationError);
 			expect((await db.tracks.get("t1"))?.selected).toBe(0);
 		});
 	});
