@@ -47,7 +47,8 @@ function expectFailure(result: ValidationResult<unknown>): ValidationIssue[] {
 	}
 	expect(result.issues.length).toBeGreaterThan(0);
 	for (const issue of result.issues) {
-		expect(typeof issue.path).toBe("string");
+		expect(Array.isArray(issue.path)).toBe(true);
+		expect(typeof issue.pathString).toBe("string");
 		expect(typeof issue.message).toBe("string");
 		expect(typeof issue.code).toBe("string");
 	}
@@ -110,7 +111,8 @@ describe("safeParseSettings", () => {
 			"returns an empty path and invalid_type for non-object root input %s",
 			(input) => {
 				const issues = expectFailure(safeParseSettings(input));
-				expect(issues[0]?.path).toBe("");
+				expect(issues[0]?.pathString).toBe("");
+				expect(issues[0]?.path).toEqual([]);
 				expect(issues[0]?.code).toBe("invalid_type");
 			},
 		);
@@ -133,12 +135,12 @@ describe("safeParseSettings", () => {
 				},
 			};
 			const issues = expectFailure(safeParseSettings(invalidSettings));
-			const paths = issues.map((issue) => issue.path);
+			const paths = issues.map((issue) => issue.pathString);
 			expect(paths).toContain("global.outputDirectoryPath");
 			expect(paths).toContain("global.concurrency");
 			expect(paths).toContain("audio.audioCodec");
 			const concurrencyIssue = issues.find(
-				(i) => i.path === "global.concurrency",
+				(i) => i.pathString === "global.concurrency",
 			);
 			expect(concurrencyIssue).toBeDefined();
 			expect(concurrencyIssue?.code).toBe("invalid_type");
@@ -157,7 +159,7 @@ describe("safeParseSettings", () => {
 			expect(result.success).toBe(false);
 			if (!result.success) {
 				const concurrencyIssue = result.issues.find(
-					(i) => i.path === "global.concurrency",
+					(i) => i.pathString === "global.concurrency",
 				);
 				expect(concurrencyIssue).toBeDefined();
 				expect(concurrencyIssue?.code).toBe("too_big");
@@ -175,7 +177,7 @@ describe("safeParseSettings", () => {
 			};
 			const issues = expectFailure(safeParseSettings(invalidSettings));
 			const pathIssue = issues.find(
-				(i) => i.path === "global.outputDirectoryPath",
+				(i) => i.pathString === "global.outputDirectoryPath",
 			);
 			expect(pathIssue?.code).toBe("custom");
 			expect(pathIssue?.message).toBe("Path contains traversal sequences (..)");
@@ -196,7 +198,7 @@ describe("safeParseSettings", () => {
 			};
 			const issues = expectFailure(safeParseSettings(invalidSettings));
 			expect(issues.length).toBeGreaterThanOrEqual(4);
-			const paths = issues.map((i) => i.path);
+			const paths = issues.map((i) => i.pathString);
 			expect(paths).toContain("version");
 			expect(paths).toContain("global.outputDirectoryPath");
 			expect(paths).toContain("global.openOutputFolderOnComplete");
@@ -237,20 +239,23 @@ describe("safeParseTracks", () => {
 		it("rejects a track with missing required fields and reports path", () => {
 			const { id, ...invalidTrack } = makeTrack();
 			const issues = expectFailure(safeParseTracks([invalidTrack]));
-			expect(issues[0]?.path).toBe("0.id");
+			expect(issues[0]?.pathString).toBe("0.id");
+			expect(issues[0]?.path).toEqual([0, "id"]);
 		});
 
 		it("rejects a track with invalid status and reports nested path", () => {
 			const issues = expectFailure(
 				safeParseTracks([makeTrack({ status: "invalid" as any })]),
 			);
-			expect(issues[0]?.path).toBe("0.status");
+			expect(issues[0]?.pathString).toBe("0.status");
+			expect(issues[0]?.path).toEqual([0, "status"]);
 		});
 
 		it("reports correct index for invalid items in the array", () => {
 			const tracks = [makeTrack(), makeTrack({ filePath: "" })];
 			const issues = expectFailure(safeParseTracks(tracks));
-			expect(issues[0]?.path).toBe("1.filePath");
+			expect(issues[0]?.pathString).toBe("1.filePath");
+			expect(issues[0]?.path).toEqual([1, "filePath"]);
 		});
 
 		it("captures multiple simultaneous issues", () => {
@@ -289,13 +294,15 @@ describe("safeParseTrack", () => {
 		const issues = expectFailure(
 			safeParseTrack(makeTrack({ status: "invalid" as any })),
 		);
-		expect(issues[0]?.path).toBe("status");
+		expect(issues[0]?.pathString).toBe("status");
+		expect(issues[0]?.path).toEqual(["status"]);
 	});
 
 	it("rejects a track missing a required field and reports its path", () => {
 		const { id, ...withoutId } = makeTrack();
 		const issues = expectFailure(safeParseTrack(withoutId));
-		expect(issues[0]?.path).toBe("id");
+		expect(issues[0]?.pathString).toBe("id");
+		expect(issues[0]?.path).toEqual(["id"]);
 	});
 
 	it("reports deeply nested array paths", () => {
@@ -313,14 +320,15 @@ describe("safeParseTrack", () => {
 				} as any),
 			),
 		);
-		expect(issues[0]?.path).toBe("common.picture.0.data");
+		expect(issues[0]?.pathString).toBe("common.picture.0.data");
+		expect(issues[0]?.path).toEqual(["common", "picture", 0, "data"]);
 	});
 
 	it("re-verifies null-byte rejection at the boundary (defense in depth)", () => {
 		const issues = expectFailure(
 			safeParseTrack(makeTrack({ filePath: "/music/\0track.mp3" })),
 		);
-		expect(issues.some((i) => i.path === "filePath")).toBe(true);
+		expect(issues.some((i) => i.pathString === "filePath")).toBe(true);
 	});
 });
 
@@ -355,13 +363,15 @@ describe("safeParseData", () => {
 		it("rejects missing tracks property", () => {
 			const { tracks, ...withoutTracks } = createValidData();
 			const issues = expectFailure(safeParseData(withoutTracks));
-			expect(issues[0]?.path).toBe("tracks");
+			expect(issues[0]?.pathString).toBe("tracks");
+			expect(issues[0]?.path).toEqual(["tracks"]);
 		});
 
 		it("rejects missing settings property", () => {
 			const { settings, ...withoutSettings } = createValidData();
 			const issues = expectFailure(safeParseData(withoutSettings));
-			expect(issues[0]?.path).toBe("settings");
+			expect(issues[0]?.pathString).toBe("settings");
+			expect(issues[0]?.path).toEqual(["settings"]);
 		});
 
 		it("rejects invalid track within the array and reports nested path", () => {
@@ -371,7 +381,8 @@ describe("safeParseData", () => {
 					settings: getValidSettings(),
 				}),
 			);
-			expect(issues[0]?.path).toBe("tracks.0.status");
+			expect(issues[0]?.pathString).toBe("tracks.0.status");
+			expect(issues[0]?.path).toEqual(["tracks", 0, "status"]);
 		});
 
 		it("rejects invalid settings and reports nested path", () => {
@@ -385,7 +396,8 @@ describe("safeParseData", () => {
 					},
 				}),
 			);
-			expect(issues[0]?.path).toBe("settings.global.concurrency");
+			expect(issues[0]?.pathString).toBe("settings.global.concurrency");
+			expect(issues[0]?.path).toEqual(["settings", "global", "concurrency"]);
 		});
 
 		it("captures issues from both tracks and settings simultaneously", () => {
@@ -399,7 +411,7 @@ describe("safeParseData", () => {
 					},
 				}),
 			);
-			const paths = issues.map((i) => i.path);
+			const paths = issues.map((i) => i.pathString);
 			expect(paths).toContain("tracks.0.id");
 			expect(paths).toContain("settings.global.concurrency");
 		});
@@ -410,12 +422,14 @@ describe("mapZodIssues (verified through the public API)", () => {
 	it("flattens union branch errors into leaf issues (no opaque invalid_union leaked)", () => {
 		const issues = expectFailure(safeParseTrackChanges({ selected: 99 }));
 		expect(issues.some((i) => i.code === "invalid_union")).toBe(false);
-		expect(issues.some((i) => i.path === "selected")).toBe(true);
+		expect(issues.some((i) => i.pathString === "selected")).toBe(true);
 	});
 
 	it("emits each unique path|code|message signature exactly once (dedup)", () => {
 		const issues = expectFailure(safeParseTrackChanges({ selected: 99 }));
-		const signatures = issues.map((i) => `${i.path}|${i.code}|${i.message}`);
+		const signatures = issues.map(
+			(i) => `${i.pathString}|${i.code}|${i.message}`,
+		);
 		expect(new Set(signatures).size).toBe(signatures.length);
 	});
 
@@ -423,7 +437,7 @@ describe("mapZodIssues (verified through the public API)", () => {
 		const issues = expectFailure(
 			safeParseTrackChanges({ status: "failed", reason: "" }),
 		);
-		expect(issues.some((i) => i.path === "reason")).toBe(true);
+		expect(issues.some((i) => i.pathString === "reason")).toBe(true);
 	});
 
 	it("caps flattened issues at MAX_VALIDATION_ISSUES and appends a truncation marker", () => {
@@ -436,8 +450,8 @@ describe("mapZodIssues (verified through the public API)", () => {
 		);
 		expect(issues).toHaveLength(MAX_VALIDATION_ISSUES + 1);
 		expect(issues[issues.length - 1]?.code).toBe(ISSUE_LIMIT_CODE);
-		expect(issues[issues.length - 1]?.path).toBe("");
-
+		expect(issues[issues.length - 1]?.pathString).toBe("");
+		expect(issues[issues.length - 1]?.path).toEqual([]);
 		const realIssues = issues.filter((i) => i.code !== ISSUE_LIMIT_CODE);
 		expect(realIssues).toHaveLength(MAX_VALIDATION_ISSUES);
 	});
@@ -445,7 +459,7 @@ describe("mapZodIssues (verified through the public API)", () => {
 	it("returns frozen issue objects (shared results cannot be mutated downstream)", () => {
 		const issues = expectFailure(safeParseSettings(null));
 		for (const issue of issues) {
-			expect(Object.isFrozen(issue)).toBe(true);
+			expect(Object.isFrozen(issue.path)).toBe(true);
 		}
 	});
 });
@@ -464,7 +478,12 @@ describe("mapZodIssues DRY contract", () => {
 	it.each(cases)("%s emits the shared ValidationIssue contract", (_, run) => {
 		const issues = expectFailure(run());
 		for (const issue of issues) {
-			expect(Object.keys(issue).sort()).toEqual(["code", "message", "path"]);
+			expect(Object.keys(issue).sort()).toEqual([
+				"code",
+				"message",
+				"path",
+				"pathString",
+			]);
 		}
 	});
 });

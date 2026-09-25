@@ -22,12 +22,15 @@ import {
 	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
 import {
+	type CollectionId,
 	type Metadata,
 	type TrackChanges,
+	targetCollectionIdSchema,
 	trackChangesSchema,
 	trackInputSchema,
 	tracksArraySchema,
 } from "@shared/schemas/track.schema";
+import { pathToString } from "@shared/utils";
 import type { ZodError, ZodSafeParseResult, ZodType, z } from "zod";
 
 export const MAX_VALIDATION_ISSUES = 100;
@@ -37,7 +40,8 @@ const FALLBACK_MESSAGE = "Invalid input";
 const FALLBACK_CODE = "custom";
 
 /**
- * A single, frozen validation issue produced by {@link mapZodIssues}.
+ * A single, frozen validation issue produced by {@link mapZodIssues} or
+ * {@link createRootIssue}.
  *
  */
 export interface ValidationIssue {
@@ -46,21 +50,19 @@ export interface ValidationIssue {
 	readonly message: string;
 	readonly code: string;
 }
-// Backward-compatible alias. Existing imports of
-// SettingsValidationIssue continue to work without modification.
-export type SettingsValidationIssue = ValidationIssue;
 
 export type SettingsParseMode = "strict" | "loose";
 
 export type ValidationResult<T> =
 	| { success: true; data: T }
-	| { success: false; issues: ValidationIssue[] };
+	| { success: false; issues: readonly ValidationIssue[] };
 
 export type SettingsParseResult = ValidationResult<SettingsForm>;
 export type TrackParseResult = ValidationResult<Metadata>;
 export type TracksParseResult = ValidationResult<Metadata[]>;
 export type DataParseResult = ValidationResult<Data>;
 export type TrackChangesParseResult = ValidationResult<TrackChanges>;
+export type CollectionIdParseResult = ValidationResult<CollectionId>;
 
 export interface Issue {
 	readonly path?: PropertyKey[];
@@ -70,11 +72,46 @@ export interface Issue {
 }
 
 /**
+ * Creates a frozen root-level {@link ValidationIssue} (empty path) with
+ * the given code and message.
+ *
+ * Used by non-schema validation layers (e.g., repository preconditions,
+ * persistence errors in Redux thunks) to produce issues that conform
+ * to the shared `ValidationIssue` contract without invoking a Zod schema.
+ * This ensures that all errors thrown as `TrackValidationError` — whether
+ * from schema validation or from precondition checks — carry issues with
+ * a consistent shape, so consumers can always access `.issues` uniformly.
+ *
+ * @param code    - Machine-readable issue code (e.g. `"persist_error"`,
+ *                  `"invalid_type"`, `"duplicate_id"`).
+ * @param message - Human-readable issue message.
+ * @returns A frozen `ValidationIssue` with empty `path` and `pathString`.
+ *
+ * @example
+ * ```ts
+ * throw new TrackValidationError("id", [
+ *     createRootIssue("invalid_type", "ID must be a non-empty string"),
+ * ]);
+ * ```
+ */
+export function createRootIssue(
+	code: string,
+	message: string,
+): ValidationIssue {
+	return Object.freeze({
+		path: Object.freeze([]),
+		pathString: "",
+		message,
+		code,
+	});
+}
+
+/**
  * Flattens ZodError.issues into a list of frozen ValidationIssue objects,
  * recursing into union branch errors and deduplicating by
  * (path | code | message) signature.
  */
-function mapZodIssues(error: ZodError): ValidationIssue[] {
+function mapZodIssues(error: ZodError): readonly ValidationIssue[] {
 	const result: ValidationIssue[] = [];
 	const seen = new Set<string>();
 	let truncated = false;
@@ -99,9 +136,11 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
 						: null;
 					if (leaves && leaves.length > 0) {
 						// Paths on invalid_union.errors sub-issues
-						// are relative to the union node, not absolute from the schema root.
-						// If a future Zod major version changes this to absolute
-						// paths, this recursion must be updated to avoid double-prefixing.
+						// are relative to the union node, not absolute
+						// from the schema root. If a future Zod major
+						// version changes this to absolute paths, this
+						// recursion must be updated to avoid
+						// double-prefixing.
 						walk(leaves as Issue[], currentPath);
 						flattened = true;
 					}
@@ -109,9 +148,7 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
 				if (flattened) continue;
 			}
 
-			const pathString = currentPath
-				.map((segment) => String(segment))
-				.join(".");
+			const pathString = pathToString(currentPath);
 			const message = issue.message ?? FALLBACK_MESSAGE;
 			let code = issue.code ?? FALLBACK_CODE;
 			if (code === "invalid_union") {
@@ -146,7 +183,7 @@ function mapZodIssues(error: ZodError): ValidationIssue[] {
 		);
 	}
 
-	return result;
+	return Object.freeze(result);
 }
 
 /**
@@ -157,6 +194,19 @@ function validate<T>(schema: ZodType<T>, input: unknown): ValidationResult<T> {
 	return result.success
 		? { success: true, data: result.data }
 		: { success: false, issues: mapZodIssues(result.error) };
+}
+
+/**
+ * Validates a target collection ID string against `targetCollectionIdSchema`.
+ *
+ * @param input - Untrusted input to validate as a collection ID.
+ * @returns A `ValidationResult<CollectionId>` — `{ success, data }` or
+ *          `{ success: false, issues }`.
+ */
+export function safeParseTargetCollectionId(
+	input: unknown,
+): CollectionIdParseResult {
+	return validate(targetCollectionIdSchema, input);
 }
 
 /**

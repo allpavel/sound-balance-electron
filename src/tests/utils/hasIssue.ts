@@ -127,5 +127,5 @@ export function hasIssueWithDotPath(
 	issues: ReadonlyArray<ValidationIssue>,
 	expectedPath: string,
 ): boolean {
-	return issues.some((issue) => issue.path === expectedPath);
+	return issues.some((issue) => issue.pathString === expectedPath);
 }
