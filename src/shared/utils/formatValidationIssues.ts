@@ -17,6 +17,7 @@
  */
 
 import type { ValidationIssue } from "@shared/validators";
+import { sanitizeControlChars } from "./pathToString";
 
 /**
  * Formats a list of structured validation issues into a single
@@ -35,6 +36,10 @@ export function formatValidationIssues(
 	issues: readonly ValidationIssue[],
 ): string {
 	return issues
-		.map((i) => (i.pathString ? `${i.pathString}: ${i.message}` : i.message))
+		.map((i) => {
+			const path = sanitizeControlChars(i.pathString);
+			const message = sanitizeControlChars(i.message);
+			return path.length > 0 ? `${path}: ${message}` : message;
+		})
 		.join("; ");
 }

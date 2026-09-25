@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import { pathToString } from "@shared/utils";
 import type { Issue } from "@shared/validators";
 
 type ParseSuccess<T> = { readonly success: true; readonly data: T };
@@ -32,14 +33,8 @@ function renderRawIssues(issues: ReadonlyArray<Issue>): string {
 	return issues
 		.map((issue) => {
 			const message = issue.message ?? "Invalid input";
-			const path = Array.isArray(issue.path)
-				? issue.path
-						.map((seg) =>
-							typeof seg === "symbol" ? seg.toString() : String(seg),
-						)
-						.join(".")
-				: undefined;
-			return path ? `${path}: ${message}` : message;
+			const path = Array.isArray(issue.path) ? pathToString(issue.path) : "";
+			return path.length > 0 ? `${path}: ${message}` : message;
 		})
 		.join("; ");
 }

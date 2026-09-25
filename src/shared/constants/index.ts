@@ -42,3 +42,13 @@ export const MAX_CONCURRENCY = 10;
 
 export const MIN_YEAR = 1000;
 export const MAX_YEAR = 9999;
+
+/**
+ * Pattern matching C0 control characters (U+0000–U+001F) and U+007F (DEL).
+ *
+ * Used to sanitize path segments before string interpolation, preventing
+ * log injection and terminal escape-sequence attacks when hostile payloads
+ * contain control characters in field names or array indices.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional pattern to strip malicious control characters and block injection attacks.
+export const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/g;

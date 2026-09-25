@@ -19,10 +19,15 @@ import type { ValidationIssue } from "@shared/validators";
 import { formatValidationIssues } from "./formatValidationIssues";
 
 const makeIssue = (
-	path: string,
+	pathString: string,
 	message: string,
 	code: ValidationIssue["code"] = "custom",
-): ValidationIssue => ({ path, message, code });
+): ValidationIssue => ({
+	path: Object.freeze(pathString ? pathString.split(".") : []),
+	pathString,
+	message,
+	code,
+});
 
 describe("formatValidationIssues", () => {
 	it("returns an empty string for an empty issue list", () => {
