@@ -17,8 +17,10 @@
  */
 
 import { MAX_BASE64_IMAGE_SIZE } from "@shared/constants";
+import { TrackValidationError } from "@shared/errors";
 import { getValidSettings, makeTrack } from "@tests/factories";
 import {
+	createRootIssue,
 	ISSUE_LIMIT_CODE,
 	MAX_VALIDATION_ISSUES,
 	safeParseData,
@@ -39,7 +41,9 @@ function expectSuccess<T>(result: ValidationResult<T>): T {
 	return result.data;
 }
 
-function expectFailure(result: ValidationResult<unknown>): ValidationIssue[] {
+function expectFailure(
+	result: ValidationResult<unknown>,
+): readonly ValidationIssue[] {
 	if (result.success) {
 		throw new Error(
 			`Expected validation to fail but parsing succeeded: ${JSON.stringify(result.data)}`,
@@ -54,6 +58,16 @@ function expectFailure(result: ValidationResult<unknown>): ValidationIssue[] {
 	}
 	return result.issues;
 }
+
+const frozenArrayCases: ReadonlyArray<
+	readonly [string, () => ValidationResult<unknown>]
+> = [
+	["safeParseSettings", () => safeParseSettings({ invalid: true })],
+	["safeParseTracks", () => safeParseTracks("not-an-array")],
+	["safeParseTrack", () => safeParseTrack(42)],
+	["safeParseData", () => safeParseData(null)],
+	["safeParseTrackChanges", () => safeParseTrackChanges("str")],
+];
 
 describe("safeParseSettings", () => {
 	describe("successful parsing contract", () => {
@@ -418,7 +432,7 @@ describe("safeParseData", () => {
 	});
 });
 
-describe("mapZodIssues (verified through the public API)", () => {
+describe("mapZodIssues", () => {
 	it("flattens union branch errors into leaf issues (no opaque invalid_union leaked)", () => {
 		const issues = expectFailure(safeParseTrackChanges({ selected: 99 }));
 		expect(issues.some((i) => i.code === "invalid_union")).toBe(false);
@@ -462,30 +476,36 @@ describe("mapZodIssues (verified through the public API)", () => {
 			expect(Object.isFrozen(issue.path)).toBe(true);
 		}
 	});
+
+	it("returns a frozen issues array (not just frozen elements)", () => {
+		const issues = expectFailure(safeParseSettings(null));
+		expect(Object.isFrozen(issues)).toBe(true);
+	});
+
+	it.each(frozenArrayCases)(
+		"%s returns a frozen issues array",
+		(_name, run) => {
+			const issues = expectFailure(run());
+			expect(Object.isFrozen(issues)).toBe(true);
+		},
+	);
 });
 
 describe("mapZodIssues DRY contract", () => {
-	const cases: ReadonlyArray<
-		readonly [name: string, run: () => ValidationResult<unknown>]
-	> = [
-		["safeParseSettings", () => safeParseSettings({ invalid: true })],
-		["safeParseTracks", () => safeParseTracks("not-an-array")],
-		["safeParseTrack", () => safeParseTrack(42)],
-		["safeParseData", () => safeParseData(null)],
-		["safeParseTrackChanges", () => safeParseTrackChanges("str")],
-	];
-
-	it.each(cases)("%s emits the shared ValidationIssue contract", (_, run) => {
-		const issues = expectFailure(run());
-		for (const issue of issues) {
-			expect(Object.keys(issue).sort()).toEqual([
-				"code",
-				"message",
-				"path",
-				"pathString",
-			]);
-		}
-	});
+	it.each(frozenArrayCases)(
+		"%s emits the shared ValidationIssue contract",
+		(_, run) => {
+			const issues = expectFailure(run());
+			for (const issue of issues) {
+				expect(Object.keys(issue).sort()).toEqual([
+					"code",
+					"message",
+					"path",
+					"pathString",
+				]);
+			}
+		},
+	);
 });
 
 describe("safeParseTrackChanges", () => {
@@ -533,5 +553,37 @@ describe("safeParseTrackChanges", () => {
 		it("produces issues with path, message, and code", () => {
 			expectFailure(safeParseTrackChanges({ selected: 99 }));
 		});
+	});
+});
+
+describe("createRootIssue", () => {
+	it("produces a frozen ValidationIssue with empty path and pathString", () => {
+		const issue = createRootIssue("persist_error", "Database write failed");
+
+		expect(Object.isFrozen(issue)).toBe(true);
+		expect(Object.isFrozen(issue.path)).toBe(true);
+		expect(issue.path).toEqual([]);
+		expect(issue.pathString).toBe("");
+		expect(issue.code).toBe("persist_error");
+		expect(issue.message).toBe("Database write failed");
+	});
+
+	it("produces issues that pass the DRY contract (code, message, path, pathString keys)", () => {
+		const issue = createRootIssue("custom", "test");
+		expect(Object.keys(issue).sort()).toEqual([
+			"code",
+			"message",
+			"path",
+			"pathString",
+		]);
+	});
+
+	it("can be used as the issues payload for TrackValidationError", () => {
+		const issue = createRootIssue("invalid_type", "ID must be non-empty");
+		const err = new TrackValidationError("id", [issue]);
+		expect(err).toBeInstanceOf(TrackValidationError);
+		expect(err.issues).toHaveLength(1);
+		expect(err.issues[0]?.code).toBe("invalid_type");
+		expect(err.context).toBe("id");
 	});
 });
