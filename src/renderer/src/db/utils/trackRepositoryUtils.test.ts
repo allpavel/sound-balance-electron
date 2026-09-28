@@ -75,8 +75,6 @@ describe("trackRepositoryUtils", () => {
 	});
 
 	describe("assertTargetCollectionId", () => {
-		const errorMsg = "targetCollectionId must be a non-empty string";
-
 		it.each([
 			["custom collection id", "mix-1"],
 			["system collection id", SYSTEM_COLLECTION_ID],
@@ -85,11 +83,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects an empty string", () => {
-			expect(() => assertTargetCollectionId("")).toThrow(errorMsg);
+			expect(() => assertTargetCollectionId("")).toThrow(TrackValidationError);
 		});
 
 		it("rejects a whitespace-only string", () => {
-			expect(() => assertTargetCollectionId("   ")).toThrow(errorMsg);
+			expect(() => assertTargetCollectionId("   ")).toThrow(
+				TrackValidationError,
+			);
 		});
 
 		it.each([
@@ -99,7 +99,21 @@ describe("trackRepositoryUtils", () => {
 			["array", []],
 			["object", {}],
 		])("rejects non-string value: %s", (_desc, value) => {
-			expect(() => assertTargetCollectionId(value)).toThrow(errorMsg);
+			expect(() => assertTargetCollectionId(value)).toThrow(
+				TrackValidationError,
+			);
+		});
+
+		it("sets the context to 'targetCollectionId' on failure", () => {
+			try {
+				assertTargetCollectionId("");
+				expect.unreachable("should have thrown");
+			} catch (err) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				expect((err as TrackValidationError).context).toBe(
+					"targetCollectionId",
+				);
+			}
 		});
 	});
 
@@ -569,8 +583,20 @@ describe("trackRepositoryUtils", () => {
 			["number", 42],
 		])("rejects non-object input with a clear error: %s", (_desc, value) => {
 			expect(() => validateTrackChanges(value, "changes")).toThrow(
-				"changes must be a non-null object",
+				TrackValidationError,
 			);
+		});
+
+		it("rejects null input with Zod-authored invalid_type issue", () => {
+			try {
+				validateTrackChanges(null, "changes");
+				expect.unreachable("should have thrown");
+			} catch (err) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				const issues = (err as TrackValidationError).issues;
+				expect(issues.length).toBeGreaterThan(0);
+				expect(issues.some((i) => i.code === "invalid_type")).toBe(true);
+			}
 		});
 
 		it("rejects invalid selected values via schema validation", () => {

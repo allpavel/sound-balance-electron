@@ -21,6 +21,7 @@ import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetTestState } from "@renderer/utils/test-utils/testFactories";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { TrackValidationError } from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
@@ -709,7 +710,7 @@ describe("useTracks", () => {
 			};
 			await act(async () => {
 				await expect(result.current.addTracksAsync(payload)).rejects.toThrow(
-					/duplicate filePath/i,
+					TrackValidationError,
 				);
 			});
 			await waitFor(() =>
@@ -727,15 +728,15 @@ describe("useTracks", () => {
 			};
 			await act(async () => {
 				await expect(result.current.updateTrackAsync(payload)).rejects.toThrow(
-					"ID must be a non-empty string",
+					TrackValidationError,
 				);
 			});
 			await waitFor(() =>
 				expect(result.current.updateTrackState.isError).toBe(true),
 			);
 			expect(result.current.updateTrackState.isPending).toBe(false);
-			expect(result.current.updateTrackState.error?.message).toBe(
-				"ID must be a non-empty string",
+			expect(result.current.updateTrackState.error).toBeInstanceOf(
+				TrackValidationError,
 			);
 		});
 	});

@@ -259,6 +259,18 @@ describe("tracksRepository", () => {
 			).toEqual([]);
 			expect(await db.tracks.count()).toBe(0);
 		});
+
+		it("rejects duplicate filePaths with TrackValidationError", async () => {
+			await expect(
+				tracksRepository.addMany(
+					[
+						makeTrack({ id: "a", filePath: "/music/same.mp3" }),
+						makeTrack({ id: "b", filePath: "/music/same.mp3" }),
+					],
+					{ targetCollectionId: SYSTEM_COLLECTION_ID },
+				),
+			).rejects.toThrow(TrackValidationError);
+		});
 	});
 
 	describe("update", () => {
@@ -362,11 +374,33 @@ describe("tracksRepository", () => {
 		it("rejects non-object changes with a clear error", async () => {
 			await db.tracks.add(makeTrack({ id: "t1" }));
 			await expect(tracksRepository.update("t1", null as any)).rejects.toThrow(
-				"changes must be a non-null object",
+				TrackValidationError,
 			);
 			await expect(
 				tracksRepository.update("t1", "invalid" as any),
-			).rejects.toThrow("changes must be a non-null object");
+			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("rejects an empty ID with TrackValidationError", async () => {
+			await expect(
+				tracksRepository.update("", { selected: 1 }),
+			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("rejects a whitespace-only ID with TrackValidationError", async () => {
+			await expect(
+				tracksRepository.update("   ", { selected: 1 }),
+			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("rejects non-object changes with TrackValidationError", async () => {
+			await db.tracks.add(makeTrack({ id: "t1" }));
+			await expect(tracksRepository.update("t1", null)).rejects.toThrow(
+				TrackValidationError,
+			);
+			await expect(tracksRepository.update("t1", "invalid")).rejects.toThrow(
+				TrackValidationError,
+			);
 		});
 	});
 
@@ -504,6 +538,33 @@ describe("tracksRepository", () => {
 				tracksRepository.updateMany([{ id: "t1", changes: {} as any }]),
 			).rejects.toThrow(TrackValidationError);
 			expect((await db.tracks.get("t1"))?.selected).toBe(0);
+		});
+
+		it("rejects a non-array updates argument with TrackValidationError", async () => {
+			await expect(tracksRepository.updateMany("not-an-array")).rejects.toThrow(
+				TrackValidationError,
+			);
+		});
+
+		it("rejects a non-object update entry with TrackValidationError", async () => {
+			await expect(
+				tracksRepository.updateMany(["not-an-object" as any]),
+			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("rejects an empty ID in updateMany with TrackValidationError", async () => {
+			await expect(
+				tracksRepository.updateMany([{ id: "", changes: { selected: 1 } }]),
+			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("rejects duplicate IDs in updateMany with TrackValidationError", async () => {
+			await expect(
+				tracksRepository.updateMany([
+					{ id: "t1", changes: { selected: 1 } },
+					{ id: "t1", changes: { selected: 0 } },
+				]),
+			).rejects.toThrow(TrackValidationError);
 		});
 	});
 
