@@ -22,6 +22,7 @@ import {
 	type SettingsForm,
 } from "@shared/schemas/settings.schema";
 import type { Metadata } from "@shared/schemas/track.schema";
+import type { ValidationIssue } from "@shared/validators";
 import { deepMerge } from "@tests/utils";
 import type { CollectionType } from "@/types";
 
@@ -57,6 +58,22 @@ export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
 		format: {},
 		...overrides,
 	} as Metadata;
+}
+
+/**
+ * Factory for building a minimal frozen `ValidationIssue` in tests.
+ */
+export function makeIssue(
+	pathString: string,
+	message: string,
+	code: string = "custom",
+): ValidationIssue {
+	return Object.freeze({
+		path: Object.freeze(pathString ? pathString.split(".") : []),
+		pathString,
+		message,
+		code,
+	});
 }
 
 export function getValidSettings(

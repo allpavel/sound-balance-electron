@@ -16,18 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import type { ValidationIssue } from "@shared/validators";
+import { makeIssue } from "@tests/factories";
 import { formatValidationIssues } from "./formatValidationIssues";
-
-const makeIssue = (
-	pathString: string,
-	message: string,
-	code: ValidationIssue["code"] = "custom",
-): ValidationIssue => ({
-	path: Object.freeze(pathString ? pathString.split(".") : []),
-	pathString,
-	message,
-	code,
-});
 
 describe("formatValidationIssues", () => {
 	it("returns an empty string for an empty issue list", () => {
