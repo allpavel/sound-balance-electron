@@ -22,10 +22,13 @@ import {
 	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
 import { trackInputSchema } from "@shared/schemas/track.schema";
+import { formatValidationIssues, pathToString } from "@shared/utils";
+import type { ValidationIssue } from "@shared/validators";
 import {
 	getValidData,
 	getValidSettings,
 	makeCollection,
+	makeIssue,
 	makeTrack,
 	resetFactorySequences,
 } from ".";
@@ -191,6 +194,189 @@ describe("shared/utils/factories", () => {
 
 		it("produces a payload that satisfies dataSchema", () => {
 			expect(dataSchema.safeParse(getValidData()).success).toBe(true);
+		});
+	});
+
+	describe("makeIssue", () => {
+		describe("field preservation", () => {
+			it("preserves pathString, message, and code on the returned object", () => {
+				const issue = makeIssue("global.concurrency", "Too small", "too_small");
+				expect(issue.pathString).toBe("global.concurrency");
+				expect(issue.message).toBe("Too small");
+				expect(issue.code).toBe("too_small");
+			});
+
+			it("preserves path and pathString consistently", () => {
+				const issue = makeIssue("common.picture.0.data", "Too large");
+				expect(pathToString(issue.path)).toBe(issue.pathString);
+			});
+		});
+
+		describe("default code", () => {
+			it("defaults code to 'custom' when omitted", () => {
+				const issue = makeIssue("id", "Must not be empty");
+				expect(issue.code).toBe("custom");
+			});
+
+			it("uses the provided code when given", () => {
+				const issue = makeIssue("id", "Must not be empty", "too_small");
+				expect(issue.code).toBe("too_small");
+			});
+		});
+
+		describe("path derivation from pathString", () => {
+			const pathSplittingCases: ReadonlyArray<
+				readonly [string, string, readonly string[]]
+			> = [
+				["empty string (root-level)", "", []],
+				["single segment", "id", ["id"]],
+				["two segments", "global.concurrency", ["global", "concurrency"]],
+				[
+					"deeply nested with numeric segment",
+					"common.picture.0.data",
+					["common", "picture", "0", "data"],
+				],
+				["numeric-only segment", "tracks.0.status", ["tracks", "0", "status"]],
+			];
+
+			it.each(pathSplittingCases)(
+				"splits pathString '%s' into correct path segments",
+				(_desc, pathString, expectedPath) => {
+					const issue = makeIssue(pathString, "test message");
+					expect(issue.path).toEqual(expectedPath);
+				},
+			);
+		});
+
+		describe("immutability (Defense in Depth)", () => {
+			it("returns a frozen object", () => {
+				const issue = makeIssue("id", "Must not be empty");
+				expect(Object.isFrozen(issue)).toBe(true);
+			});
+
+			it("returns a frozen path array", () => {
+				const issue = makeIssue("global.concurrency", "Too small");
+				expect(Object.isFrozen(issue.path)).toBe(true);
+			});
+
+			it("field mutations are no-ops in strict mode (frozen object)", () => {
+				const issue = makeIssue("id", "Must not be empty");
+				const originalMessage = issue.message;
+				expect(() => Object.assign(issue, { message: "mutated" })).toThrow(
+					TypeError,
+				);
+				expect(issue.message).toBe(originalMessage);
+			});
+		});
+
+		describe("contract compliance", () => {
+			it("has exactly the four ValidationIssue keys", () => {
+				const issue = makeIssue("id", "Must not be empty");
+				expect(Object.keys(issue).sort()).toEqual([
+					"code",
+					"message",
+					"path",
+					"pathString",
+				]);
+			});
+
+			it("path is an array", () => {
+				const issue = makeIssue("global.concurrency", "Too small");
+				expect(Array.isArray(issue.path)).toBe(true);
+			});
+
+			it("pathString, message, and code are all strings", () => {
+				const issue = makeIssue("global.concurrency", "Too small", "too_small");
+				expect(typeof issue.pathString).toBe("string");
+				expect(typeof issue.message).toBe("string");
+				expect(typeof issue.code).toBe("string");
+			});
+
+			it("path elements are strings (split produces string[])", () => {
+				const issue = makeIssue("common.picture.0.data", "Too large");
+				for (const segment of issue.path) {
+					expect(typeof segment).toBe("string");
+				}
+			});
+		});
+
+		describe("path/pathString invariant", () => {
+			it.each([
+				"",
+				"id",
+				"global.concurrency",
+				"common.picture.0.data",
+				"tracks.0.status",
+			])(
+				"pathToString(issue.path) === issue.pathString for '%s'",
+				(pathString) => {
+					const issue = makeIssue(pathString, "test");
+					expect(pathToString(issue.path)).toBe(issue.pathString);
+				},
+			);
+		});
+
+		describe("integration with formatValidationIssues", () => {
+			it("produces issues consumable by formatValidationIssues", () => {
+				const issues: readonly ValidationIssue[] = [
+					makeIssue("global.concurrency", "Too small", "too_small"),
+					makeIssue("audio.audioCodec", "Unrecognized", "invalid_value"),
+				];
+				expect(formatValidationIssues(issues)).toBe(
+					"global.concurrency: Too small; audio.audioCodec: Unrecognized",
+				);
+			});
+
+			it("produces root-level issues (empty pathString) with bare message", () => {
+				const issues: readonly ValidationIssue[] = [
+					makeIssue("", "Invalid root payload", "invalid_type"),
+				];
+				expect(formatValidationIssues(issues)).toBe("Invalid root payload");
+			});
+		});
+
+		describe("edge cases", () => {
+			it("accepts an empty message", () => {
+				const issue = makeIssue("id", "");
+				expect(issue.message).toBe("");
+				expect(issue.pathString).toBe("id");
+				expect(issue.path).toEqual(["id"]);
+			});
+
+			it("treats a whitespace-only pathString as a single segment", () => {
+				const issue = makeIssue("   ", "test");
+				expect(issue.path).toEqual(["   "]);
+				expect(issue.pathString).toBe("   ");
+			});
+
+			it("handles consecutive dots by producing empty-string segments", () => {
+				const issue = makeIssue("a..b", "test");
+				expect(issue.path).toEqual(["a", "", "b"]);
+			});
+		});
+
+		describe("isolation", () => {
+			it("returns a distinct object on every call", () => {
+				const first = makeIssue("id", "Must not be empty");
+				const second = makeIssue("id", "Must not be empty");
+				expect(first).not.toBe(second);
+				expect(first).toEqual(second);
+			});
+
+			it("returns a distinct path array on every call", () => {
+				const first = makeIssue("global.concurrency", "Too small");
+				const second = makeIssue("global.concurrency", "Too small");
+				expect(first.path).not.toBe(second.path);
+				expect(first.path).toEqual(second.path);
+			});
+
+			it("does not share path array references across different pathStrings", () => {
+				const first = makeIssue("id", "test");
+				const second = makeIssue("file", "test");
+				expect(first.path).not.toBe(second.path);
+				expect(first.path).toEqual(["id"]);
+				expect(second.path).toEqual(["file"]);
+			});
 		});
 	});
 });
