@@ -20,7 +20,7 @@ import {
 	SETTINGS_ID,
 	settingsRepository,
 } from "@renderer/db/repositories/settingsRepository";
-import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
+import { resetDatabase } from "@renderer/utils/test-utils";
 import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,

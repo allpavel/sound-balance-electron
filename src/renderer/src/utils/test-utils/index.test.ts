@@ -29,7 +29,7 @@ import {
 	resetDatabase,
 	resetSequences,
 	resetTestState,
-} from "./testFactories";
+} from ".";
 
 function getValidSettings(): SettingsForm {
 	return settingsSchema.parse({

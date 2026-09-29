@@ -45,3 +45,17 @@ export async function resetTestState() {
 	await resetDatabase();
 	configureUuidMock();
 }
+
+/**
+ * Seeds a collection row so that referential-integrity checks
+ * pass for non-system collection IDs used in test inputs.
+ *
+ * @param id    – The collection primary key to insert.
+ * @param title – Optional human-readable title; defaults to `"Collection <id>"`.
+ */
+export async function seedCollection(
+	id: string,
+	title?: string,
+): Promise<void> {
+	await db.collections.add({ id, title: title ?? `Collection ${id}` });
+}

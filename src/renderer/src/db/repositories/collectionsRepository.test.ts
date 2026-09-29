@@ -18,10 +18,7 @@
 
 import { db } from "@renderer/db/db";
 import { collectionsRepository } from "@renderer/db/repositories/collectionsRepository";
-import {
-	configureUuidMock,
-	resetTestState,
-} from "@renderer/utils/test-utils/testFactories";
+import { configureUuidMock, resetTestState } from "@renderer/utils/test-utils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
