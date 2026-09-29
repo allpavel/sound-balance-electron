@@ -20,10 +20,13 @@ import { db } from "@renderer/db/db";
 import {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
+	assertBatchUniqueness,
 	assertTargetCollectionId,
 	assertTrackInput,
+	chunkArray,
 	isNonEmptyString,
 	isPlainObject,
+	mapStorageWriteError,
 	normalizeCollectionIds,
 	uniqueTracks,
 	validateTrackChanges,
@@ -31,7 +34,9 @@ import {
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
+import type { AddManyResult } from "@shared/types";
 import { createRootIssue } from "@shared/validators";
+import { ANYOF_CHUNK_SIZE } from "../constants";
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
@@ -49,10 +54,20 @@ export const tracksRepository = {
 		return await db.tracks.get(id);
 	},
 
+	/**
+	 * Batch-inserts tracks, merging duplicates by `filePath` into the target
+	 * collection.
+	 *
+	 * @param tracks – Array of track metadata objects to persist.
+	 * @param options.targetCollectionId – Collection to assign (defaults to `"all"`).
+	 * @returns A structured {@link AddManyResult} discriminating outcomes.
+	 * @throws {TrackValidationError} On validation, uniqueness, or integrity failure.
+	 * @throws {TrackValidationError} With code `"quota_exceeded"` on storage exhaustion.
+	 */
 	async addMany(
 		tracks: Metadata[],
 		{ targetCollectionId: rawId = SYSTEM_COLLECTION_ID } = {},
-	): Promise<string[]> {
+	): Promise<AddManyResult> {
 		const targetCollectionId = assertTargetCollectionId(rawId);
 
 		if (!Array.isArray(tracks)) {
@@ -61,88 +76,157 @@ export const tracksRepository = {
 			]);
 		}
 		if (tracks.length === 0) {
-			return [];
+			return { added: [], merged: [], skipped: [] };
 		}
 
 		const parsedTracks: Metadata[] = [];
-		const seenFilePaths = new Set<string>();
 
 		for (const [index, track] of tracks.entries()) {
 			const parsedTrack = assertTrackInput(track, index);
-			const filePath = parsedTrack.filePath;
-			if (seenFilePaths.has(filePath)) {
-				throw new TrackValidationError(`tracks[${index}].filePath`, [
-					createRootIssue(
-						"duplicate_file_path",
-						`Tracks contains duplicate filePath: ${filePath}`,
-					),
-				]);
-			}
-			seenFilePaths.add(filePath);
 			parsedTracks.push(parsedTrack);
 		}
 
-		const filePaths = parsedTracks.map((track) => track.filePath);
+		assertBatchUniqueness(
+			parsedTracks,
+			(t) => t.id,
+			(i) => `tracks[${i}].id`,
+			"duplicate_id",
+			"id",
+		);
 
-		return await db.transaction("rw", db.tracks, async () => {
-			const existingTracks = await db.tracks
-				.where("filePath")
-				.anyOf(filePaths)
-				.toArray();
+		assertBatchUniqueness(
+			parsedTracks,
+			(t) => t.filePath,
+			(i) => `tracks[${i}].filePath`,
+			"duplicate_file_path",
+			"filePath",
+		);
 
-			const existingByFilePath = new Map<string, Metadata>();
-
-			for (const existingTrack of existingTracks) {
-				if (isNonEmptyString(existingTrack.filePath)) {
-					existingByFilePath.set(existingTrack.filePath, existingTrack);
-				}
-			}
-
-			const toAdd: Metadata[] = [];
-			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
-
-			for (const track of parsedTracks) {
-				const existingRow = existingByFilePath.get(track.filePath);
-
-				if (existingRow) {
-					const nextCollectionIds = normalizeCollectionIds(
-						existingRow.collectionIds,
-						targetCollectionId,
-					);
-					if (
-						!areCollectionIdsEqual(existingRow.collectionIds, nextCollectionIds)
-					) {
-						toUpdate.push({
-							key: existingRow.id,
-							changes: {
-								collectionIds: nextCollectionIds,
-							},
-						});
+		const referencedCollectionIds = new Set<string>();
+		referencedCollectionIds.add(targetCollectionId);
+		for (const track of parsedTracks) {
+			if (Array.isArray(track.collectionIds)) {
+				for (const cid of track.collectionIds) {
+					if (isNonEmptyString(cid)) {
+						referencedCollectionIds.add(cid);
 					}
-				} else {
-					toAdd.push({
-						...track,
-						collectionIds: normalizeCollectionIds(
-							track.collectionIds,
-							targetCollectionId,
-						),
-					});
 				}
 			}
+		}
+		referencedCollectionIds.delete(SYSTEM_COLLECTION_ID);
 
-			const resultIds: string[] = [];
+		try {
+			return await db.transaction(
+				"rw",
+				db.tracks,
+				db.collections,
+				async (): Promise<AddManyResult> => {
+					if (referencedCollectionIds.size > 0) {
+						const idsToCheck = [...referencedCollectionIds];
+						const chunks = chunkArray(idsToCheck, ANYOF_CHUNK_SIZE);
+						const existingIds = new Set<string>();
 
-			if (toAdd.length > 0) {
-				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys: true });
-				const addedIdArray = Array.isArray(addedIds) ? addedIds : [addedIds];
-				resultIds.push(...(addedIdArray as string[]));
+						for (const chunk of chunks) {
+							const keys = await db.collections
+								.where("id")
+								.anyOf(chunk)
+								.primaryKeys();
+							for (const key of keys) {
+								if (typeof key === "string") {
+									existingIds.add(key);
+								}
+							}
+						}
+
+						const missing = idsToCheck.filter((id) => !existingIds.has(id));
+						if (missing.length > 0) {
+							throw new TrackValidationError("collectionIds", [
+								createRootIssue(
+									"referential_integrity",
+									`Referenced collection(s) do not exist: ${missing.join(", ")}`,
+								),
+							]);
+						}
+					}
+
+					const filePaths = parsedTracks.map((t) => t.filePath);
+					const filePathChunks = chunkArray(filePaths, ANYOF_CHUNK_SIZE);
+					const existingByFilePath = new Map<string, Metadata>();
+
+					for (const chunk of filePathChunks) {
+						const rows = await db.tracks
+							.where("filePath")
+							.anyOf(chunk)
+							.toArray();
+						for (const row of rows) {
+							if (isNonEmptyString(row.filePath)) {
+								existingByFilePath.set(row.filePath, row);
+							}
+						}
+					}
+
+					const toAdd: Metadata[] = [];
+					const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
+					const mergedIds: string[] = [];
+					const skippedIds: string[] = [];
+
+					for (const track of parsedTracks) {
+						const existingRow = existingByFilePath.get(track.filePath);
+
+						if (existingRow) {
+							const nextCollectionIds = normalizeCollectionIds(
+								existingRow.collectionIds,
+								targetCollectionId,
+							);
+
+							if (
+								areCollectionIdsEqual(
+									existingRow.collectionIds,
+									nextCollectionIds,
+								)
+							) {
+								skippedIds.push(existingRow.id);
+							} else {
+								toUpdate.push({
+									key: existingRow.id,
+									changes: { collectionIds: nextCollectionIds },
+								});
+								mergedIds.push(existingRow.id);
+							}
+						} else {
+							toAdd.push({
+								...track,
+								collectionIds: normalizeCollectionIds(
+									track.collectionIds,
+									targetCollectionId,
+								),
+							});
+						}
+					}
+					const addedIds: string[] = [];
+
+					if (toAdd.length > 0) {
+						const rawKeys = await db.tracks.bulkAdd(toAdd, { allKeys: true });
+						if (Array.isArray(rawKeys)) {
+							for (const key of rawKeys) {
+								if (typeof key === "string") {
+									addedIds.push(key);
+								}
+							}
+						}
+					}
+					if (toUpdate.length > 0) {
+						await db.tracks.bulkUpdate(toUpdate);
+					}
+					return { added: addedIds, merged: mergedIds, skipped: skippedIds };
+				},
+			);
+		} catch (error: unknown) {
+			if (error instanceof TrackValidationError) {
+				throw error;
 			}
-
-			if (toUpdate.length > 0) {
-				await db.tracks.bulkUpdate(toUpdate);
-			}
-			return resultIds;
-		});
+			mapStorageWriteError(error);
+		}
 	},
 
 	async update(id: string, changes: unknown): Promise<number> {
@@ -215,6 +299,7 @@ export const tracksRepository = {
 		});
 		return total;
 	},
+
 	async remove(id: string): Promise<void> {
 		if (!isNonEmptyString(id)) {
 			throw new Error("ID must be a non-empty string");
