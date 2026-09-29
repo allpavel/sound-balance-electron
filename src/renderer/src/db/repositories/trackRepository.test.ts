@@ -18,10 +18,11 @@
 
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
+import { resetDatabase, seedCollection } from "@renderer/utils/test-utils";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
+import type { AddManyResult } from "@shared/types";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeTrack } from "@tests/factories";
 
@@ -42,6 +43,28 @@ async function seedTrackWithStatus(id: string, status: Status): Promise<void> {
 function statusChange(to: Status, seq?: number): Record<string, unknown> {
 	const base = seq === undefined ? { status: to } : { status: to, seq };
 	return to === "failed" ? { ...base, reason: "processing failed" } : base;
+}
+
+/**
+ * Asserts all three lanes of an {@link AddManyResult} in a single call,
+ * reducing boilerplate across the addMany test suite.
+ *
+ * @param result   – The actual result returned by `addMany`.
+ * @param expected – Partial expectation; omitted lanes are not checked.
+ */
+function expectAddManyResult(
+	result: AddManyResult,
+	expected: Partial<AddManyResult>,
+): void {
+	if (expected.added !== undefined) {
+		expect(result.added).toEqual(expected.added);
+	}
+	if (expected.merged !== undefined) {
+		expect(result.merged).toEqual(expected.merged);
+	}
+	if (expected.skipped !== undefined) {
+		expect(result.skipped).toEqual(expected.skipped);
+	}
 }
 
 describe("tracksRepository", () => {
@@ -88,20 +111,25 @@ describe("tracksRepository", () => {
 
 	describe("addMany", () => {
 		it("adds new tracks to the 'all' collection and returns their ids", async () => {
-			const ids = await tracksRepository.addMany(
+			const result: AddManyResult = await tracksRepository.addMany(
 				[
 					makeTrack({ id: "a", collectionIds: [] }),
 					makeTrack({ id: "b", collectionIds: [] }),
 				],
 				{ targetCollectionId: SYSTEM_COLLECTION_ID },
 			);
-			expect(ids).toEqual(["a", "b"]);
+			expectAddManyResult(result, {
+				added: ["a", "b"],
+				merged: [],
+				skipped: [],
+			});
 			expect(
 				(await db.tracks.toArray()).map((t) => t.collectionIds).sort(),
 			).toEqual([[SYSTEM_COLLECTION_ID], [SYSTEM_COLLECTION_ID]]);
 		});
 
 		it("adds new tracks to a specific collection and auto-includes 'all'", async () => {
+			await seedCollection("mix1");
 			await tracksRepository.addMany(
 				[makeTrack({ id: "a", collectionIds: [] })],
 				{ targetCollectionId: "mix1" },
@@ -113,6 +141,8 @@ describe("tracksRepository", () => {
 		});
 
 		it("preserves pre-existing collectionIds and appends 'all' + target", async () => {
+			await seedCollection("preexisting");
+			await seedCollection("mix1");
 			await tracksRepository.addMany(
 				[makeTrack({ id: "a", collectionIds: ["preexisting"] })],
 				{ targetCollectionId: "mix1" },
@@ -125,6 +155,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("appends targetCollectionId to an existing track that lacks it", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "a",
@@ -132,7 +163,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID],
 				}),
 			);
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "a",
@@ -142,7 +173,11 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expect(ids).toEqual([]);
+			expectAddManyResult(result, {
+				added: [],
+				merged: ["a"],
+				skipped: [],
+			});
 			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 				"mix1",
@@ -150,6 +185,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("does not modify an existing track that already has the targetCollectionId", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "a",
@@ -157,7 +193,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				}),
 			);
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "a",
@@ -167,7 +203,11 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expect(ids).toEqual([]);
+			expectAddManyResult(result, {
+				added: [],
+				merged: [],
+				skipped: ["a"],
+			});
 			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 				"mix1",
@@ -175,6 +215,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("handles a mixed batch: new, update, and no-op together", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "exists",
@@ -189,8 +230,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				}),
 			);
-
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "new1",
@@ -210,8 +250,11 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-
-			expect(ids).toEqual(["new1"]);
+			expectAddManyResult(result, {
+				added: ["new1"],
+				merged: ["exists"],
+				skipped: ["noop"],
+			});
 			expect((await db.tracks.get("new1"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 				"mix1",
@@ -227,6 +270,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("matches existing tracks by filePath, not by id", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "orig",
@@ -234,7 +278,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID],
 				}),
 			);
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "different-id",
@@ -244,19 +288,26 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expect(ids).toEqual([]);
+			expectAddManyResult(result, {
+				added: [],
+				merged: ["orig"],
+				skipped: [],
+			});
 			const rows = await db.tracks.toArray();
 			expect(rows).toHaveLength(1);
 			expect(rows[0]?.id).toBe("orig");
 			expect(rows[0]?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
 		});
 
-		it("returns an empty array for an empty input and writes nothing", async () => {
-			expect(
-				await tracksRepository.addMany([], {
-					targetCollectionId: SYSTEM_COLLECTION_ID,
-				}),
-			).toEqual([]);
+		it("returns an empty result for an empty input and writes nothing", async () => {
+			const result = await tracksRepository.addMany([], {
+				targetCollectionId: SYSTEM_COLLECTION_ID,
+			});
+			expect(result).toEqual({
+				added: [],
+				merged: [],
+				skipped: [],
+			});
 			expect(await db.tracks.count()).toBe(0);
 		});
 
@@ -270,6 +321,219 @@ describe("tracksRepository", () => {
 					{ targetCollectionId: SYSTEM_COLLECTION_ID },
 				),
 			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("rejects duplicate track ids within the same batch", async () => {
+			await expect(
+				tracksRepository.addMany([
+					makeTrack({ id: "dup", filePath: "/music/a.mp3" }),
+					makeTrack({ id: "dup", filePath: "/music/b.mp3" }),
+				]),
+			).rejects.toThrow(TrackValidationError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("reports the correct index and field in the duplicate-id error", async () => {
+			try {
+				await tracksRepository.addMany([
+					makeTrack({ id: "x", filePath: "/music/1.mp3" }),
+					makeTrack({ id: "y", filePath: "/music/2.mp3" }),
+					makeTrack({ id: "x", filePath: "/music/3.mp3" }),
+				]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				if (err instanceof TrackValidationError) {
+					expect(err.context).toBe("tracks[2].id");
+					expect(err.issues.some((i) => i.code === "duplicate_id")).toBe(true);
+				}
+			}
+		});
+
+		it("handles >500 tracks via chunked anyOf without data loss", async () => {
+			const TRACK_COUNT = 1_200;
+			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+
+			const result = await tracksRepository.addMany(bigBatch);
+			expect(result.added).toHaveLength(TRACK_COUNT);
+			expect(result.merged).toHaveLength(0);
+			expect(result.skipped).toHaveLength(0);
+			expect(await db.tracks.count()).toBe(TRACK_COUNT);
+		});
+
+		it("correctly merges when a large batch partially overlaps the DB", async () => {
+			await seedCollection("merge-target");
+			const existingTracks: Metadata[] = Array.from({ length: 100 }, (_, i) =>
+				makeTrack({ id: `e-${i}`, filePath: `/music/e-${i}.mp3` }),
+			);
+			await db.tracks.bulkAdd(existingTracks);
+			const batch: Metadata[] = Array.from({ length: 600 }, (_, i) =>
+				i < 100
+					? makeTrack({ id: `new-id-${i}`, filePath: `/music/e-${i}.mp3` })
+					: makeTrack({ id: `n-${i}`, filePath: `/music/n-${i}.mp3` }),
+			);
+			const result = await tracksRepository.addMany(batch, {
+				targetCollectionId: "merge-target",
+			});
+			expect(result.added).toHaveLength(500);
+			expect(result.merged).toHaveLength(100);
+			expect(result.skipped).toHaveLength(0);
+		});
+
+		it("rejects tracks referencing a non-existent targetCollectionId", async () => {
+			await expect(
+				tracksRepository.addMany([makeTrack({ id: "a", collectionIds: [] })], {
+					targetCollectionId: "ghost-collection",
+				}),
+			).rejects.toThrow(TrackValidationError);
+
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("rejects tracks whose collectionIds reference a non-existent collection", async () => {
+			await expect(
+				tracksRepository.addMany(
+					[makeTrack({ id: "a", collectionIds: ["nonexistent"] })],
+					{ targetCollectionId: SYSTEM_COLLECTION_ID },
+				),
+			).rejects.toThrow(TrackValidationError);
+
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("reports the missing collection ids in the error", async () => {
+			try {
+				await tracksRepository.addMany(
+					[makeTrack({ id: "a", collectionIds: ["ghost-a", "ghost-b"] })],
+					{ targetCollectionId: SYSTEM_COLLECTION_ID },
+				);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				if (err instanceof TrackValidationError) {
+					expect(err.context).toBe("collectionIds");
+					const issue = err.issues.find(
+						(i) => i.code === "referential_integrity",
+					);
+					expect(issue).toBeDefined();
+					expect(issue?.message).toContain("ghost-a");
+					expect(issue?.message).toContain("ghost-b");
+				}
+			}
+		});
+
+		it("accepts SYSTEM_COLLECTION_ID without explicit seeding (always exists)", async () => {
+			const result = await tracksRepository.addMany(
+				[makeTrack({ id: "a", collectionIds: [] })],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(result.added).toEqual(["a"]);
+		});
+
+		it("validates referential integrity atomically within the transaction", async () => {
+			await seedCollection("valid-col");
+			await expect(
+				tracksRepository.addMany(
+					[
+						makeTrack({ id: "a", collectionIds: ["valid-col"] }),
+						makeTrack({ id: "b", collectionIds: ["ghost"] }),
+					],
+					{ targetCollectionId: SYSTEM_COLLECTION_ID },
+				),
+			).rejects.toThrow(TrackValidationError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("maps QuotaExceededError to a domain TrackValidationError", async () => {
+			const quotaError = new DOMException(
+				"Storage quota exceeded",
+				"QuotaExceededError",
+			);
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(quotaError);
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "wrap-test" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(TrackValidationError);
+				if (err instanceof TrackValidationError) {
+					expect(err.issues.some((i) => i.code === "quota_exceeded")).toBe(
+						true,
+					);
+				}
+			}
+		});
+
+		it("maps a Dexie BulkError with ConstraintError failures to a domain error", async () => {
+			const bulkError: unknown = {
+				name: "BulkError",
+				message: "bulkAdd failed",
+				failures: [new DOMException("Key already exists", "ConstraintError")],
+			};
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(bulkError);
+			await expect(
+				tracksRepository.addMany([makeTrack({ id: "c" })]),
+			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("re-throws TrackValidationError without double-wrapping", async () => {
+			const original = new TrackValidationError("collectionIds", [
+				{
+					path: Object.freeze([]),
+					pathString: "",
+					code: "referential_integrity",
+					message: "test",
+				},
+			]);
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(original);
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "d" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBe(original);
+			}
+		});
+
+		it("propagates unknown errors without swallowing them", async () => {
+			const unknownError = new TypeError("unexpected internal failure");
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(unknownError);
+			await expect(
+				tracksRepository.addMany([makeTrack({ id: "e" })]),
+			).rejects.toThrow("unexpected internal failure");
+		});
+
+		it("in-batch filePath duplicate is a hard rejection (programming error)", async () => {
+			await expect(
+				tracksRepository.addMany([
+					makeTrack({ id: "a", filePath: "/music/dup.mp3" }),
+					makeTrack({ id: "b", filePath: "/music/dup.mp3" }),
+				]),
+			).rejects.toThrow(TrackValidationError);
+		});
+
+		it("DB filePath collision is a merge (user re-add), not a rejection", async () => {
+			await seedCollection("re-add-target");
+			await db.tracks.add(
+				makeTrack({
+					id: "existing",
+					filePath: "/music/song.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "new-id",
+						filePath: "/music/song.mp3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: "re-add-target" },
+			);
+			expect(result.added).toEqual([]);
+			expect(result.merged).toEqual(["existing"]);
+			expect(await db.tracks.count()).toBe(1);
 		});
 	});
 

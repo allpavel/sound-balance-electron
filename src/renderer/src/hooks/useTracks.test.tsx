@@ -19,10 +19,11 @@
 // @vitest-environment jsdom
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { resetTestState } from "@renderer/utils/test-utils/testFactories";
+import { resetTestState, seedCollection } from "@renderer/utils/test-utils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
+import type { AddManyResult } from "@shared/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { makeTrack } from "@tests/factories";
@@ -271,6 +272,7 @@ describe("useTracks", () => {
 
 	describe("mutations integrated with live queries", () => {
 		it("addTracksAsync persists tracks and updates visible tracks", async () => {
+			await seedCollection("custom");
 			const result = await renderUseTracks();
 			const payload: AddTracksPayload = {
 				tracks: [
@@ -498,11 +500,11 @@ describe("useTracks", () => {
 					targetCollectionId: SYSTEM_COLLECTION_ID,
 				},
 			};
-			const successDeferred = createDeferred<string[]>();
+			const successDeferred = createDeferred<AddManyResult>();
 			const addSpy = vi
 				.spyOn(tracksRepository, "addMany")
 				.mockReturnValueOnce(successDeferred.promise);
-			let pendingPromise!: Promise<string[]>;
+			let pendingPromise!: Promise<AddManyResult>;
 			act(() => {
 				pendingPromise = result.current.addTracksAsync(payload);
 			});
@@ -512,7 +514,11 @@ describe("useTracks", () => {
 			expect(result.current.addTracksState.isError).toBe(false);
 			expect(result.current.addTracksState.error).toBeNull();
 			await act(async () => {
-				successDeferred.resolve(["lifecycle-track"]);
+				successDeferred.resolve({
+					added: ["lifecycle-track"],
+					merged: [],
+					skipped: [],
+				});
 				await pendingPromise;
 			});
 			await waitFor(() =>
