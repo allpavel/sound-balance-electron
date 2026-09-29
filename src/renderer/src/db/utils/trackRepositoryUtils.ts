@@ -25,6 +25,7 @@ import type {
 } from "@shared/schemas/track.schema";
 import { isLegalStatusTransition } from "@shared/utils";
 import {
+	createRootIssue,
 	safeParseTargetCollectionId,
 	safeParseTrack,
 	safeParseTrackChanges,
@@ -37,6 +38,116 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Splits an array into consecutive sub-arrays of at most `size` elements.
+ *
+ * Used to keep IndexedDB `anyOf()` key arrays within engine-safe bounds
+ * while preserving transactional atomicity.
+ *
+ * @typeParam T - Element type; inferred from the input array.
+ * @param source - The array to partition. Not mutated.
+ * @param size   - Maximum chunk length. Must be ≥ 1.
+ * @returns An array of chunks. Empty input yields an empty array.
+ *
+ * @example
+ * chunkArray([1,2,3,4,5], 2) // → [[1,2],[3,4],[5]]
+ */
+function chunkArray<T>(source: readonly T[], size: number): T[][] {
+	if (size < 1) {
+		throw new RangeError(`chunkArray: size must be ≥ 1, received ${size}`);
+	}
+	const chunks: T[][] = [];
+	for (let offset = 0; offset < source.length; offset += size) {
+		chunks.push(source.slice(offset, offset + size));
+	}
+	return chunks;
+}
+
+/**
+ * Discriminates raw IndexedDB / Dexie errors into typed domain errors.
+ *
+ * @param error - The caught unknown error value.
+ * @throws {TrackValidationError} A domain-specific, user-presentable error.
+ * @throws {Error} Re-throws if the error is not a known storage failure.
+ */
+function mapStorageWriteError(error: unknown): never {
+	if (error instanceof DOMException) {
+		if (error.name === "QuotaExceededError") {
+			throw new TrackValidationError("storage", [
+				createRootIssue(
+					"quota_exceeded",
+					"Storage quota exceeded. Free disk space or reduce embedded artwork size, then retry.",
+				),
+			]);
+		}
+		if (error.name === "ConstraintError") {
+			throw new TrackValidationError("id", [
+				createRootIssue(
+					"duplicate_id",
+					"A track with the same primary key already exists in the database.",
+				),
+			]);
+		}
+	}
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"failures" in error &&
+		Array.isArray((error as Record<string, unknown>).failures)
+	) {
+		const failures: unknown[] = (error as { failures: unknown[] }).failures;
+		const constraintHit = failures.find(
+			(f): f is DOMException =>
+				f instanceof DOMException && f.name === "ConstraintError",
+		);
+		if (constraintHit) {
+			throw new TrackValidationError("id", [
+				createRootIssue(
+					"duplicate_id",
+					"One or more tracks collide with existing primary keys or unique filePaths.",
+				),
+			]);
+		}
+	}
+	throw error;
+}
+
+/**
+ * Asserts that a derived key is unique across a batch of items.
+ *
+ * Throws a {@link TrackValidationError} at the first duplicate occurrence,
+ * pinpointing the exact index and field.
+ *
+ * @param items     – The batch to inspect.
+ * @param getKey    – Pure extractor returning the uniqueness key for an item.
+ * @param fieldPath – Template for the error context, e.g. `"tracks[{i}].filePath"`.
+ * @param errorCode – Machine-readable issue code, e.g. `"duplicate_file_path"`.
+ * @param label     – Human-readable noun for the message, e.g. `"filePath"`.
+ *
+ * @throws {TrackValidationError} On the first duplicate detected.
+ */
+function assertBatchUniqueness<T>(
+	items: readonly T[],
+	getKey: (item: T) => string,
+	fieldPath: (index: number) => string,
+	errorCode: string,
+	label: string,
+): void {
+	const seen = new Set<string>();
+	for (const [index, item] of items.entries()) {
+		const key = getKey(item);
+		if (seen.has(key)) {
+			throw new TrackValidationError(fieldPath(index), [
+				createRootIssue(
+					errorCode,
+					`Batch contains duplicate ${label}: "${key}" at index ${index}`,
+				),
+			]);
+		}
+		seen.add(key);
+	}
 }
 
 /**
@@ -244,10 +355,13 @@ async function applyGuardedTrackUpdate(
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
+	assertBatchUniqueness,
 	assertTargetCollectionId,
 	assertTrackInput,
+	chunkArray,
 	isNonEmptyString,
 	isPlainObject,
+	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
 	uniqueTracks,
