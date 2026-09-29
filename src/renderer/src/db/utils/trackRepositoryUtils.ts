@@ -73,6 +73,15 @@ function chunkArray<T>(source: readonly T[], size: number): T[][] {
  * @throws {Error} Re-throws if the error is not a known storage failure.
  */
 function mapStorageWriteError(error: unknown): never {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"inner" in error &&
+		error.inner !== undefined &&
+		error.inner !== null
+	) {
+		mapStorageWriteError(error.inner);
+	}
 	if (error instanceof DOMException) {
 		if (error.name === "QuotaExceededError") {
 			throw new TrackValidationError("storage", [
