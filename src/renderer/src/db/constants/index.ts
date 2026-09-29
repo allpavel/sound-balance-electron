@@ -18,3 +18,8 @@
 
 export const DATABASE_NAME = "AudioDB";
 export const SYSTEM_COLLECTION_ID = "all";
+
+/**
+ * Maximum number of keys passed to a single IndexedDB `anyOf()` call.
+ */
+export const ANYOF_CHUNK_SIZE = 500;

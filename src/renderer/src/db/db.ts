@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import {
-	DATABASE_NAME,
-	SYSTEM_COLLECTION_ID,
-} from "@renderer/db/constants/constants";
+import { DATABASE_NAME, SYSTEM_COLLECTION_ID } from "@renderer/db/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
 import Dexie, { type EntityTable } from "dexie";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
