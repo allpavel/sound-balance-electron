@@ -28,6 +28,7 @@ export const TrackErrorCode = {
 	ReferentialIntegrity: "referential_integrity",
 	StorageCapacity: "storage_capacity",
 	StorageUnavailable: "storage_unavailable",
+	PayloadLimitExceeded: "payload_limit_exceeded",
 } as const;
 
 export type TrackErrorCode =
@@ -69,9 +70,19 @@ export class StorageUnavailableError extends Error {
 	}
 }
 
+export class PayloadLimitExceededError extends Error {
+	readonly code: TrackErrorCode = TrackErrorCode.PayloadLimitExceeded;
+	constructor(message: string) {
+		super(message);
+		this.name = "PayloadLimitExceededError";
+		Object.setPrototypeOf(this, PayloadLimitExceededError.prototype);
+	}
+}
+
 export type TrackRepositoryError =
 	| TrackValidationError
 	| ConflictError
 	| ReferentialIntegrityError
 	| StorageCapacityError
-	| StorageUnavailableError;
+	| StorageUnavailableError
+	| PayloadLimitExceededError;
