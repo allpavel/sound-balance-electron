@@ -34,7 +34,11 @@ import {
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { TrackValidationError } from "@shared/errors";
+import {
+	ConflictError,
+	ReferentialIntegrityError,
+	TrackValidationError,
+} from "@shared/errors";
 import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
 import { createRootIssue } from "@shared/validators";
@@ -62,8 +66,10 @@ export const tracksRepository = {
 	 * @param tracks – Array of track metadata objects to persist.
 	 * @param options.targetCollectionId – Collection to assign (defaults to `"all"`).
 	 * @returns A structured {@link AddManyResult} discriminating outcomes.
-	 * @throws {TrackValidationError} On validation, uniqueness, or integrity failure.
-	 * @throws {TrackValidationError} With code `"quota_exceeded"` on storage exhaustion.
+	 * @throws {TrackValidationError} On validation failure.
+	 * @throws {ConflictError} On uniqueness conflict.
+	 * @throws {ReferentialIntegrityError} On missing collection reference.
+	 * @throws {StorageCapacityError} On storage exhaustion.
 	 */
 	async addMany(
 		tracks: Metadata[],
@@ -91,7 +97,6 @@ export const tracksRepository = {
 			parsedTracks,
 			(t) => t.id,
 			(i) => `tracks[${i}].id`,
-			"duplicate_id",
 			"id",
 		);
 
@@ -99,7 +104,6 @@ export const tracksRepository = {
 			parsedTracks,
 			(t) => t.filePath,
 			(i) => `tracks[${i}].filePath`,
-			"duplicate_file_path",
 			"filePath",
 		);
 
@@ -202,7 +206,11 @@ export const tracksRepository = {
 				},
 			);
 		} catch (error: unknown) {
-			if (error instanceof TrackValidationError) {
+			if (
+				error instanceof TrackValidationError ||
+				error instanceof ConflictError ||
+				error instanceof ReferentialIntegrityError
+			) {
 				throw error;
 			}
 			mapStorageWriteError(error);
@@ -268,12 +276,7 @@ export const tracksRepository = {
 				]);
 			}
 			if (seenIds.has(update.id)) {
-				throw new TrackValidationError(`updates[${index}].id`, [
-					createRootIssue(
-						"duplicate_id",
-						`Updates contains duplicate id: ${update.id}`,
-					),
-				]);
+				throw new ConflictError(`Updates contains duplicate id: ${update.id}`);
 			}
 			seenIds.add(update.id);
 			normalizedUpdates.push({
@@ -310,7 +313,9 @@ export const tracksRepository = {
 
 	async remove(id: string): Promise<void> {
 		if (!isNonEmptyString(id)) {
-			throw new Error("ID must be a non-empty string");
+			throw new TrackValidationError("id", [
+				createRootIssue("invalid_type", "ID must be a non-empty string"),
+			]);
 		}
 		await db.tracks.delete(id);
 	},
