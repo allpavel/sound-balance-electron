@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 export const STATUS_VALUES = [
 	"pending",
 	"processing",
@@ -28,8 +29,27 @@ export const CORRUPTION_SETTINGS_TOAST =
 	"Stored settings are corrupted and were reset to defaults.";
 export const SAVE_ERROR_TOAST = "Unable to save settings. Please try again.";
 
+/**
+ * Maximum allowed size for a single base64-encoded image payload.
+ * Enforced during schema validation before it reaches the database layer.
+ */
 export const MAX_BASE64_IMAGE_SIZE = 5 * 1024 * 1024;
+
 export const MAX_PICTURE_COUNT = 20;
+
+/**
+ * Maximum allowed size per artwork Blob (5 MB).
+ * Enforced during ingestion validation to prevent oversized binary payloads
+ * from overwhelming the IndexedDB quota.
+ */
+export const MAX_BLOB_IMAGE_SIZE = 5 * 1024 * 1024;
+
+/**
+ * Maximum total payload size per batch (50 MB).
+ * Enforced before database transactions to shift failure left, preventing
+ * the environment from rejecting the operation due to engine or quota limits.
+ */
+export const MAX_BATCH_PAYLOAD_SIZE = 50 * 1024 * 1024;
 
 export const MAX_REASON_LENGTH = 1000;
 export const MAX_PATH_LENGTH = 4096;
