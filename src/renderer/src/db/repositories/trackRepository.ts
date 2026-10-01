@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { ANYOF_CHUNK_SIZE } from "@renderer/db/constants";
 import { db } from "@renderer/db/db";
 import {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
+	assertReferentialIntegrity,
 	assertTargetCollectionId,
 	assertTrackInput,
 	chunkArray,
@@ -36,7 +38,6 @@ import { TrackValidationError } from "@shared/errors";
 import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
 import { createRootIssue } from "@shared/validators";
-import { ANYOF_CHUNK_SIZE } from "../constants";
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
@@ -113,7 +114,6 @@ export const tracksRepository = {
 				}
 			}
 		}
-		referencedCollectionIds.delete(SYSTEM_COLLECTION_ID);
 
 		try {
 			return await db.transaction(
@@ -122,31 +122,11 @@ export const tracksRepository = {
 				db.collections,
 				async (): Promise<AddManyResult> => {
 					if (referencedCollectionIds.size > 0) {
-						const idsToCheck = [...referencedCollectionIds];
-						const chunks = chunkArray(idsToCheck, ANYOF_CHUNK_SIZE);
-						const existingIds = new Set<string>();
-
-						for (const chunk of chunks) {
-							const keys = await db.collections
-								.where("id")
-								.anyOf(chunk)
-								.primaryKeys();
-							for (const key of keys) {
-								if (typeof key === "string") {
-									existingIds.add(key);
-								}
-							}
-						}
-
-						const missing = idsToCheck.filter((id) => !existingIds.has(id));
-						if (missing.length > 0) {
-							throw new TrackValidationError("collectionIds", [
-								createRootIssue(
-									"referential_integrity",
-									`Referenced collection(s) do not exist: ${missing.join(", ")}`,
-								),
-							]);
-						}
+						await assertReferentialIntegrity(
+							[...referencedCollectionIds],
+							db.collections,
+							"collectionIds",
+						);
 					}
 
 					const filePaths = parsedTracks.map((t) => t.filePath);

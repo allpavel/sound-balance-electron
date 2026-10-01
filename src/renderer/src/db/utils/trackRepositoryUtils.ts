@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { ANYOF_CHUNK_SIZE } from "@renderer/db/constants";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import type {
@@ -31,6 +32,7 @@ import {
 	safeParseTrackChanges,
 } from "@shared/validators";
 import type { EntityTable } from "dexie";
+import type { CollectionType } from "@/types";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -172,6 +174,46 @@ function assertTargetCollectionId(value: unknown): CollectionId {
 		throw new TrackValidationError("targetCollectionId", result.issues);
 	}
 	return result.data;
+}
+
+/**
+ * Verifies that all collection IDs in the provided array exist in the database.
+ *
+ * @param collectionIds - Array of collection IDs to verify.
+ * @param collectionsTable - Dexie EntityTable for collections.
+ * @param context - Error context string for validation failures.
+ * @throws {TrackValidationError} If any collection ID does not exist.
+ */
+async function assertReferentialIntegrity(
+	collectionIds: readonly string[],
+	collectionsTable: EntityTable<CollectionType, "id">,
+	context: string,
+): Promise<void> {
+	if (collectionIds.length === 0) return;
+
+	const referencedCollectionIds = new Set<string>(collectionIds);
+	const idsToCheck = [...referencedCollectionIds];
+	const chunks = chunkArray(idsToCheck, ANYOF_CHUNK_SIZE);
+	const existingIds = new Set<string>();
+
+	for (const chunk of chunks) {
+		const keys = await collectionsTable.where("id").anyOf(chunk).primaryKeys();
+		for (const key of keys) {
+			if (typeof key === "string") {
+				existingIds.add(key);
+			}
+		}
+	}
+
+	const missing = idsToCheck.filter((id) => !existingIds.has(id));
+	if (missing.length > 0) {
+		throw new TrackValidationError(context, [
+			createRootIssue(
+				"referential_integrity",
+				`Referenced collection(s) do not exist: ${missing.join(", ")}`,
+			),
+		]);
+	}
 }
 
 /**
@@ -365,6 +407,7 @@ export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
+	assertReferentialIntegrity,
 	assertTargetCollectionId,
 	assertTrackInput,
 	chunkArray,
