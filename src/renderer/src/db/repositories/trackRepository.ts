@@ -217,6 +217,17 @@ export const tracksRepository = {
 		}
 		const validated = validateTrackChanges(changes, "changes");
 		if (!("status" in validated)) {
+			const collectionIds = validated.collectionIds;
+			if (collectionIds !== undefined) {
+				return db.transaction("rw", db.tracks, db.collections, async () => {
+					await assertReferentialIntegrity(
+						collectionIds,
+						db.collections,
+						"changes.collectionIds",
+					);
+					return applyGuardedTrackUpdate(db.tracks, id, validated);
+				});
+			}
 			return db.tracks.update(id, validated);
 		}
 
@@ -271,9 +282,26 @@ export const tracksRepository = {
 			});
 		}
 
+		const needsCollectionCheck = normalizedUpdates.some(
+			(u) =>
+				"collectionIds" in u.changes && u.changes.collectionIds !== undefined,
+		);
+
+		const transactionTables = needsCollectionCheck
+			? [db.tracks, db.collections]
+			: [db.tracks];
+
 		let total = 0;
-		await db.transaction("rw", db.tracks, async () => {
-			for (const { id, changes } of normalizedUpdates) {
+		await db.transaction("rw", transactionTables, async () => {
+			for (const [index, { id, changes }] of normalizedUpdates.entries()) {
+				if ("collectionIds" in changes && changes.collectionIds !== undefined) {
+					const collectionIds = changes.collectionIds;
+					await assertReferentialIntegrity(
+						collectionIds,
+						db.collections,
+						`updates[${index}].changes.collectionIds`,
+					);
+				}
 				total += await applyGuardedTrackUpdate(db.tracks, id, changes);
 			}
 		});
