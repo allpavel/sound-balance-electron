@@ -20,7 +20,12 @@ import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetDatabase, seedCollection } from "@renderer/utils/test-utils";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { TrackValidationError } from "@shared/errors";
+import {
+	ConflictError,
+	ReferentialIntegrityError,
+	StorageCapacityError,
+	TrackValidationError,
+} from "@shared/errors";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
@@ -311,7 +316,7 @@ describe("tracksRepository", () => {
 			expect(await db.tracks.count()).toBe(0);
 		});
 
-		it("rejects duplicate filePaths with TrackValidationError", async () => {
+		it("rejects duplicate filePaths with ConflictError", async () => {
 			await expect(
 				tracksRepository.addMany(
 					[
@@ -320,7 +325,7 @@ describe("tracksRepository", () => {
 					],
 					{ targetCollectionId: SYSTEM_COLLECTION_ID },
 				),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ConflictError);
 		});
 
 		it("rejects duplicate track ids within the same batch", async () => {
@@ -329,7 +334,7 @@ describe("tracksRepository", () => {
 					makeTrack({ id: "dup", filePath: "/music/a.mp3" }),
 					makeTrack({ id: "dup", filePath: "/music/b.mp3" }),
 				]),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ConflictError);
 			expect(await db.tracks.count()).toBe(0);
 		});
 
@@ -342,10 +347,10 @@ describe("tracksRepository", () => {
 				]);
 				expect.unreachable("should have thrown");
 			} catch (err: unknown) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				if (err instanceof TrackValidationError) {
-					expect(err.context).toBe("tracks[2].id");
-					expect(err.issues.some((i) => i.code === "duplicate_id")).toBe(true);
+				expect(err).toBeInstanceOf(ConflictError);
+				if (err instanceof ConflictError) {
+					expect(err.message).toContain("tracks[2].id");
+					expect(err.message).toContain("duplicate id");
 				}
 			}
 		});
@@ -387,7 +392,7 @@ describe("tracksRepository", () => {
 				tracksRepository.addMany([makeTrack({ id: "a", collectionIds: [] })], {
 					targetCollectionId: "ghost-collection",
 				}),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ReferentialIntegrityError);
 
 			expect(await db.tracks.count()).toBe(0);
 		});
@@ -398,7 +403,7 @@ describe("tracksRepository", () => {
 					[makeTrack({ id: "a", collectionIds: ["nonexistent"] })],
 					{ targetCollectionId: SYSTEM_COLLECTION_ID },
 				),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ReferentialIntegrityError);
 
 			expect(await db.tracks.count()).toBe(0);
 		});
@@ -411,15 +416,10 @@ describe("tracksRepository", () => {
 				);
 				expect.unreachable("should have thrown");
 			} catch (err: unknown) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				if (err instanceof TrackValidationError) {
-					expect(err.context).toBe("collectionIds");
-					const issue = err.issues.find(
-						(i) => i.code === "referential_integrity",
-					);
-					expect(issue).toBeDefined();
-					expect(issue?.message).toContain("ghost-a");
-					expect(issue?.message).toContain("ghost-b");
+				expect(err).toBeInstanceOf(ReferentialIntegrityError);
+				if (err instanceof ReferentialIntegrityError) {
+					expect(err.message).toContain("ghost-a");
+					expect(err.message).toContain("ghost-b");
 				}
 			}
 		});
@@ -442,11 +442,11 @@ describe("tracksRepository", () => {
 					],
 					{ targetCollectionId: SYSTEM_COLLECTION_ID },
 				),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ReferentialIntegrityError);
 			expect(await db.tracks.count()).toBe(0);
 		});
 
-		it("maps QuotaExceededError to a domain TrackValidationError", async () => {
+		it("maps QuotaExceededError to a domain StorageCapacityError", async () => {
 			const quotaError = new DOMException(
 				"Storage quota exceeded",
 				"QuotaExceededError",
@@ -456,12 +456,7 @@ describe("tracksRepository", () => {
 				await tracksRepository.addMany([makeTrack({ id: "wrap-test" })]);
 				expect.unreachable("should have thrown");
 			} catch (err: unknown) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				if (err instanceof TrackValidationError) {
-					expect(err.issues.some((i) => i.code === "quota_exceeded")).toBe(
-						true,
-					);
-				}
+				expect(err).toBeInstanceOf(StorageCapacityError);
 			}
 		});
 
@@ -474,7 +469,7 @@ describe("tracksRepository", () => {
 			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(bulkError);
 			await expect(
 				tracksRepository.addMany([makeTrack({ id: "c" })]),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ConflictError);
 		});
 
 		it("re-throws TrackValidationError without double-wrapping", async () => {
@@ -509,7 +504,7 @@ describe("tracksRepository", () => {
 					makeTrack({ id: "a", filePath: "/music/dup.mp3" }),
 					makeTrack({ id: "b", filePath: "/music/dup.mp3" }),
 				]),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ConflictError);
 		});
 
 		it("DB filePath collision is a merge (user re-add), not a rejection", async () => {
@@ -563,6 +558,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("normalizes collectionIds changes and removes duplicate system collection ids", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "t1",
@@ -579,6 +575,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("adds the system collection id when collectionIds changes omit it", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "t1",
@@ -707,6 +704,8 @@ describe("tracksRepository", () => {
 		});
 
 		it("normalizes collectionIds changes and removes duplicate system collection ids", async () => {
+			await seedCollection("mix1");
+			await seedCollection("mix2");
 			await db.tracks.bulkAdd([
 				makeTrack({
 					id: "t1",
@@ -822,13 +821,13 @@ describe("tracksRepository", () => {
 			).rejects.toThrow(TrackValidationError);
 		});
 
-		it("rejects duplicate IDs in updateMany with TrackValidationError", async () => {
+		it("rejects duplicate IDs in updateMany with ConflictError", async () => {
 			await expect(
 				tracksRepository.updateMany([
 					{ id: "t1", changes: { selected: 1 } },
 					{ id: "t1", changes: { selected: 0 } },
 				]),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ConflictError);
 		});
 	});
 
