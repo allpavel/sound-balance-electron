@@ -16,9 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ANYOF_CHUNK_SIZE } from "@renderer/db/constants";
+import { ANYOF_CHUNK_SIZE, MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { TrackValidationError } from "@shared/errors";
+import {
+	ConflictError,
+	ReferentialIntegrityError,
+	StorageCapacityError,
+	StorageUnavailableError,
+	TrackValidationError,
+} from "@shared/errors";
 import type {
 	CollectionId,
 	Metadata,
@@ -26,7 +32,6 @@ import type {
 } from "@shared/schemas/track.schema";
 import { isLegalStatusTransition } from "@shared/utils";
 import {
-	createRootIssue,
 	safeParseTargetCollectionId,
 	safeParseTrack,
 	safeParseTrackChanges,
@@ -68,13 +73,35 @@ function chunkArray<T>(source: readonly T[], size: number): T[][] {
 }
 
 /**
+ * Type guard to safely extract `name` and `message` from unknown error shapes.
+ */
+function isErrorWithName(
+	error: unknown,
+): error is { name: string; message: string } {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"name" in error &&
+		typeof (error as Record<string, unknown>).name === "string"
+	);
+}
+
+/**
  * Discriminates raw IndexedDB / Dexie errors into typed domain errors.
  *
  * @param error - The caught unknown error value.
- * @throws {TrackValidationError} A domain-specific, user-presentable error.
+ * @throws {@link TrackValidationError} A domain-specific, user-presentable error.
  * @throws {Error} Re-throws if the error is not a known storage failure.
  */
 function mapStorageWriteError(error: unknown): never {
+	if (
+		error instanceof TrackValidationError ||
+		error instanceof ConflictError ||
+		error instanceof ReferentialIntegrityError
+	) {
+		throw error;
+	}
+
 	if (
 		typeof error === "object" &&
 		error !== null &&
@@ -84,24 +111,33 @@ function mapStorageWriteError(error: unknown): never {
 	) {
 		mapStorageWriteError(error.inner);
 	}
-	if (error instanceof DOMException) {
+
+	if (isErrorWithName(error)) {
 		if (error.name === "QuotaExceededError") {
-			throw new TrackValidationError("storage", [
-				createRootIssue(
-					"quota_exceeded",
-					"Storage quota exceeded. Free disk space or reduce embedded artwork size, then retry.",
-				),
-			]);
+			throw new StorageCapacityError(
+				"Storage quota exceeded. Free disk space or reduce embedded artwork size, then retry.",
+			);
 		}
 		if (error.name === "ConstraintError") {
-			throw new TrackValidationError("id", [
-				createRootIssue(
-					"duplicate_id",
-					"A track with the same primary key already exists in the database.",
-				),
-			]);
+			throw new ConflictError(
+				"A track with the same primary key or unique filePath already exists in the database.",
+			);
+		}
+		if (
+			[
+				"InvalidStateError",
+				"AbortError",
+				"UnknownError",
+				"VersionError",
+				"NotFoundError",
+			].includes(error.name)
+		) {
+			throw new StorageUnavailableError(
+				`Database operation failed: ${error.message || error.name}`,
+			);
 		}
 	}
+
 	if (
 		typeof error === "object" &&
 		error !== null &&
@@ -109,17 +145,32 @@ function mapStorageWriteError(error: unknown): never {
 		Array.isArray((error as Record<string, unknown>).failures)
 	) {
 		const failures: unknown[] = (error as { failures: unknown[] }).failures;
-		const constraintHit = failures.find(
-			(f): f is DOMException =>
-				f instanceof DOMException && f.name === "ConstraintError",
-		);
-		if (constraintHit) {
-			throw new TrackValidationError("id", [
-				createRootIssue(
-					"duplicate_id",
-					"One or more tracks collide with existing primary keys or unique filePaths.",
-				),
-			]);
+		for (const f of failures) {
+			if (isErrorWithName(f)) {
+				if (f.name === "QuotaExceededError") {
+					throw new StorageCapacityError(
+						"Storage quota exceeded during batch operation.",
+					);
+				}
+				if (f.name === "ConstraintError") {
+					throw new ConflictError(
+						"One or more tracks collide with existing primary keys or unique filePaths.",
+					);
+				}
+				if (
+					[
+						"InvalidStateError",
+						"AbortError",
+						"UnknownError",
+						"VersionError",
+						"NotFoundError",
+					].includes(f.name)
+				) {
+					throw new StorageUnavailableError(
+						`Database batch operation failed: ${f.message || f.name}`,
+					);
+				}
+			}
 		}
 	}
 	throw error;
@@ -128,13 +179,9 @@ function mapStorageWriteError(error: unknown): never {
 /**
  * Asserts that a derived key is unique across a batch of items.
  *
- * Throws a {@link TrackValidationError} at the first duplicate occurrence,
- * pinpointing the exact index and field.
- *
  * @param items     – The batch to inspect.
  * @param getKey    – Pure extractor returning the uniqueness key for an item.
  * @param fieldPath – Template for the error context, e.g. `"tracks[{i}].filePath"`.
- * @param errorCode – Machine-readable issue code, e.g. `"duplicate_file_path"`.
  * @param label     – Human-readable noun for the message, e.g. `"filePath"`.
  *
  * @throws {TrackValidationError} On the first duplicate detected.
@@ -143,19 +190,15 @@ function assertBatchUniqueness<T>(
 	items: readonly T[],
 	getKey: (item: T) => string,
 	fieldPath: (index: number) => string,
-	errorCode: string,
 	label: string,
 ): void {
 	const seen = new Set<string>();
 	for (const [index, item] of items.entries()) {
 		const key = getKey(item);
 		if (seen.has(key)) {
-			throw new TrackValidationError(fieldPath(index), [
-				createRootIssue(
-					errorCode,
-					`Batch contains duplicate ${label}: "${key}" at index ${index}`,
-				),
-			]);
+			throw new ConflictError(
+				`Batch contains duplicate ${label}: "${key}" at ${fieldPath(index)}`,
+			);
 		}
 		seen.add(key);
 	}
@@ -182,7 +225,7 @@ function assertTargetCollectionId(value: unknown): CollectionId {
  * @param collectionIds - Array of collection IDs to verify.
  * @param collectionsTable - Dexie EntityTable for collections.
  * @param context - Error context string for validation failures.
- * @throws {TrackValidationError} If any collection ID does not exist.
+ * @throws {ReferentialIntegrityError} If any collection ID does not exist.
  */
 async function assertReferentialIntegrity(
 	collectionIds: readonly string[],
@@ -207,12 +250,14 @@ async function assertReferentialIntegrity(
 
 	const missing = idsToCheck.filter((id) => !existingIds.has(id));
 	if (missing.length > 0) {
-		throw new TrackValidationError(context, [
-			createRootIssue(
-				"referential_integrity",
-				`Referenced collection(s) do not exist: ${missing.join(", ")}`,
-			),
-		]);
+		const display = missing.slice(0, MAX_DISPLAY_MISSING).join(", ");
+		const suffix =
+			missing.length > MAX_DISPLAY_MISSING
+				? ` (and ${missing.length - MAX_DISPLAY_MISSING} more)`
+				: "";
+		throw new ReferentialIntegrityError(
+			`${context}: Referenced collection(s) do not exist: ${display}${suffix}`,
+		);
 	}
 }
 
@@ -411,6 +456,7 @@ export {
 	assertTargetCollectionId,
 	assertTrackInput,
 	chunkArray,
+	isErrorWithName,
 	isNonEmptyString,
 	isPlainObject,
 	mapStorageWriteError,
