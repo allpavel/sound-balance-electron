@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import {
-	MAX_BASE64_IMAGE_SIZE,
+	MAX_BLOB_IMAGE_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
@@ -62,19 +62,24 @@ export const statusSchema = z.enum(STATUS_VALUES, {
 	error: `Must be one of: ${STATUS_VALUES.join(", ")}`,
 });
 export const eventSeqSchema = z.number().int().min(1).optional();
+
 export const pictureSchema = z
 	.object({
 		format: z.string().min(1).max(50),
 		data: z
-			.string()
-			.max(
-				MAX_BASE64_IMAGE_SIZE,
-				"Album art exceeds maximum allowed size (5MB)",
+			.instanceof(Blob)
+			.or(z.instanceof(Uint8Array))
+			.refine(
+				(val) =>
+					(val instanceof Blob ? val.size : val.byteLength) <=
+					MAX_BLOB_IMAGE_SIZE,
+				`Album art exceeds maximum allowed size (${MAX_BLOB_IMAGE_SIZE / 1024 / 1024}MB)`,
 			),
 		description: z.string().max(500).optional(),
 		name: z.string().max(255).optional(),
 	})
 	.strict();
+
 const trackInfoSchema = z
 	.object({
 		id: z.number().int().optional(),
@@ -96,7 +101,7 @@ const chapterSchema = z
 	})
 	.strict();
 
-const commonSchema = z
+const baseCommonSchema = z
 	.object({
 		artist: z.string().optional(),
 		title: z.string().optional(),
@@ -108,7 +113,6 @@ const commonSchema = z
 		disk: z
 			.object({ no: z.number().nullable(), of: z.number().nullable() })
 			.optional(),
-		picture: z.array(pictureSchema).max(MAX_PICTURE_COUNT).optional(),
 		genre: z.array(z.string()).optional(),
 		composer: z.array(z.string()).optional(),
 		artists: z.array(z.string()).optional(),
@@ -322,6 +326,24 @@ const commonSchema = z
 	})
 	.strict();
 
+/**
+ * Schema for the `common` metadata fields during ingestion (IPC boundary).
+ * Accepts raw binary artwork (`Blob` or `Uint8Array`) and enforces payload
+ * size limits before the data reaches the database layer.
+ */
+const ingestionCommonSchema = baseCommonSchema.extend({
+	picture: z.array(pictureSchema).max(MAX_PICTURE_COUNT).optional(),
+});
+
+/**
+ * Schema for the `common` metadata fields at the storage boundary (IndexedDB).
+ * Artwork is represented as an array of string UUIDs referencing the separate
+ * `artworks` table, preventing quota bloat and improving query performance.
+ */
+const storedCommonSchema = baseCommonSchema.extend({
+	picture: z.array(z.string()).max(MAX_PICTURE_COUNT).optional(),
+});
+
 const formatSchema = z
 	.object({
 		duration: z.number().min(0).max(1000000).optional(),
@@ -348,6 +370,12 @@ const formatSchema = z
 	})
 	.strict();
 
+/**
+ * Base schema containing track fields that are identical across both
+ * ingestion (IPC) and storage (IndexedDB) boundaries.
+ * Excludes `common` and `status`, which are composed later to prevent
+ * type duplication.
+ */
 const trackBaseSchema = z
 	.object({
 		id: nonEmptyStringSchema,
@@ -356,20 +384,59 @@ const trackBaseSchema = z
 		selected: selectedSchema,
 		collectionIds: collectionIdsSchema,
 		statusSeq: eventSeqSchema,
-		common: commonSchema.default({}),
 		format: formatSchema.default({}),
 	})
 	.strip();
 
+/**
+ * Validation schema for untrusted track payloads entering the Renderer process
+ * via IPC. Enforces ingestion constraints, including raw binary artwork validation.
+ */
 export const trackInputSchema = z.discriminatedUnion("status", [
-	trackBaseSchema.extend({ status: z.literal("pending") }),
-	trackBaseSchema.extend({ status: z.literal("processing") }),
-	trackBaseSchema.extend({ status: z.literal("completed") }),
+	trackBaseSchema.extend({
+		status: z.literal("pending"),
+		common: ingestionCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("processing"),
+		common: ingestionCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("completed"),
+		common: ingestionCommonSchema.default({}),
+	}),
 	trackBaseSchema.extend({
 		status: z.literal("failed"),
 		reason: reasonSchema,
+		common: ingestionCommonSchema.default({}),
 	}),
 ]);
+
+/**
+ * Validation schema for tracks being persisted to or read from IndexedDB.
+ * Enforces storage constraints, verifying that artwork references are stored
+ * as string UUIDs pointing to the `artworks` table.
+ */
+export const storedTrackSchema = z.discriminatedUnion("status", [
+	trackBaseSchema.extend({
+		status: z.literal("pending"),
+		common: storedCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("processing"),
+		common: storedCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("completed"),
+		common: storedCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("failed"),
+		reason: reasonSchema,
+		common: storedCommonSchema.default({}),
+	}),
+]);
+
 export const tracksArraySchema = z.array(trackInputSchema);
 
 const trackChangesFieldsSchema = z
@@ -415,11 +482,14 @@ export const trackChangesSchema = z.union([
 	trackChangesStatusSchema,
 ]);
 
-type TrackInput = z.infer<typeof trackInputSchema>;
+type InputTrack = z.infer<typeof trackInputSchema>;
+
+type StoredTrack = z.infer<typeof storedTrackSchema>;
+
+export type IngestionMetadata = InputTrack;
+export type Metadata = StoredTrack;
 
 export type Picture = z.infer<typeof pictureSchema>;
-
-export type Metadata = TrackInput;
 
 export type TrackChanges = z.infer<typeof trackChangesSchema>;
 
