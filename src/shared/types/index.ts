@@ -30,3 +30,20 @@ export type AddManyResult = {
 	merged: string[];
 	skipped: string[];
 };
+
+/**
+ * Represents an album artwork image stored in the dedicated `artworks` table.
+ *
+ * @property id          - UUID v7 primary key.
+ * @property blob        - The binary image data (stored efficiently as a Blob).
+ * @property format      - MIME type of the image (e.g., "image/jpeg").
+ * @property description - Optional descriptive text.
+ * @property name        - Optional filename or identifier.
+ */
+export type Artwork = {
+	id: string;
+	blob: Blob;
+	format: string;
+	description?: string;
+	name?: string;
+};
