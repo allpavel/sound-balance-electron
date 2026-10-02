@@ -23,7 +23,7 @@ import {
 } from "@shared/schemas/settings.schema";
 import {
 	type CollectionId,
-	type Metadata,
+	type IngestionMetadata,
 	type TrackChanges,
 	targetCollectionIdSchema,
 	trackChangesSchema,
@@ -58,8 +58,8 @@ export type ValidationResult<T> =
 	| { success: false; issues: readonly ValidationIssue[] };
 
 export type SettingsParseResult = ValidationResult<SettingsForm>;
-export type TrackParseResult = ValidationResult<Metadata>;
-export type TracksParseResult = ValidationResult<Metadata[]>;
+export type TrackParseResult = ValidationResult<IngestionMetadata>;
+export type TracksParseResult = ValidationResult<IngestionMetadata[]>;
 export type DataParseResult = ValidationResult<Data>;
 export type TrackChangesParseResult = ValidationResult<TrackChanges>;
 export type CollectionIdParseResult = ValidationResult<CollectionId>;
