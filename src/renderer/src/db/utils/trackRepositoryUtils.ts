@@ -17,9 +17,13 @@
  */
 
 import { ANYOF_CHUNK_SIZE, MAX_DISPLAY_MISSING } from "@renderer/db/constants";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import {
+	MAX_BATCH_PAYLOAD_SIZE,
+	SYSTEM_COLLECTION_ID,
+} from "@shared/constants";
 import {
 	ConflictError,
+	PayloadLimitExceededError,
 	ReferentialIntegrityError,
 	StorageCapacityError,
 	StorageUnavailableError,
@@ -27,6 +31,7 @@ import {
 } from "@shared/errors";
 import type {
 	CollectionId,
+	IngestionMetadata,
 	Metadata,
 	TrackChanges,
 } from "@shared/schemas/track.schema";
@@ -271,7 +276,7 @@ async function assertReferentialIntegrity(
  * @throws {TrackValidationError} When validation fails. Carries the full
  *         structured issue list — no issues are discarded.
  */
-function assertTrackInput(track: unknown, index: number): Metadata {
+function assertTrackInput(track: unknown, index: number): IngestionMetadata {
 	const context = `tracks[${index}]`;
 	const result = safeParseTrack(track);
 	if (!result.success) {
@@ -448,13 +453,49 @@ async function applyGuardedTrackUpdate(
 	return await tracksTable.update(id, patch);
 }
 
+/**
+ * Calculates the total estimated payload size of a batch by summing artwork Blob/Uint8Array sizes.
+ * @param tracks - The parsed ingestion metadata array.
+ * @returns Total size in bytes.
+ */
+function calculateBatchPayloadSize(tracks: IngestionMetadata[]): number {
+	let size = 0;
+	for (const track of tracks) {
+		if (track.common?.picture) {
+			for (const pic of track.common.picture) {
+				if (pic.data instanceof Blob) {
+					size += pic.data.size;
+				} else if (pic.data instanceof Uint8Array) {
+					size += pic.data.byteLength;
+				}
+			}
+		}
+	}
+	return size;
+}
+
+/**
+ * Asserts that the batch payload size does not exceed the maximum allowed limit.
+ * @param size - Total size in bytes.
+ * @throws {PayloadLimitExceededError} If size exceeds `MAX_BATCH_PAYLOAD_SIZE`.
+ */
+function assertBatchPayloadSize(size: number): void {
+	if (size > MAX_BATCH_PAYLOAD_SIZE) {
+		throw new PayloadLimitExceededError(
+			`Batch payload size ${size} exceeds maximum allowed ${MAX_BATCH_PAYLOAD_SIZE}`,
+		);
+	}
+}
+
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
+	assertBatchPayloadSize,
 	assertBatchUniqueness,
 	assertReferentialIntegrity,
 	assertTargetCollectionId,
 	assertTrackInput,
+	calculateBatchPayloadSize,
 	chunkArray,
 	isErrorWithName,
 	isNonEmptyString,

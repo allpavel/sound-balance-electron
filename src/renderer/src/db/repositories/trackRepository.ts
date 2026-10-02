@@ -18,13 +18,16 @@
 
 import { ANYOF_CHUNK_SIZE } from "@renderer/db/constants";
 import { db } from "@renderer/db/db";
+import { checkStorageHeadroom } from "@renderer/db/utils/dbUtils";
 import {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
+	assertBatchPayloadSize,
 	assertBatchUniqueness,
 	assertReferentialIntegrity,
 	assertTargetCollectionId,
 	assertTrackInput,
+	calculateBatchPayloadSize,
 	chunkArray,
 	isNonEmptyString,
 	isPlainObject,
@@ -39,9 +42,14 @@ import {
 	ReferentialIntegrityError,
 	TrackValidationError,
 } from "@shared/errors";
-import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
-import type { AddManyResult } from "@shared/types";
+import type {
+	IngestionMetadata,
+	Metadata,
+	TrackChanges,
+} from "@shared/schemas/track.schema";
+import type { AddManyResult, Artwork } from "@shared/types";
 import { createRootIssue } from "@shared/validators";
+import { v7 as uuidV7 } from "uuid";
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
@@ -70,6 +78,7 @@ export const tracksRepository = {
 	 * @throws {ConflictError} On uniqueness conflict.
 	 * @throws {ReferentialIntegrityError} On missing collection reference.
 	 * @throws {StorageCapacityError} On storage exhaustion.
+	 * @throws {PayloadLimitExceededError} If batch payload exceeds size cap.
 	 */
 	async addMany(
 		tracks: Metadata[],
@@ -86,12 +95,16 @@ export const tracksRepository = {
 			return { added: [], merged: [], skipped: [] };
 		}
 
-		const parsedTracks: Metadata[] = [];
+		const parsedTracks: IngestionMetadata[] = [];
 
 		for (const [index, track] of tracks.entries()) {
 			const parsedTrack = assertTrackInput(track, index);
 			parsedTracks.push(parsedTrack);
 		}
+
+		const payloadSize = calculateBatchPayloadSize(parsedTracks);
+		assertBatchPayloadSize(payloadSize);
+		await checkStorageHeadroom(payloadSize);
 
 		assertBatchUniqueness(
 			parsedTracks,
@@ -153,8 +166,36 @@ export const tracksRepository = {
 					const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
 					const mergedIds: string[] = [];
 					const skippedIds: string[] = [];
+					const artworksToSave: Artwork[] = [];
 
 					for (const track of parsedTracks) {
+						const pictureIds: string[] = [];
+						if (track.common?.picture) {
+							for (const pic of track.common.picture) {
+								const blob =
+									pic.data instanceof Uint8Array
+										? new Blob([pic.data], { type: pic.format })
+										: pic.data;
+								const id = uuidV7();
+								artworksToSave.push({
+									id,
+									blob,
+									format: pic.format,
+									description: pic.description,
+									name: pic.name,
+								});
+								pictureIds.push(id);
+							}
+						}
+
+						const storedTrack: Metadata = {
+							...track,
+							common: {
+								...track.common,
+								picture: pictureIds,
+							},
+						};
+
 						const existingRow = existingByFilePath.get(track.filePath);
 
 						if (existingRow) {
@@ -178,13 +219,10 @@ export const tracksRepository = {
 								mergedIds.push(existingRow.id);
 							}
 						} else {
-							toAdd.push({
-								...track,
-								collectionIds: normalizeCollectionIds(
-									track.collectionIds,
-									targetCollectionId,
-								),
-							});
+							toAdd.push(storedTrack);
+						}
+						if (artworksToSave.length > 0) {
+							await db.artworks.bulkAdd(artworksToSave);
 						}
 					}
 					const addedIds: string[] = [];
