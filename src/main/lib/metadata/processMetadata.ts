@@ -1,4 +1,4 @@
-2; /*
+/*
  * sound-balance-electron
  * Copyright (C) 2026 Pavel Alloyarov
  *
@@ -16,8 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { processAlbumCover } from "@main/lib/metadata/processAlbumCover";
-import type { Metadata } from "@shared/schemas/track.schema";
+import type { IngestionMetadata } from "@shared/schemas/track.schema";
 import type { IAudioMetadata } from "music-metadata";
 import { v7 as uuid } from "uuid";
 import { sanitizePictures } from "./pictureProcessingUtils";
@@ -25,13 +24,12 @@ import { sanitizePictures } from "./pictureProcessingUtils";
 export const processMetadata = async (
 	filePath: string,
 	parser: (filePath: string) => Promise<IAudioMetadata>,
-): Promise<Metadata> => {
+): Promise<IngestionMetadata> => {
 	try {
 		const data = await parser(filePath);
 		const id = uuid();
 		const fileName = filePath.split(/[\\/]/).at(-1) ?? "";
 		const status = "pending";
-		const processedData = processAlbumCover(data);
 		const selected = 0;
 		const collectionIds = [];
 		return {
@@ -42,13 +40,13 @@ export const processMetadata = async (
 			selected,
 			collectionIds,
 			common: {
-				...processedData.common,
-				picture: sanitizePictures(processedData.common.picture),
+				...data.common,
+				picture: sanitizePictures(data.common.picture),
 			},
 			format: {
-				...processedData.format,
+				...data.format,
 			},
-		} satisfies Metadata;
+		} satisfies IngestionMetadata;
 	} catch (e) {
 		throw new Error(
 			`Metadata parsing failed for ${filePath}: ${e instanceof Error ? e : "Unknown error"}`,
