@@ -16,47 +16,82 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { MAX_BASE64_IMAGE_SIZE, MAX_PICTURE_COUNT } from "@shared/constants";
+import { MAX_BLOB_IMAGE_SIZE, MAX_PICTURE_COUNT } from "@shared/constants";
 import { type Picture, pictureSchema } from "@shared/schemas/track.schema";
 
-export const isUint8Array = (value: unknown): value is Uint8Array =>
-	value instanceof Uint8Array ||
-	(typeof value === "object" &&
+/**
+ * Type guard to safely check if an unknown value is a record (object)
+ * that might contain raw picture data from a metadata parser.
+ */
+function isRecordWithStringData(
+	value: unknown,
+): value is { data: string; [key: string]: unknown } {
+	return (
+		typeof value === "object" &&
 		value !== null &&
-		Symbol.toStringTag in value &&
-		value[Symbol.toStringTag] === "Uint8Array");
+		"data" in value &&
+		typeof value.data === "string"
+	);
+}
 
-export const toBase64 = (data: Uint8Array): string =>
-	Buffer.from(data).toString("base64");
+/**
+ * Type guard to safely check if an unknown value is a record
+ * that contains binary picture data (Uint8Array or Blob).
+ */
+function isRecordWithBinaryData(
+	value: unknown,
+): value is { data: Uint8Array | Blob; [key: string]: unknown } {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"data" in value &&
+		(value.data instanceof Uint8Array || value.data instanceof Blob)
+	);
+}
 
+/**
+ * Sanitizes untrusted picture data from metadata parsers.
+ * Converts legacy base64 strings to Uint8Array to comply with the ingestion schema,
+ * enforces size limits, and validates the final structure via Zod.
+ *
+ * @param pictures - Untrusted array of picture objects from `music-metadata`.
+ * @param maxCount - Maximum number of pictures to keep.
+ * @param maxSize - Maximum allowed byte size per picture.
+ * @returns An array of validated `Picture` objects, or `undefined` if none are valid.
+ */
 export function sanitizePictures(
-	pictures: Picture[] | undefined,
+	pictures: unknown[] | undefined,
 	maxCount: number = MAX_PICTURE_COUNT,
-	maxBase64Size: number = MAX_BASE64_IMAGE_SIZE,
+	maxSize: number = MAX_BLOB_IMAGE_SIZE,
 ): Picture[] | undefined {
-	if (!pictures || pictures.length === 0) {
+	if (!Array.isArray(pictures) || pictures.length === 0) {
 		return undefined;
 	}
 	const upperBound = Math.min(pictures.length, maxCount);
 	const result: Picture[] = [];
 
 	for (let i = 0; i < upperBound; i++) {
-		const pic = pictures[i];
+		const rawPic = pictures[i];
+		let data: Uint8Array | Blob | undefined;
 
-		const data: string =
-			typeof pic.data === "string"
-				? pic.data
-				: toBase64(pic.data as Uint8Array);
+		if (isRecordWithStringData(rawPic)) {
+			data = new Uint8Array(Buffer.from(rawPic.data, "base64"));
+		} else if (isRecordWithBinaryData(rawPic)) {
+			data = rawPic.data;
+		} else {
+			continue;
+		}
 
-		if (data.length > maxBase64Size) {
+		const size = data instanceof Blob ? data.size : data.byteLength;
+		if (size > maxSize) {
 			continue;
 		}
 
 		const parsed = pictureSchema.safeParse({
-			format: pic.format,
+			format: (rawPic as Record<string, unknown>)?.format,
 			data,
-			description: pic.description,
-			name: pic.name,
+			description: (rawPic as Record<string, unknown>)?.description,
+			name: (rawPic as Record<string, unknown>)?.name,
 		});
 
 		if (parsed.success) {
