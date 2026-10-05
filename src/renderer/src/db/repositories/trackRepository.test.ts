@@ -27,7 +27,7 @@ import {
 	TrackValidationError,
 } from "@shared/errors";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
-import type { AddManyResult } from "@shared/types";
+import type { AddManyProgress, AddManyResult } from "@shared/types";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeTrack } from "@tests/factories";
 
@@ -529,6 +529,71 @@ describe("tracksRepository", () => {
 			expect(result.added).toEqual([]);
 			expect(result.merged).toEqual(["existing"]);
 			expect(await db.tracks.count()).toBe(1);
+		});
+	});
+
+	describe("addMany - batch processing and progress (PERF-3/4)", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+		});
+
+		it("invokes onProgress callback with cumulative counts after each batch (PERF-4)", async () => {
+			const TRACK_COUNT = 1200;
+			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+
+			const progressCalls: AddManyProgress[] = [];
+			const onProgress = (progress: AddManyProgress) => {
+				progressCalls.push(progress);
+			};
+
+			await tracksRepository.addMany(bigBatch, { onProgress });
+
+			// Default batch size is 500. 1200 / 500 = 2 full batches, 1 partial (200).
+			expect(progressCalls).toHaveLength(3);
+
+			// Check first batch
+			expect(progressCalls[0]).toEqual({
+				processed: 500,
+				total: 1200,
+				added: 500,
+				merged: 0,
+				skipped: 0,
+			});
+
+			expect(progressCalls[2]).toEqual({
+				processed: 1200,
+				total: 1200,
+				added: 1200,
+				merged: 0,
+				skipped: 0,
+			});
+		});
+
+		it("respects custom batchSize option for chunking (PERF-3)", async () => {
+			const tracks: Metadata[] = Array.from({ length: 10 }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+
+			const progressCalls: AddManyProgress[] = [];
+			await tracksRepository.addMany(tracks, {
+				batchSize: 4,
+				onProgress: (p) => progressCalls.push(p),
+			});
+
+			expect(progressCalls).toHaveLength(3);
+			expect(progressCalls[0]?.processed).toBe(4);
+			expect(progressCalls[1]?.processed).toBe(8);
+			expect(progressCalls[2]?.processed).toBe(10);
+
+			expect(await db.tracks.count()).toBe(10);
+		});
+
+		it("does not invoke onProgress if the input array is empty", async () => {
+			const onProgress = vi.fn();
+			await tracksRepository.addMany([], { onProgress });
+			expect(onProgress).not.toHaveBeenCalled();
 		});
 	});
 

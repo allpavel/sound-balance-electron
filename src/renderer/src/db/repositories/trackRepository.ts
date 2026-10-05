@@ -16,12 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ANYOF_CHUNK_SIZE } from "@renderer/db/constants";
 import { db } from "@renderer/db/db";
+import type { AddManyOptions } from "@renderer/db/types";
 import { checkStorageHeadroom } from "@renderer/db/utils/dbUtils";
 import {
 	applyGuardedTrackUpdate,
-	areCollectionIdsEqual,
 	assertBatchPayloadSize,
 	assertBatchUniqueness,
 	assertReferentialIntegrity,
@@ -32,11 +31,11 @@ import {
 	isNonEmptyString,
 	isPlainObject,
 	mapStorageWriteError,
-	normalizeCollectionIds,
+	processBatch,
 	uniqueTracks,
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import {
 	ConflictError,
 	ReferentialIntegrityError,
@@ -47,9 +46,8 @@ import type {
 	Metadata,
 	TrackChanges,
 } from "@shared/schemas/track.schema";
-import type { AddManyResult, Artwork } from "@shared/types";
+import type { AddManyResult } from "@shared/types";
 import { createRootIssue } from "@shared/validators";
-import { v7 as uuidV7 } from "uuid";
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
@@ -82,8 +80,14 @@ export const tracksRepository = {
 	 */
 	async addMany(
 		tracks: Metadata[],
-		{ targetCollectionId: rawId = SYSTEM_COLLECTION_ID } = {},
+		options: AddManyOptions = {},
 	): Promise<AddManyResult> {
+		const {
+			targetCollectionId: rawId = SYSTEM_COLLECTION_ID,
+			onProgress,
+			batchSize = IMPORT_BATCH_SIZE,
+		} = options;
+
 		const targetCollectionId = assertTargetCollectionId(rawId);
 
 		if (!Array.isArray(tracks)) {
@@ -132,121 +136,47 @@ export const tracksRepository = {
 			}
 		}
 
-		try {
-			return await db.transaction(
-				"rw",
-				db.tracks,
+		if (referencedCollectionIds.size > 0) {
+			await assertReferentialIntegrity(
+				[...referencedCollectionIds],
 				db.collections,
-				async (): Promise<AddManyResult> => {
-					if (referencedCollectionIds.size > 0) {
-						await assertReferentialIntegrity(
-							[...referencedCollectionIds],
-							db.collections,
-							"collectionIds",
-						);
-					}
-
-					const filePaths = parsedTracks.map((t) => t.filePath);
-					const filePathChunks = chunkArray(filePaths, ANYOF_CHUNK_SIZE);
-					const existingByFilePath = new Map<string, Metadata>();
-
-					for (const chunk of filePathChunks) {
-						const rows = await db.tracks
-							.where("filePath")
-							.anyOf(chunk)
-							.toArray();
-						for (const row of rows) {
-							if (isNonEmptyString(row.filePath)) {
-								existingByFilePath.set(row.filePath, row);
-							}
-						}
-					}
-
-					const toAdd: Metadata[] = [];
-					const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
-					const mergedIds: string[] = [];
-					const skippedIds: string[] = [];
-					const artworksToSave: Artwork[] = [];
-
-					for (const track of parsedTracks) {
-						const pictureIds: string[] = [];
-						if (track.common?.picture) {
-							for (const pic of track.common.picture) {
-								const blob =
-									pic.data instanceof Uint8Array
-										? new Blob([pic.data], { type: pic.format })
-										: pic.data;
-								const id = uuidV7();
-								artworksToSave.push({
-									id,
-									blob,
-									format: pic.format,
-									description: pic.description,
-									name: pic.name,
-								});
-								pictureIds.push(id);
-							}
-						}
-
-						const storedTrack: Metadata = {
-							...track,
-							common: {
-								...track.common,
-								picture: pictureIds,
-							},
-							collectionIds: normalizeCollectionIds(
-								track.collectionIds,
-								targetCollectionId,
-							),
-						};
-
-						const existingRow = existingByFilePath.get(track.filePath);
-
-						if (existingRow) {
-							const nextCollectionIds = normalizeCollectionIds(
-								existingRow.collectionIds,
-								targetCollectionId,
-							);
-
-							if (
-								areCollectionIdsEqual(
-									existingRow.collectionIds,
-									nextCollectionIds,
-								)
-							) {
-								skippedIds.push(existingRow.id);
-							} else {
-								toUpdate.push({
-									key: existingRow.id,
-									changes: { collectionIds: nextCollectionIds },
-								});
-								mergedIds.push(existingRow.id);
-							}
-						} else {
-							toAdd.push(storedTrack);
-						}
-						if (artworksToSave.length > 0) {
-							await db.artworks.bulkAdd(artworksToSave);
-						}
-					}
-					const addedIds: string[] = [];
-
-					if (toAdd.length > 0) {
-						const rawKeys = await db.tracks.bulkAdd(toAdd, { allKeys: true });
-						if (Array.isArray(rawKeys)) {
-							for (const key of rawKeys) {
-								if (typeof key === "string") {
-									addedIds.push(key);
-								}
-							}
-						}
-					}
-					if (toUpdate.length > 0) {
-						await db.tracks.bulkUpdate(toUpdate);
-					}
-					return { added: addedIds, merged: mergedIds, skipped: skippedIds };
-				},
+				"collectionIds",
 			);
+		}
+
+		const effectiveBatchSize = Math.max(1, batchSize);
+		const batches = chunkArray(parsedTracks, effectiveBatchSize);
+		const allAdded: string[] = [];
+		const allMerged: string[] = [];
+		const allSkipped: string[] = [];
+		let processed = 0;
+		const total = parsedTracks.length;
+
+		try {
+			for (const batch of batches) {
+				const batchResult = await processBatch(batch, targetCollectionId, db);
+
+				allAdded.push(...batchResult.added);
+				allMerged.push(...batchResult.merged);
+				allSkipped.push(...batchResult.skipped);
+				processed += batch.length;
+
+				if (onProgress) {
+					onProgress({
+						processed,
+						total,
+						added: allAdded.length,
+						merged: allMerged.length,
+						skipped: allSkipped.length,
+					});
+				}
+			}
+
+			return {
+				added: allAdded,
+				merged: allMerged,
+				skipped: allSkipped,
+			};
 		} catch (error: unknown) {
 			if (
 				error instanceof TrackValidationError ||
