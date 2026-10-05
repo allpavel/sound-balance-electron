@@ -16,9 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { db } from "@renderer/db/db";
+import { resetDatabase } from "@renderer/utils/test-utils";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
-import type { Metadata } from "@shared/schemas/track.schema";
+import {
+	type IngestionMetadata,
+	type Metadata,
+	trackInputSchema,
+} from "@shared/schemas/track.schema";
+import type { AddManyResult } from "@shared/types";
 import { makeTrack } from "@tests/factories";
 import type { EntityTable } from "dexie";
 import {
@@ -26,8 +33,10 @@ import {
 	areCollectionIdsEqual,
 	assertTargetCollectionId,
 	assertTrackInput,
+	fetchExistingTrackKeys,
 	isPlainObject,
 	normalizeCollectionIds,
+	processBatch,
 	shouldApplyUpdate,
 	uniqueTracks,
 	validateTrackChanges,
@@ -842,6 +851,116 @@ describe("trackRepositoryUtils", () => {
 				status: "failed",
 				reason: "new boom",
 			});
+		});
+	});
+
+	describe("fetchExistingTrackKeys", () => {
+		let mockTable: EntityTable<Metadata, "id">;
+		let mockCollection: { primaryKeys: ReturnType<typeof vi.fn> };
+
+		beforeEach(() => {
+			mockCollection = {
+				primaryKeys: vi.fn(),
+			};
+			mockTable = {
+				where: vi.fn(() => ({
+					anyOf: vi.fn(() => mockCollection),
+				})),
+				bulkGet: vi.fn(),
+			} as unknown as EntityTable<Metadata, "id">;
+		});
+
+		it("returns an empty map for empty input without querying the DB", async () => {
+			const result = await fetchExistingTrackKeys([], mockTable);
+			expect(result.size).toBe(0);
+			expect(mockTable.where).not.toHaveBeenCalled();
+		});
+
+		it("chunks filePaths, fetches primary keys, then bulkGets and projects to {id, collectionIds}", async () => {
+			const filePaths = ["/music/a.mp3", "/music/b.mp3"];
+			mockCollection.primaryKeys.mockResolvedValue(["id1", "id2"]);
+			vi.mocked(mockTable.bulkGet).mockResolvedValue([
+				makeTrack({
+					id: "id1",
+					filePath: "/music/a.mp3",
+					collectionIds: ["all"],
+				}),
+				makeTrack({
+					id: "id2",
+					filePath: "/music/b.mp3",
+					collectionIds: ["all", "mix1"],
+				}),
+			]);
+			const result = await fetchExistingTrackKeys(filePaths, mockTable);
+			expect(result.size).toBe(2);
+			expect(result.get("/music/a.mp3")).toEqual({
+				id: "id1",
+				collectionIds: ["all"],
+			});
+			expect(result.get("/music/b.mp3")).toEqual({
+				id: "id2",
+				collectionIds: ["all", "mix1"],
+			});
+			expect(mockTable.where).toHaveBeenCalledWith("filePath");
+			expect(mockTable.bulkGet).toHaveBeenCalledWith(["id1", "id2"]);
+		});
+
+		it("skips undefined rows returned by bulkGet", async () => {
+			const filePaths = ["/music/a.mp3", "/music/ghost.mp3"];
+			mockCollection.primaryKeys.mockResolvedValue(["id1", "id2"]);
+			vi.mocked(mockTable.bulkGet).mockResolvedValue([
+				makeTrack({
+					id: "id1",
+					filePath: "/music/a.mp3",
+					collectionIds: ["all"],
+				}),
+				undefined,
+			]);
+			const result = await fetchExistingTrackKeys(filePaths, mockTable);
+			expect(result.size).toBe(1);
+			expect(result.has("/music/ghost.mp3")).toBe(false);
+		});
+	});
+
+	describe("processBatch", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+		});
+
+		it("classifies tracks and persists them correctly within a transaction", async () => {
+			await db.collections.add({ id: "mix1", title: "Mix1" });
+			await db.tracks.add(
+				makeTrack({
+					id: "exist",
+					filePath: "/music/exist.mp3",
+					collectionIds: ["all"],
+				}),
+			);
+
+			const tracks: IngestionMetadata[] = [
+				trackInputSchema.parse(
+					makeTrack({
+						id: "new",
+						filePath: "/music/new.mp3",
+						collectionIds: [],
+					}),
+				),
+				trackInputSchema.parse(
+					makeTrack({
+						id: "exist-merge",
+						filePath: "/music/exist.mp3",
+						collectionIds: ["all"],
+					}),
+				),
+			];
+			const result: AddManyResult = await processBatch(tracks, "mix1", db);
+			expect(result.added).toHaveLength(1);
+			expect(result.merged).toHaveLength(1);
+			expect(result.skipped).toHaveLength(0);
+			const newTrack = await db.tracks.get("new");
+			expect(newTrack?.collectionIds).toEqual(["all", "mix1"]);
+			const mergedTrack = await db.tracks.get("exist");
+			expect(mergedTrack?.collectionIds).toEqual(["all", "mix1"]);
 		});
 	});
 });

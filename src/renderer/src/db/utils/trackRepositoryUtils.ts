@@ -16,8 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ANYOF_CHUNK_SIZE, MAX_DISPLAY_MISSING } from "@renderer/db/constants";
+import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
+import type { TrackBatchDatabase } from "@renderer/db/types";
 import {
+	ANYOF_CHUNK_SIZE,
 	MAX_BATCH_PAYLOAD_SIZE,
 	SYSTEM_COLLECTION_ID,
 } from "@shared/constants";
@@ -35,6 +37,7 @@ import type {
 	Metadata,
 	TrackChanges,
 } from "@shared/schemas/track.schema";
+import type { AddManyResult, Artwork } from "@shared/types";
 import { isLegalStatusTransition } from "@shared/utils";
 import {
 	safeParseTargetCollectionId,
@@ -42,6 +45,7 @@ import {
 	safeParseTrackChanges,
 } from "@shared/validators";
 import type { EntityTable } from "dexie";
+import { v7 as uuidV7 } from "uuid";
 import type { CollectionType } from "@/types";
 
 function isNonEmptyString(value: unknown): value is string {
@@ -487,6 +491,180 @@ function assertBatchPayloadSize(size: number): void {
 	}
 }
 
+/**
+ * Fetches existing tracks by `filePath` using the **keys-first strategy**.
+ *
+ * @param filePaths   - Array of (already-normalized) filePaths to look up.
+ *                      Duplicates are handled gracefully (the same row
+ *                      may appear once in the result map).
+ * @param tracksTable - The Dexie `EntityTable` for tracks.
+ * @returns Returns an empty map when `filePaths`
+ *          is empty or no matches are found.
+ */
+async function fetchExistingTrackKeys(
+	filePaths: readonly string[],
+	tracksTable: EntityTable<Metadata, "id">,
+): Promise<
+	Map<
+		string,
+		{
+			readonly id: string;
+			readonly collectionIds: readonly string[];
+		}
+	>
+> {
+	const result = new Map<
+		string,
+		{
+			readonly id: string;
+			readonly collectionIds: readonly string[];
+		}
+	>();
+
+	if (filePaths.length === 0) {
+		return result;
+	}
+
+	const chunks = chunkArray(filePaths, ANYOF_CHUNK_SIZE);
+	const existingIds: string[] = [];
+
+	for (const chunk of chunks) {
+		const keys = await tracksTable.where("filePath").anyOf(chunk).primaryKeys();
+		for (const key of keys) {
+			if (typeof key === "string") {
+				existingIds.push(key);
+			}
+		}
+	}
+
+	if (existingIds.length === 0) {
+		return result;
+	}
+
+	const rows = await tracksTable.bulkGet(existingIds);
+
+	for (const row of rows) {
+		if (row === undefined) continue;
+		if (!isNonEmptyString(row.filePath)) continue;
+		result.set(row.filePath, {
+			id: row.id,
+			collectionIds: row.collectionIds,
+		});
+	}
+
+	return result;
+}
+
+/**
+ * Processes a single batch of tracks within its own IndexedDB transaction.
+ *
+ * @param tracks              - Parsed, validated, normalized ingestion tracks.
+ * @param targetCollectionId - The collection to assign to new/merged tracks.
+ * @returns A partial {@link AddManyResult} for this batch.
+ * @throws Re-throws domain errors; maps storage errors via
+ *         {@link mapStorageWriteError}.
+ */
+async function processBatch(
+	tracks: readonly IngestionMetadata[],
+	targetCollectionId: string,
+	db: TrackBatchDatabase,
+): Promise<AddManyResult> {
+	return db.transaction(
+		"rw",
+		db.tracks,
+		db.artworks,
+		async (): Promise<AddManyResult> => {
+			const filePaths = tracks.map((t) => t.filePath);
+			const existingByFilePath = await fetchExistingTrackKeys(
+				filePaths,
+				db.tracks,
+			);
+
+			const toAdd: Metadata[] = [];
+			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
+			const mergedIds: string[] = [];
+			const skippedIds: string[] = [];
+			const artworksToSave: Artwork[] = [];
+
+			for (const track of tracks) {
+				const existingRow = existingByFilePath.get(track.filePath);
+
+				if (existingRow) {
+					const nextCollectionIds = normalizeCollectionIds(
+						existingRow.collectionIds,
+						targetCollectionId,
+					);
+
+					if (
+						areCollectionIdsEqual(existingRow.collectionIds, nextCollectionIds)
+					) {
+						skippedIds.push(existingRow.id);
+					} else {
+						toUpdate.push({
+							key: existingRow.id,
+							changes: { collectionIds: nextCollectionIds },
+						});
+						mergedIds.push(existingRow.id);
+					}
+				} else {
+					const pictureIds: string[] = [];
+					if (track.common?.picture) {
+						for (const pic of track.common.picture) {
+							const blob: Blob =
+								pic.data instanceof Uint8Array
+									? new Blob([pic.data], { type: pic.format })
+									: pic.data;
+							const id = uuidV7();
+							artworksToSave.push({
+								id,
+								blob,
+								format: pic.format,
+								description: pic.description,
+								name: pic.name,
+							});
+							pictureIds.push(id);
+						}
+					}
+
+					toAdd.push({
+						...track,
+						common: {
+							...track.common,
+							picture: pictureIds,
+						},
+						collectionIds: normalizeCollectionIds(
+							track.collectionIds,
+							targetCollectionId,
+						),
+					});
+				}
+			}
+
+			if (artworksToSave.length > 0) {
+				await db.artworks.bulkAdd(artworksToSave);
+			}
+
+			const addedIds: string[] = [];
+			if (toAdd.length > 0) {
+				const rawKeys = await db.tracks.bulkAdd(toAdd, { allKeys: true });
+				if (Array.isArray(rawKeys)) {
+					for (const key of rawKeys) {
+						if (typeof key === "string") {
+							addedIds.push(key);
+						}
+					}
+				}
+			}
+
+			if (toUpdate.length > 0) {
+				await db.tracks.bulkUpdate(toUpdate);
+			}
+
+			return { added: addedIds, merged: mergedIds, skipped: skippedIds };
+		},
+	);
+}
+
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
@@ -497,11 +675,13 @@ export {
 	assertTrackInput,
 	calculateBatchPayloadSize,
 	chunkArray,
+	fetchExistingTrackKeys,
 	isErrorWithName,
 	isNonEmptyString,
 	isPlainObject,
 	mapStorageWriteError,
 	normalizeCollectionIds,
+	processBatch,
 	shouldApplyUpdate,
 	uniqueTracks,
 	validateTrackChanges,
