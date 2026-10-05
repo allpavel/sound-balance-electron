@@ -17,17 +17,19 @@
  */
 
 import {
-	MAX_BASE64_IMAGE_SIZE,
+	MAX_BLOB_IMAGE_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
 	MAX_YEAR,
 	STATUS_VALUES,
 } from "@shared/constants";
+import { DETECTED_PLATFORM } from "@shared/utils";
 import { makeTrack } from "@tests/factories";
 import { expectFailure, expectSuccess, hasIssueWithPath } from "@tests/utils";
 import {
 	collectionIdsSchema,
+	filePathSchema,
 	selectedSchema,
 	statusSchema,
 	targetCollectionIdSchema,
@@ -87,16 +89,21 @@ describe("track.schema", () => {
 			).not.toHaveProperty("unknownField");
 		});
 
-		it("rejects picture data exceeding MAX_BASE64_IMAGE_SIZE", () => {
-			const oversizedData = "x".repeat(MAX_BASE64_IMAGE_SIZE + 1);
+		it("rejects picture data exceeding MAX_BLOB_IMAGE_SIZE", () => {
+			const oversizedData = new Uint8Array(MAX_BLOB_IMAGE_SIZE + 1);
 			const issues = expectFailure(
-				trackInputSchema.safeParse(
-					makeTrack({
-						common: {
-							picture: [{ format: "image/jpeg", data: oversizedData }],
-						},
-					}),
-				),
+				trackInputSchema.safeParse({
+					id: "track-1",
+					file: "track-1.mp3",
+					filePath: "/music/track-1.mp3",
+					status: "pending",
+					selected: 0,
+					collectionIds: ["all"],
+					common: {
+						picture: [{ format: "image/jpeg", data: oversizedData }],
+					},
+					format: {},
+				}),
 			);
 			expect(hasIssueWithPath(issues, ["common", "picture", 0, "data"])).toBe(
 				true,
@@ -106,11 +113,20 @@ describe("track.schema", () => {
 		it(`rejects more than ${MAX_PICTURE_COUNT} pictures`, () => {
 			const pictures = Array.from({ length: MAX_PICTURE_COUNT + 1 }, () => ({
 				format: "image/jpeg",
-				data: "AQID",
+				data: new Uint8Array([1, 2, 3]),
 			}));
-			const result = trackInputSchema.safeParse(
-				makeTrack({ common: { picture: pictures } }),
-			);
+			const result = trackInputSchema.safeParse({
+				id: "track-1",
+				file: "track-1.mp3",
+				filePath: "/music/track-1.mp3",
+				status: "pending",
+				selected: 0,
+				collectionIds: ["all"],
+				common: {
+					picture: pictures,
+				},
+				format: {},
+			});
 			expect(result.success).toBe(false);
 		});
 
@@ -799,6 +815,38 @@ describe("track.schema", () => {
 
 		it("rejects seq on the fields branch", () => {
 			const result = trackChangesSchema.safeParse({ selected: 1, seq: 2 });
+			expect(result.success).toBe(false);
+		});
+	});
+
+	describe("filePathSchema (INV-8)", () => {
+		it("accepts a valid file path", () => {
+			const path = "/music/track.mp3";
+			const result = filePathSchema.safeParse(path);
+			expect(result.success).toBe(true);
+		});
+
+		it("rejects an empty file path", () => {
+			const result = filePathSchema.safeParse("");
+			expect(result.success).toBe(false);
+		});
+
+		it("applies the normalizeFilePath transform idempotently", () => {
+			const path = "C:/Music/Track.MP3";
+			const result = filePathSchema.safeParse(path);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				// On win32/darwin it lowercases, on linux it preserves case.
+				// We assert against the expected output based on the detected platform,
+				// avoiding environment-specific flakiness.
+				const expected =
+					DETECTED_PLATFORM === "linux" ? path : path.toLowerCase();
+				expect(result.data).toBe(expected);
+			}
+		});
+
+		it("rejects file paths containing null bytes", () => {
+			const result = filePathSchema.safeParse("/music/\0track.mp3");
 			expect(result.success).toBe(false);
 		});
 	});

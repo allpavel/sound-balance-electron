@@ -25,6 +25,7 @@ import {
 	NULL_BYTE_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
+import { normalizeFilePath } from "@shared/utils";
 import z from "zod";
 
 export const nonEmptyStringSchema = z
@@ -52,6 +53,24 @@ export const reasonSchema = z
 	.refine((val) => !NULL_BYTE_PATTERN.test(val), {
 		error: "Reason must not contain null bytes",
 	});
+
+/**
+ * Schema for the `filePath` field with OS-aware case normalization.
+ *
+ * On case-insensitive filesystems (Windows, macOS), the path is lowercased
+ * after all string validations pass. On case-sensitive filesystems (Linux),
+ * the path is stored unchanged. This ensures the `&filePath` unique index
+ * treats `"C:/A.mp3"` and `"c:/a.MP3"` as the same file on Windows/macOS,
+ * while preserving case-distinct paths on Linux.
+ *
+ * The transform is **idempotent**: normalizing an already-normalized path
+ * is a no-op, so re-parsing stored data is safe.
+ *
+ * @see {@link normalizeFilePath} for the full policy documentation.
+ */
+export const filePathSchema = nonEmptyStringSchema.transform((path) =>
+	normalizeFilePath(path),
+);
 
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
 export const targetCollectionIdSchema = nonEmptyStringSchema;
@@ -441,7 +460,7 @@ export const tracksArraySchema = z.array(trackInputSchema);
 
 const trackChangesFieldsSchema = z
 	.object({
-		filePath: nonEmptyStringSchema.optional(),
+		filePath: filePathSchema.optional(),
 		selected: selectedSchema.optional(),
 		collectionIds: collectionIdsSchema.optional(),
 	})
