@@ -194,6 +194,10 @@ export const tracksRepository = {
 								...track.common,
 								picture: pictureIds,
 							},
+							collectionIds: normalizeCollectionIds(
+								track.collectionIds,
+								targetCollectionId,
+							),
 						};
 
 						const existingRow = existingByFilePath.get(track.filePath);
