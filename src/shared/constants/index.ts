@@ -72,3 +72,14 @@ export const MAX_YEAR = 9999;
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional pattern to strip malicious control characters and block injection attacks.
 export const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/g;
+
+/**
+ * Maximum number of tracks processed in a single IndexedDB transaction
+ * during `addMany`.
+ */
+export const IMPORT_BATCH_SIZE = 500;
+
+/**
+ * Maximum number of keys passed to a single IndexedDB `anyOf()` call.
+ */
+export const ANYOF_CHUNK_SIZE = 500;
