@@ -17,6 +17,23 @@
  */
 
 /**
+ * Represents an album artwork image stored in the dedicated `artworks` table.
+ *
+ * @property id          - UUID v7 primary key.
+ * @property blob        - The binary image data (stored efficiently as a Blob).
+ * @property format      - MIME type of the image (e.g., "image/jpeg").
+ * @property description - Optional descriptive text.
+ * @property name        - Optional filename or identifier.
+ */
+export type Artwork = {
+	id: string;
+	blob: Blob;
+	format: string;
+	description?: string;
+	name?: string;
+};
+
+/**
  * Discriminated outcome of a batch track insertion.
  *
  * @property added   – Primary keys of tracks that were newly inserted.
@@ -32,18 +49,54 @@ export type AddManyResult = {
 };
 
 /**
- * Represents an album artwork image stored in the dedicated `artworks` table.
+ * Cumulative progress snapshot emitted by `addMany` after each batch
+ * completes.
  *
- * @property id          - UUID v7 primary key.
- * @property blob        - The binary image data (stored efficiently as a Blob).
- * @property format      - MIME type of the image (e.g., "image/jpeg").
- * @property description - Optional descriptive text.
- * @property name        - Optional filename or identifier.
+ * All counts are **cumulative** (not per-batch) so callers can render
+ * ratios directly without aggregation.
+ *
+ * @property processed - Number of input tracks processed so far (across all batches).
+ * @property total     - Total number of input tracks in the import.
+ * @property added     - Cumulative count of newly inserted tracks.
+ * @property merged    - Cumulative count of tracks whose `collectionIds` were updated.
+ * @property skipped   - Cumulative count of tracks already in the target collection (no-op).
  */
-export type Artwork = {
-	id: string;
-	blob: Blob;
-	format: string;
-	description?: string;
-	name?: string;
+export type AddManyProgress = {
+	readonly processed: number;
+	readonly total: number;
+	readonly added: number;
+	readonly merged: number;
+	readonly skipped: number;
+};
+
+/**
+ * Callback invoked after each batch in `addMany` completes.
+ *
+ * Callers can use this to update a progress bar, compute outcome ratios
+ * (e.g., `added / total`), or log telemetry for large imports.
+ */
+export type AddManyProgressCallback = (progress: AddManyProgress) => void;
+
+/**
+ * Final outcome summary computed from an {@link AddManyResult}.
+ *
+ * Provides pre-computed ratios for observability dashboards and toast
+ * notifications. Produced by the `getAddManySummary` helper.
+ *
+ * @property total       - Sum of added + merged + skipped.
+ * @property added       - Count of newly inserted tracks.
+ * @property merged      - Count of updated tracks.
+ * @property skipped     - Count of no-op tracks.
+ * @property addedRatio  - `added / total` (0–1), or 0 when total is 0.
+ * @property mergedRatio - `merged / total` (0–1), or 0 when total is 0.
+ * @property skippedRatio - `skipped / total` (0–1), or 0 when total is 0.
+ */
+export type AddManySummary = {
+	readonly total: number;
+	readonly added: number;
+	readonly merged: number;
+	readonly skipped: number;
+	readonly addedRatio: number;
+	readonly mergedRatio: number;
+	readonly skippedRatio: number;
 };
