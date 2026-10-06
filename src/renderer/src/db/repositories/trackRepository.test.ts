@@ -31,6 +31,14 @@ import type { AddManyProgress, AddManyResult } from "@shared/types";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeTrack } from "@tests/factories";
 
+vi.mock("@shared/utils", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@shared/utils")>();
+	return {
+		...actual,
+		normalizeFilePath: (filePath: string): string => filePath.toLowerCase(),
+	};
+});
+
 /** Seeds a row in the given status. "failed" requires a reason (schema
  *  invariant), supplied once here for the whole suite.
  */
@@ -316,16 +324,18 @@ describe("tracksRepository", () => {
 			expect(await db.tracks.count()).toBe(0);
 		});
 
-		it("rejects duplicate filePaths with ConflictError", async () => {
-			await expect(
-				tracksRepository.addMany(
-					[
-						makeTrack({ id: "a", filePath: "/music/same.mp3" }),
-						makeTrack({ id: "b", filePath: "/music/same.mp3" }),
-					],
-					{ targetCollectionId: SYSTEM_COLLECTION_ID },
-				),
-			).rejects.toThrow(ConflictError);
+		it("folds exact duplicate filePaths within the same batch (first-wins)", async () => {
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({ id: "a", filePath: "/music/same.mp3" }),
+					makeTrack({ id: "b", filePath: "/music/same.mp3" }),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(result.added).toEqual(["a"]);
+			expect(result.merged).toEqual([]);
+			expect(result.skipped).toEqual(["b"]);
+			expect(await db.tracks.count()).toBe(1);
 		});
 
 		it("rejects duplicate track ids within the same batch", async () => {
@@ -498,13 +508,15 @@ describe("tracksRepository", () => {
 			).rejects.toThrow("unexpected internal failure");
 		});
 
-		it("in-batch filePath duplicate is a hard rejection (programming error)", async () => {
-			await expect(
-				tracksRepository.addMany([
-					makeTrack({ id: "a", filePath: "/music/dup.mp3" }),
-					makeTrack({ id: "b", filePath: "/music/dup.mp3" }),
-				]),
-			).rejects.toThrow(ConflictError);
+		it("in-batch filePath duplicate is folded (first-wins, skipped)", async () => {
+			const result = await tracksRepository.addMany([
+				makeTrack({ id: "a", filePath: "/music/dup.mp3" }),
+				makeTrack({ id: "b", filePath: "/music/dup.mp3" }),
+			]);
+			expect(result.added).toEqual(["a"]);
+			expect(result.merged).toEqual([]);
+			expect(result.skipped).toEqual(["b"]);
+			expect(await db.tracks.count()).toBe(1);
 		});
 
 		it("DB filePath collision is a merge (user re-add), not a rejection", async () => {
@@ -532,7 +544,7 @@ describe("tracksRepository", () => {
 		});
 	});
 
-	describe("addMany - batch processing and progress (PERF-3/4)", () => {
+	describe("addMany - batch processing and progress", () => {
 		beforeEach(async () => {
 			await resetDatabase();
 		});
@@ -594,6 +606,103 @@ describe("tracksRepository", () => {
 			const onProgress = vi.fn();
 			await tracksRepository.addMany([], { onProgress });
 			expect(onProgress).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("addMany — case-variant filePath dedupe", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+		});
+
+		it("merges a case-variant re-import onto the existing row (single INV-8 row)", async () => {
+			await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "a",
+						filePath: "C:/A.MP3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			const second: AddManyResult = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "b",
+						filePath: "c:/a.mp3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(second.added).toEqual([]);
+			expect(second.merged.length + second.skipped.length).toBe(1);
+			expect(await db.tracks.count()).toBe(1);
+			const onlyRow = await db.tracks.toArray();
+			expect(onlyRow[0]?.filePath).toBe("c:/a.mp3");
+		});
+
+		it("folds case-variant duplicates within one payload (first-wins, skipped)", async () => {
+			const result: AddManyResult = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "a",
+						filePath: "C:/Same.MP3",
+						collectionIds: [],
+					}),
+					makeTrack({
+						id: "b",
+						filePath: "c:/same.mp3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(result.added).toEqual(["a"]);
+			expect(result.merged).toEqual([]);
+			expect(result.skipped).toEqual(["b"]);
+			expect(await db.tracks.count()).toBe(1);
+		});
+
+		it("still throws ConflictError on duplicate ids (hard integrity violation)", async () => {
+			await expect(
+				tracksRepository.addMany([
+					makeTrack({ id: "dup", filePath: "C:/A.MP3" }),
+					makeTrack({ id: "dup", filePath: "c:/a.mp3" }),
+				]),
+			).rejects.toThrow(ConflictError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("preserves merge semantics across collections for a case-variant re-import", async () => {
+			await seedCollection("mix1");
+			await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "a",
+						filePath: "C:/A.MP3",
+						collectionIds: [SYSTEM_COLLECTION_ID],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+
+			const second: AddManyResult = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "b",
+						filePath: "c:/a.mp3",
+						collectionIds: [SYSTEM_COLLECTION_ID],
+					}),
+				],
+				{ targetCollectionId: "mix1" },
+			);
+
+			expect(second.merged).toEqual(["a"]);
+			expect(await db.tracks.count()).toBe(1);
+			expect((await db.tracks.get("a"))?.collectionIds).toEqual(
+				expect.arrayContaining([SYSTEM_COLLECTION_ID, "mix1"]),
+			);
 		});
 	});
 
