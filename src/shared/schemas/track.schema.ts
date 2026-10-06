@@ -399,7 +399,7 @@ const trackBaseSchema = z
 	.object({
 		id: nonEmptyStringSchema,
 		file: nonEmptyStringSchema,
-		filePath: nonEmptyStringSchema,
+		filePath: filePathSchema,
 		selected: selectedSchema,
 		collectionIds: collectionIdsSchema,
 		statusSeq: eventSeqSchema,

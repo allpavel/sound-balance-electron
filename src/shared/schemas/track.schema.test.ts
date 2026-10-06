@@ -24,7 +24,6 @@ import {
 	MAX_YEAR,
 	STATUS_VALUES,
 } from "@shared/constants";
-import { DETECTED_PLATFORM } from "@shared/utils";
 import { makeTrack } from "@tests/factories";
 import { expectFailure, expectSuccess, hasIssueWithPath } from "@tests/utils";
 import {
@@ -37,6 +36,14 @@ import {
 	trackInputSchema,
 	tracksArraySchema,
 } from "./track.schema";
+
+vi.mock("@shared/utils", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@shared/utils")>();
+	return {
+		...actual,
+		normalizeFilePath: (filePath: string): string => filePath.toLowerCase(),
+	};
+});
 
 const REQUIRED_FIELDS = [
 	"id",
@@ -819,7 +826,7 @@ describe("track.schema", () => {
 		});
 	});
 
-	describe("filePathSchema (INV-8)", () => {
+	describe("filePathSchema", () => {
 		it("accepts a valid file path", () => {
 			const path = "/music/track.mp3";
 			const result = filePathSchema.safeParse(path);
@@ -836,18 +843,51 @@ describe("track.schema", () => {
 			const result = filePathSchema.safeParse(path);
 			expect(result.success).toBe(true);
 			if (result.success) {
-				// On win32/darwin it lowercases, on linux it preserves case.
-				// We assert against the expected output based on the detected platform,
-				// avoiding environment-specific flakiness.
-				const expected =
-					DETECTED_PLATFORM === "linux" ? path : path.toLowerCase();
-				expect(result.data).toBe(expected);
+				expect(result.data).toBe(path.toLowerCase());
 			}
 		});
 
 		it("rejects file paths containing null bytes", () => {
 			const result = filePathSchema.safeParse("/music/\0track.mp3");
 			expect(result.success).toBe(false);
+		});
+	});
+
+	describe("trackInputSchema — filePath normalization (F-01 / INV-8)", () => {
+		it("normalizes filePath on the ingestion path (proves F-01)", () => {
+			const parsed = trackInputSchema.parse(
+				makeTrack({ filePath: "C:/Music/Track.MP3" }),
+			);
+			expect(parsed.filePath).toBe("c:/music/track.mp3");
+		});
+
+		it("folds case-variant filePaths to the same canonical key", () => {
+			const a = trackInputSchema.parse(
+				makeTrack({ id: "a", filePath: "C:/A.MP3" }),
+			);
+			const b = trackInputSchema.parse(
+				makeTrack({ id: "b", filePath: "c:/a.mp3" }),
+			);
+			expect(a.filePath).toBe(b.filePath);
+			expect(a.filePath).toBe("c:/a.mp3");
+		});
+
+		it("preserves already-normalized filePaths (idempotent re-parse)", () => {
+			const parsed = trackInputSchema.parse(
+				makeTrack({ filePath: "c:/music/track.mp3" }),
+			);
+			expect(parsed.filePath).toBe("c:/music/track.mp3");
+		});
+
+		it("still rejects empty / null-byte filePaths after the transform", () => {
+			expect(
+				trackInputSchema.safeParse(makeTrack({ filePath: "" })).success,
+			).toBe(false);
+			expect(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "/music/\0track.mp3" }),
+				).success,
+			).toBe(false);
 		});
 	});
 });
