@@ -17,7 +17,10 @@
  */
 
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
-import type { TrackBatchDatabase } from "@renderer/db/types";
+import type {
+	FilePathDedupeResult,
+	TrackBatchDatabase,
+} from "@renderer/db/types";
 import {
 	ANYOF_CHUNK_SIZE,
 	MAX_BATCH_PAYLOAD_SIZE,
@@ -493,6 +496,8 @@ function assertBatchPayloadSize(size: number): void {
 
 /**
  * Fetches existing tracks by `filePath` using the **keys-first strategy**.
+ * Every `filePath` that reaches this function has been
+ * normalized by {@link filePathSchema} at the schema boundary.
  *
  * @param filePaths   - Array of (already-normalized) filePaths to look up.
  *                      Duplicates are handled gracefully (the same row
@@ -665,6 +670,50 @@ async function processBatch(
 	);
 }
 
+/**
+ * First-wins deduplication of ingestion tracks by normalized `filePath`.
+ *
+ * Once {@link trackBaseSchema} normalizes `filePath` at parse time,
+ * case-variant duplicates within a single import payload collapse onto
+ * the same canonical key. Rather than aborting the whole import
+ * with a `ConflictError` (the previous strict `assertBatchUniqueness` behavior),
+ * this helper keeps the first occurrence and reports the rest
+ * as `skipped` — the same outcome channel already used for tracks that exist in the database.
+ * This tolerates noisy scanner output (symlink re-resolution, re-scans, case-renames)
+ * without losing data and without aborting a long-running import.
+ *
+ * Duplicate `id`s remain a hard {@link ConflictError} (asserted separately
+ * by {@link assertBatchUniqueness} on the `id` key): two ingestion tracks
+ * claiming the same primary key is a genuine integrity violation, not a
+ * case-folding artifact, and must not be silently folded.
+ *
+ * The function is pure and total: it performs no I/O, does not touch the
+ * database, and preserves input order for the surviving tracks. It relies
+ * on the schema-enforced precondition that every `track.filePath` is
+ * already normalized (see {@link filePathSchema}).
+ *
+ * @param tracks - Parsed, schema-validated ingestion tracks whose
+ *                 `filePath` values are already normalized by
+ *                 {@link filePathSchema}.
+ * @returns The deduped unique tracks and the IDs folded into them.
+ */
+function dedupeByFilePath(
+	tracks: readonly IngestionMetadata[],
+): FilePathDedupeResult {
+	const seen = new Set<string>();
+	const unique: IngestionMetadata[] = [];
+	const skipped: string[] = [];
+	for (const track of tracks) {
+		if (seen.has(track.filePath)) {
+			skipped.push(track.id);
+			continue;
+		}
+		seen.add(track.filePath);
+		unique.push(track);
+	}
+	return { unique, skipped };
+}
+
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
@@ -675,6 +724,7 @@ export {
 	assertTrackInput,
 	calculateBatchPayloadSize,
 	chunkArray,
+	dedupeByFilePath,
 	fetchExistingTrackKeys,
 	isErrorWithName,
 	isNonEmptyString,

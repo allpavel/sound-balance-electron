@@ -28,6 +28,7 @@ import {
 	assertTrackInput,
 	calculateBatchPayloadSize,
 	chunkArray,
+	dedupeByFilePath,
 	isNonEmptyString,
 	isPlainObject,
 	mapStorageWriteError,
@@ -117,16 +118,12 @@ export const tracksRepository = {
 			"id",
 		);
 
-		assertBatchUniqueness(
-			parsedTracks,
-			(t) => t.filePath,
-			(i) => `tracks[${i}].filePath`,
-			"filePath",
-		);
+		const { unique: dedupedTracks, skipped: preSkipped } =
+			dedupeByFilePath(parsedTracks);
 
 		const referencedCollectionIds = new Set<string>();
 		referencedCollectionIds.add(targetCollectionId);
-		for (const track of parsedTracks) {
+		for (const track of dedupedTracks) {
 			if (Array.isArray(track.collectionIds)) {
 				for (const cid of track.collectionIds) {
 					if (isNonEmptyString(cid)) {
@@ -145,10 +142,10 @@ export const tracksRepository = {
 		}
 
 		const effectiveBatchSize = Math.max(1, batchSize);
-		const batches = chunkArray(parsedTracks, effectiveBatchSize);
+		const batches = chunkArray(dedupedTracks, effectiveBatchSize);
 		const allAdded: string[] = [];
 		const allMerged: string[] = [];
-		const allSkipped: string[] = [];
+		const allSkipped: string[] = [...preSkipped];
 		let processed = 0;
 		const total = parsedTracks.length;
 

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { Metadata } from "@shared/schemas/track.schema";
+import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyProgressCallback, Artwork } from "@shared/types";
 import type Dexie from "dexie";
 import type { EntityTable } from "dexie";
@@ -47,4 +47,17 @@ export type AddManyOptions = {
 	readonly targetCollectionId?: string;
 	readonly onProgress?: AddManyProgressCallback;
 	readonly batchSize?: number;
+};
+
+/**
+ * Outcome of first-wins deduplication of ingestion tracks by normalized
+ * `filePath`.
+ */
+export type FilePathDedupeResult = {
+	/** First-occurrence tracks in input order; subsequent case-variant
+	 *  or exact duplicates are folded out of this list. */
+	readonly unique: readonly IngestionMetadata[];
+	/** IDs of the folded (duplicate) tracks, reported via the `skipped`
+	 *  lane of {@link AddManyResult}. */
+	readonly skipped: readonly string[];
 };
