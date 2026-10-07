@@ -25,7 +25,7 @@ import {
 	NULL_BYTE_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
-import { normalizeFilePath } from "@shared/utils";
+import { getPlatform, normalizeFilePath } from "@shared/utils";
 import z from "zod";
 
 export const nonEmptyStringSchema = z
@@ -69,7 +69,7 @@ export const reasonSchema = z
  * @see {@link normalizeFilePath} for the full policy documentation.
  */
 export const filePathSchema = nonEmptyStringSchema.transform((path) =>
-	normalizeFilePath(path),
+	normalizeFilePath(path, getPlatform()),
 );
 
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
