@@ -20,35 +20,6 @@
 export type NormalizationPlatform = "win32" | "darwin" | "linux";
 
 /**
- * Detects the current platform for filePath normalization purposes.
- *
- * @returns The detected {@link NormalizationPlatform}; defaults to `"linux"`
- *          when the environment cannot be determined.
- */
-function detectPlatform(): NormalizationPlatform {
-	if (typeof process !== "undefined" && typeof process.platform === "string") {
-		if (process.platform === "win32") return "win32";
-		if (process.platform === "darwin") return "darwin";
-		return "linux";
-	}
-
-	if (
-		typeof navigator !== "undefined" &&
-		typeof navigator.userAgent === "string"
-	) {
-		const userAgent = navigator.userAgent.toLowerCase();
-		if (userAgent.includes("win")) return "win32";
-		if (userAgent.includes("mac")) return "darwin";
-	}
-	return "linux";
-}
-
-/** The runtime-detected platform. */
-export const DETECTED_PLATFORM: Readonly<NormalizationPlatform> = Object.freeze(
-	detectPlatform(),
-);
-
-/**
  * Normalizes a filePath according to the platform's case-sensitivity rules.
  *
  * On case-insensitive filesystems (Windows, macOS), the entire path is
@@ -58,8 +29,8 @@ export const DETECTED_PLATFORM: Readonly<NormalizationPlatform> = Object.freeze(
  *
  * @param filePath - The raw file path to normalize. Must be a string;
  *                   empty strings are returned as-is (defensive guard).
- * @param platform - Optional explicit platform override (for testing).
- *                   Defaults to {@link DETECTED_PLATFORM}.
+ * @param platform - The target platform's case-sensitivity policy.
+ *
  * @returns The normalized filePath.
  *
  * @example
@@ -72,9 +43,10 @@ export const DETECTED_PLATFORM: Readonly<NormalizationPlatform> = Object.freeze(
  */
 export function normalizeFilePath(
 	filePath: string,
-	platform: NormalizationPlatform = DETECTED_PLATFORM,
+	platform: NormalizationPlatform,
 ): string {
 	if (filePath.length === 0) return filePath;
+	const nfc = filePath.normalize("NFC");
 	const isCaseInsensitive = platform === "win32" || platform === "darwin";
-	return isCaseInsensitive ? filePath.toLowerCase() : filePath;
+	return isCaseInsensitive ? nfc.toLowerCase() : nfc;
 }
