@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import type { PLATFORM } from "@shared/constants";
 import type { Data } from "@shared/schemas/data.schema";
 import type { Metadata, ProcessingStatus } from "@shared/schemas/track.schema";
 
@@ -32,6 +33,7 @@ export type API = {
 	responseOnStop: (cb: (msg: StoppingStatus) => void) => () => void;
 	processingResult: (cb: (msg: ProcessingStatus) => void) => () => void;
 	openOutputFolder: (outputDirectoryPath: string) => Promise<OpenPathResult>;
+	readonly platform: PLATFORM;
 };
 
 export type NativeValue = {
