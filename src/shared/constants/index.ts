@@ -83,3 +83,6 @@ export const IMPORT_BATCH_SIZE = 500;
  * Maximum number of keys passed to a single IndexedDB `anyOf()` call.
  */
 export const ANYOF_CHUNK_SIZE = 500;
+
+/** Supported platform identifiers for filePath normalization. */
+export type PLATFORM = "win32" | "darwin" | "linux";

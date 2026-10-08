@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/** Supported platform identifiers for filePath normalization. */
-export type NormalizationPlatform = "win32" | "darwin" | "linux";
+import type { PLATFORM } from "@shared/constants";
+import { getPlatform } from "./platformContext";
 
 /**
  * Normalizes a filePath according to the platform's case-sensitivity rules.
@@ -43,7 +43,7 @@ export type NormalizationPlatform = "win32" | "darwin" | "linux";
  */
 export function normalizeFilePath(
 	filePath: string,
-	platform: NormalizationPlatform,
+	platform: PLATFORM = getPlatform(),
 ): string {
 	if (filePath.length === 0) return filePath;
 	const nfc = filePath.normalize("NFC");

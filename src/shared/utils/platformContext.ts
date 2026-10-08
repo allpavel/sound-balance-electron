@@ -16,13 +16,32 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { NormalizationPlatform } from "./filePathNormalizer";
+import type { PLATFORM } from "@shared/constants";
 
 /**
  * Runtime context that supplies the normalization platform to the schema
  * transform.
  */
-let currentPlatform: NormalizationPlatform = "linux";
+let currentPlatform: PLATFORM = "linux";
+
+/**
+ * Type guard that safely narrows an `unknown` value to
+ * {@link PLATFORM} without type assertions.
+ */
+export function isValidPlatform(value: unknown): value is PLATFORM {
+	return value === "win32" || value === "darwin" || value === "linux";
+}
+
+/**
+ * Safely normalizes an unknown value to a {@link PLATFORM}.
+ * Falls back to "linux" (case-sensitive, non-mutating) for unsupported platforms.
+ *
+ * @param value - The raw value to normalize (typically `process.platform`).
+ * @returns A validated `NormalizationPlatform`.
+ */
+export function normalizePlatform(value: unknown): PLATFORM {
+	return isValidPlatform(value) ? value : "linux";
+}
 
 /**
  * Sets the runtime normalization platform. Called once at renderer
@@ -31,8 +50,10 @@ let currentPlatform: NormalizationPlatform = "linux";
  *
  * @param platform - The case-sensitivity policy to apply.
  */
-export function configurePlatform(platform: NormalizationPlatform): void {
-	currentPlatform = platform;
+export function configurePlatform(platform: unknown): PLATFORM {
+	const normalizedPlatform = normalizePlatform(platform);
+	currentPlatform = normalizedPlatform;
+	return normalizedPlatform;
 }
 
 /**
@@ -41,7 +62,7 @@ export function configurePlatform(platform: NormalizationPlatform): void {
  * @returns The configured platform; defaults to `"linux"` (fail-open)
  *          until {@link configurePlatform} is called.
  */
-export function getPlatform(): NormalizationPlatform {
+export function getPlatform(): PLATFORM {
 	return currentPlatform;
 }
 
@@ -50,6 +71,6 @@ export function getPlatform(): NormalizationPlatform {
  * `afterEach`/`afterAll` to prevent leakage when a suite pins a
  * non-default platform.
  */
-export function resetPlatformContext(): void {
+export function resetPlatform(): void {
 	currentPlatform = "linux";
 }
