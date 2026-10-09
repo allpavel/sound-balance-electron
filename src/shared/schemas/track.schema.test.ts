@@ -24,6 +24,7 @@ import {
 	MAX_YEAR,
 	STATUS_VALUES,
 } from "@shared/constants";
+import { configurePlatform, resetPlatform } from "@shared/utils";
 import { makeTrack } from "@tests/factories";
 import { expectFailure, expectSuccess, hasIssueWithPath } from "@tests/utils";
 import {
@@ -36,14 +37,6 @@ import {
 	trackInputSchema,
 	tracksArraySchema,
 } from "./track.schema";
-
-vi.mock("@shared/utils", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@shared/utils")>();
-	return {
-		...actual,
-		normalizeFilePath: (filePath: string): string => filePath.toLowerCase(),
-	};
-});
 
 const REQUIRED_FIELDS = [
 	"id",
@@ -267,7 +260,7 @@ describe("track.schema", () => {
 
 	describe("statusSchema", () => {
 		it.each(STATUS_VALUES)("accepts every supported status: %s", (status) => {
-			expect(statusSchema.safeParse(status).success).toBe(true);
+			expectSuccess(statusSchema.safeParse(status));
 		});
 
 		it.each([
@@ -277,7 +270,7 @@ describe("track.schema", () => {
 			["synonym", "error"],
 			["wrong case", "PENDING"],
 		])("rejects unsupported string value: %s", (_label, value) => {
-			expect(statusSchema.safeParse(value).success).toBe(false);
+			expectFailure(statusSchema.safeParse(value));
 		});
 
 		it.each([
@@ -287,7 +280,7 @@ describe("track.schema", () => {
 			["array", []],
 			["object", {}],
 		])("rejects non-string value: %s", (_label, value) => {
-			expect(statusSchema.safeParse(value).success).toBe(false);
+			expectFailure(statusSchema.safeParse(value));
 		});
 	});
 
@@ -296,7 +289,7 @@ describe("track.schema", () => {
 			["0", 0],
 			["1", 1],
 		])("accepts %s", (_label, value) => {
-			expect(selectedSchema.safeParse(value).success).toBe(true);
+			expectSuccess(selectedSchema.safeParse(value));
 		});
 
 		it.each([
@@ -304,28 +297,28 @@ describe("track.schema", () => {
 			["negative integer", -1],
 			["float", 1.5],
 		])("rejects other number: %s", (_label, value) => {
-			expect(selectedSchema.safeParse(value).success).toBe(false);
+			expectFailure(selectedSchema.safeParse(value));
 		});
 
 		it.each([
 			["true", true],
 			["false", false],
 		])("rejects boolean: %s", (_label, value) => {
-			expect(selectedSchema.safeParse(value).success).toBe(false);
+			expectFailure(selectedSchema.safeParse(value));
 		});
 
 		it.each([
 			['"0"', "0"],
 			['"1"', "1"],
 		])("rejects string: %s", (_label, value) => {
-			expect(selectedSchema.safeParse(value).success).toBe(false);
+			expectFailure(selectedSchema.safeParse(value));
 		});
 
 		it.each([
 			["null", null],
 			["undefined", undefined],
 		])("rejects %s", (_label, value) => {
-			expect(selectedSchema.safeParse(value).success).toBe(false);
+			expectFailure(selectedSchema.safeParse(value));
 		});
 	});
 
@@ -335,7 +328,7 @@ describe("track.schema", () => {
 			["custom id", "mix-1"],
 			["id with surrounding whitespace", "  mix-1  "],
 		])("accepts non-empty string: %s", (_label, value) => {
-			expect(targetCollectionIdSchema.safeParse(value).success).toBe(true);
+			expectSuccess(targetCollectionIdSchema.safeParse(value));
 		});
 
 		it.each([
@@ -343,7 +336,7 @@ describe("track.schema", () => {
 			["whitespace-only", "   "],
 			["tab and newline", "\t\n"],
 		])("rejects empty or whitespace-only string: %s", (_label, value) => {
-			expect(targetCollectionIdSchema.safeParse(value).success).toBe(false);
+			expectFailure(targetCollectionIdSchema.safeParse(value));
 		});
 
 		it.each([
@@ -353,28 +346,28 @@ describe("track.schema", () => {
 			["array", []],
 			["object", {}],
 		])("rejects non-string value: %s", (_label, value) => {
-			expect(targetCollectionIdSchema.safeParse(value).success).toBe(false);
+			expectFailure(targetCollectionIdSchema.safeParse(value));
 		});
 	});
 
 	describe("collectionIdsSchema", () => {
 		it("accepts an empty array", () => {
-			expect(collectionIdsSchema.safeParse([]).success).toBe(true);
+			expectSuccess(collectionIdsSchema.safeParse([]));
 		});
 
 		it.each([
 			["single element", ["all"]],
 			["multiple elements", ["all", "mix-1"]],
 		])("accepts an array of non-empty strings: %s", (_label, value) => {
-			expect(collectionIdsSchema.safeParse(value).success).toBe(true);
+			expectSuccess(collectionIdsSchema.safeParse(value));
 		});
 
 		it("rejects undefined because collectionIds is required", () => {
-			expect(collectionIdsSchema.safeParse(undefined).success).toBe(false);
+			expectFailure(collectionIdsSchema.safeParse(undefined));
 		});
 
 		it("rejects null", () => {
-			expect(collectionIdsSchema.safeParse(null).success).toBe(false);
+			expectFailure(collectionIdsSchema.safeParse(null));
 		});
 
 		it.each([
@@ -382,7 +375,7 @@ describe("track.schema", () => {
 			["number", 123],
 			["object", {}],
 		])("rejects non-array value: %s", (_label, value) => {
-			expect(collectionIdsSchema.safeParse(value).success).toBe(false);
+			expectFailure(collectionIdsSchema.safeParse(value));
 		});
 
 		it("rejects empty collection ids and reports the invalid index", () => {
@@ -408,15 +401,13 @@ describe("track.schema", () => {
 
 	describe("trackInputSchema", () => {
 		it("accepts a complete application-owned track", () => {
-			const result = trackInputSchema.safeParse(makeTrack());
-			expect(result.success).toBe(true);
+			expectSuccess(trackInputSchema.safeParse(makeTrack()));
 		});
 
 		it("accepts an empty collectionIds array", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ collectionIds: [] }),
+			expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ collectionIds: [] })),
 			);
-			expect(result.success).toBe(true);
 		});
 
 		it("accepts declared IAudioMetadata fields and preserves them", () => {
@@ -498,7 +489,7 @@ describe("track.schema", () => {
 		});
 
 		it("accepts an empty array (valid state: no tracks loaded)", () => {
-			expect(expectSuccess(tracksArraySchema.safeParse([]))).toEqual([]);
+			expectSuccess(tracksArraySchema.safeParse([]));
 		});
 
 		it.each([
@@ -547,176 +538,181 @@ describe("track.schema", () => {
 	describe("trackChangesSchema", () => {
 		describe("fields branch", () => {
 			it("accepts a valid filePath change", () => {
-				const result = trackChangesSchema.safeParse({
-					filePath: "/music/track.mp3",
-				});
-				expect(result.success).toBe(true);
+				expectSuccess(
+					trackChangesSchema.safeParse({
+						filePath: "/music/track.mp3",
+					}),
+				);
 			});
 
 			it.each([
 				["selected: 1", { selected: 1 }],
 				["selected: 0", { selected: 0 }],
 			])("accepts a valid selected change: %s", (_label, value) => {
-				expect(trackChangesSchema.safeParse(value).success).toBe(true);
+				expectSuccess(trackChangesSchema.safeParse(value));
 			});
 
 			it("accepts a valid collectionIds change", () => {
-				const result = trackChangesSchema.safeParse({
-					collectionIds: ["all", "mix-1"],
-				});
-				expect(result.success).toBe(true);
+				expectSuccess(
+					trackChangesSchema.safeParse({
+						collectionIds: ["all", "mix-1"],
+					}),
+				);
 			});
 
 			it("accepts multiple fields together", () => {
-				const result = trackChangesSchema.safeParse({
-					filePath: "/music/track.mp3",
-					selected: 1,
-					collectionIds: ["all"],
-				});
-				expect(result.success).toBe(true);
+				expectSuccess(
+					trackChangesSchema.safeParse({
+						filePath: "/music/track.mp3",
+						selected: 1,
+						collectionIds: ["all"],
+					}),
+				);
 			});
 
 			it("rejects an empty object (no-op mutation)", () => {
-				const result = trackChangesSchema.safeParse({});
-				expect(result.success).toBe(false);
+				expectFailure(trackChangesSchema.safeParse({}));
 			});
 
 			it("rejects unknown fields (strict mode)", () => {
-				const result = trackChangesSchema.safeParse({
-					selected: 1,
-					unknownField: true,
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						selected: 1,
+						unknownField: true,
+					}),
+				);
 			});
 
 			it.each([
 				["empty string", ""],
 				["whitespace-only", "   "],
 			])("rejects invalid filePath value: %s", (_label, value) => {
-				expect(trackChangesSchema.safeParse({ filePath: value }).success).toBe(
-					false,
-				);
+				expectFailure(trackChangesSchema.safeParse(value));
 			});
 
 			it.each([
 				["number > 1", { selected: 2 }],
 				["boolean", { selected: true }],
 			])("rejects invalid selected value: %s", (_label, value) => {
-				expect(trackChangesSchema.safeParse(value).success).toBe(false);
+				expectFailure(trackChangesSchema.safeParse(value));
 			});
 
 			it("rejects invalid collectionIds items", () => {
-				const result = trackChangesSchema.safeParse({
-					collectionIds: ["all", ""],
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						collectionIds: ["all", ""],
+					}),
+				);
 			});
 		});
 
 		describe("status branch", () => {
 			it("accepts pending status", () => {
-				expect(
-					trackChangesSchema.safeParse({ status: "pending" }).success,
-				).toBe(true);
+				expectSuccess(trackChangesSchema.safeParse({ status: "pending" }));
 			});
 
 			it("accepts processing status", () => {
-				expect(
-					trackChangesSchema.safeParse({ status: "processing" }).success,
-				).toBe(true);
+				expectSuccess(trackChangesSchema.safeParse({ status: "processing" }));
 			});
 
 			it("accepts completed status", () => {
-				expect(
-					trackChangesSchema.safeParse({ status: "completed" }).success,
-				).toBe(true);
+				expectSuccess(trackChangesSchema.safeParse({ status: "completed" }));
 			});
 
 			it("accepts failed status with a valid reason", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "failed",
-					reason: "FFmpeg exited with code 1",
-				});
-				expect(result.success).toBe(true);
+				expectSuccess(
+					trackChangesSchema.safeParse({
+						status: "failed",
+						reason: "FFmpeg exited with code 1",
+					}),
+				);
 			});
 
 			it("rejects failed status without reason", () => {
-				const result = trackChangesSchema.safeParse({ status: "failed" });
-				expect(result.success).toBe(false);
+				expectFailure(trackChangesSchema.safeParse({ status: "failed" }));
 			});
 
 			it("rejects an empty reason", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "failed",
-					reason: "",
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "failed",
+						reason: "",
+					}),
+				);
 			});
 
 			it("rejects a whitespace-only reason", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "failed",
-					reason: "   ",
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "failed",
+						reason: "   ",
+					}),
+				);
 			});
 
 			it("rejects a reason exceeding MAX_REASON_LENGTH", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "failed",
-					reason: "x".repeat(MAX_REASON_LENGTH + 1),
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "failed",
+						reason: "x".repeat(MAX_REASON_LENGTH + 1),
+					}),
+				);
 			});
 
 			it("rejects a reason containing null bytes", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "failed",
-					reason: "error\0injection",
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "failed",
+						reason: "error\0injection",
+					}),
+				);
 			});
 
 			it("accepts a reason at exactly MAX_REASON_LENGTH", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "failed",
-					reason: "x".repeat(MAX_REASON_LENGTH),
-				});
-				expect(result.success).toBe(true);
+				expectSuccess(
+					trackChangesSchema.safeParse({
+						status: "failed",
+						reason: "x".repeat(MAX_REASON_LENGTH),
+					}),
+				);
 			});
 		});
 
 		describe("mutual exclusivity (status XOR fields)", () => {
 			it("rejects status combined with filePath", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "pending",
-					filePath: "/music/track.mp3",
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "pending",
+						filePath: "/music/track.mp3",
+					}),
+				);
 			});
 
 			it("rejects status combined with selected", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "completed",
-					selected: 1,
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "completed",
+						selected: 1,
+					}),
+				);
 			});
 
 			it("rejects status combined with collectionIds", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "processing",
-					collectionIds: ["all"],
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "processing",
+						collectionIds: ["all"],
+					}),
+				);
 			});
 
 			it("rejects reason on non-failed status (strict mode)", () => {
-				const result = trackChangesSchema.safeParse({
-					status: "pending",
-					reason: "should not be here",
-				});
-				expect(result.success).toBe(false);
+				expectFailure(
+					trackChangesSchema.safeParse({
+						status: "pending",
+						reason: "should not be here",
+					}),
+				);
 			});
 		});
 
@@ -729,21 +725,18 @@ describe("track.schema", () => {
 				["boolean", true],
 				["array", []],
 			])("rejects %s", (_label, input) => {
-				expect(trackChangesSchema.safeParse(input).success).toBe(false);
+				expectFailure(trackChangesSchema.safeParse(input));
 			});
 		});
 	});
 
 	describe("trackInputSchema - statusSeq", () => {
 		it("accepts a track without statusSeq (optional field)", () => {
-			expect(trackInputSchema.safeParse(makeTrack()).success).toBe(true);
+			expectSuccess(trackInputSchema.safeParse(makeTrack()));
 		});
 
 		it("rejects statusSeq 0 (must be >= 1)", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ statusSeq: 0 } as any),
-			);
-			expect(result.success).toBe(false);
+			expectFailure(trackInputSchema.safeParse(makeTrack({ statusSeq: 0 })));
 		});
 
 		it("accepts a positive integer statusSeq and preserves it", () => {
@@ -760,10 +753,9 @@ describe("track.schema", () => {
 			["null", null],
 			["boolean", true],
 		])("rejects %s statusSeq", (_label, value) => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ statusSeq: value } as any),
+			expectFailure(
+				trackInputSchema.safeParse(makeTrack({ statusSeq: value } as any)),
 			);
-			expect(result.success).toBe(false);
 		});
 	});
 
@@ -772,34 +764,33 @@ describe("track.schema", () => {
 			["processing", { status: "processing", seq: 1 }],
 			["completed", { status: "completed", seq: 42 }],
 		])("accepts %s status with a non-negative integer seq", (_label, value) => {
-			expect(trackChangesSchema.safeParse(value).success).toBe(true);
+			expectSuccess(trackChangesSchema.safeParse(value));
 		});
 
 		it("accepts failed status with reason and seq", () => {
-			const result = trackChangesSchema.safeParse({
-				status: "failed",
-				reason: "FFmpeg exited with code 1",
-				seq: 3,
-			});
-			expect(result.success).toBe(true);
+			expectSuccess(
+				trackChangesSchema.safeParse({
+					status: "failed",
+					reason: "FFmpeg exited with code 1",
+					seq: 3,
+				}),
+			);
 		});
 
 		it("rejects seq 0 (must be >= 1)", () => {
-			expect(
-				trackChangesSchema.safeParse({ status: "processing", seq: 0 }).success,
-			).toBe(false);
+			expectFailure(
+				trackChangesSchema.safeParse({ status: "processing", seq: 0 }),
+			);
 		});
 
 		it("rejects pending status in changes (no implicit re-queue)", () => {
-			expect(
-				trackChangesSchema.safeParse({ status: "pending", seq: 1 }).success,
-			).toBe(false);
+			expectFailure(
+				trackChangesSchema.safeParse({ status: "pending", seq: 1 }),
+			);
 		});
 
 		it("keeps seq optional for backward compatibility", () => {
-			expect(
-				trackChangesSchema.safeParse({ status: "processing" }).success,
-			).toBe(true);
+			expectSuccess(trackChangesSchema.safeParse({ status: "processing" }));
 		});
 
 		it.each([
@@ -809,85 +800,122 @@ describe("track.schema", () => {
 			["null", null],
 			["boolean", true],
 		])("rejects %s seq", (_label, seq) => {
-			const result = trackChangesSchema.safeParse({
-				status: "processing",
-				seq,
-			});
-			expect(result.success).toBe(false);
+			expectFailure(
+				trackChangesSchema.safeParse({
+					status: "processing",
+					seq,
+				}),
+			);
 		});
 		it("rejects failed status with seq but missing reason", () => {
-			const result = trackChangesSchema.safeParse({ status: "failed", seq: 1 });
-			expect(result.success).toBe(false);
+			expectFailure(trackChangesSchema.safeParse({ status: "failed", seq: 1 }));
 		});
 
 		it("rejects seq on the fields branch", () => {
-			const result = trackChangesSchema.safeParse({ selected: 1, seq: 2 });
-			expect(result.success).toBe(false);
+			expectFailure(trackChangesSchema.safeParse({ selected: 1, seq: 2 }));
 		});
 	});
 
 	describe("filePathSchema", () => {
+		afterEach(() => resetPlatform());
+
 		it("accepts a valid file path", () => {
-			const path = "/music/track.mp3";
-			const result = filePathSchema.safeParse(path);
-			expect(result.success).toBe(true);
+			expectSuccess(filePathSchema.safeParse("/music/track.mp3"));
 		});
 
 		it("rejects an empty file path", () => {
-			const result = filePathSchema.safeParse("");
-			expect(result.success).toBe(false);
-		});
-
-		it("applies the normalizeFilePath transform idempotently", () => {
-			const path = "C:/Music/Track.MP3";
-			const result = filePathSchema.safeParse(path);
-			expect(result.success).toBe(true);
-			if (result.success) {
-				expect(result.data).toBe(path.toLowerCase());
-			}
+			expectFailure(filePathSchema.safeParse(""));
 		});
 
 		it("rejects file paths containing null bytes", () => {
-			const result = filePathSchema.safeParse("/music/\0track.mp3");
-			expect(result.success).toBe(false);
+			expectFailure(filePathSchema.safeParse("/music/\0track.mp3"));
+		});
+
+		it("lowercases filePath on win32", () => {
+			configurePlatform("win32");
+			expect(
+				expectSuccess(filePathSchema.safeParse("C:/Music/Track.MP3")),
+			).toBe("c:/music/track.mp3");
+		});
+
+		it("lowercases filePath on darwin", () => {
+			configurePlatform("darwin");
+			expect(expectSuccess(filePathSchema.safeParse("/Music/Track.MP3"))).toBe(
+				"/music/track.mp3",
+			);
+		});
+
+		it("preserves case on linux", () => {
+			configurePlatform("linux");
+			expect(expectSuccess(filePathSchema.safeParse("/Music/Track.MP3"))).toBe(
+				"/Music/Track.MP3",
+			);
+		});
+
+		it("is idempotent (re-parsing a normalized value is a no-op)", () => {
+			configurePlatform("win32");
+			const firstData = expectSuccess(filePathSchema.safeParse("C:/A.MP3"));
+			const reparsedData = expectSuccess(filePathSchema.safeParse(firstData));
+			expect(reparsedData).toBe(firstData);
 		});
 	});
 
-	describe("trackInputSchema — filePath normalization (F-01 / INV-8)", () => {
-		it("normalizes filePath on the ingestion path (proves F-01)", () => {
-			const parsed = trackInputSchema.parse(
-				makeTrack({ filePath: "C:/Music/Track.MP3" }),
+	describe("trackInputSchema — filePath normalization", () => {
+		afterEach(() => resetPlatform());
+
+		it("normalizes filePath on the ingestion path", () => {
+			configurePlatform("win32");
+			const parsed = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "C:/Music/Track.MP3" }),
+				),
 			);
 			expect(parsed.filePath).toBe("c:/music/track.mp3");
 		});
 
 		it("folds case-variant filePaths to the same canonical key", () => {
-			const a = trackInputSchema.parse(
-				makeTrack({ id: "a", filePath: "C:/A.MP3" }),
+			configurePlatform("win32");
+			const a = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ id: "a", filePath: "C:/A.MP3" }),
+				),
 			);
-			const b = trackInputSchema.parse(
-				makeTrack({ id: "b", filePath: "c:/a.mp3" }),
+			const b = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ id: "b", filePath: "c:/a.mp3" }),
+				),
 			);
 			expect(a.filePath).toBe(b.filePath);
 			expect(a.filePath).toBe("c:/a.mp3");
 		});
 
 		it("preserves already-normalized filePaths (idempotent re-parse)", () => {
-			const parsed = trackInputSchema.parse(
-				makeTrack({ filePath: "c:/music/track.mp3" }),
+			configurePlatform("win32");
+			const parsed = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "c:/music/track.mp3" }),
+				),
 			);
 			expect(parsed.filePath).toBe("c:/music/track.mp3");
 		});
 
 		it("still rejects empty / null-byte filePaths after the transform", () => {
-			expect(
-				trackInputSchema.safeParse(makeTrack({ filePath: "" })).success,
-			).toBe(false);
-			expect(
+			configurePlatform("win32");
+			expectFailure(trackInputSchema.safeParse(makeTrack({ filePath: "" })));
+			expectFailure(
 				trackInputSchema.safeParse(
 					makeTrack({ filePath: "/music/\0track.mp3" }),
-				).success,
-			).toBe(false);
+				),
+			);
+		});
+
+		it("applies NFC folding on the ingestion path", () => {
+			configurePlatform("darwin");
+			const nfdInput = "/Music/E\u0301le\u0301ment.MP3";
+			const parsed = expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ filePath: nfdInput })),
+			);
+			expect(parsed.filePath).toBe("/music/\u00e9l\u00e9ment.mp3");
 		});
 	});
 });
