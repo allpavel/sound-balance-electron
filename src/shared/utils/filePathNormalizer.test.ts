@@ -16,15 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import {
-	DETECTED_PLATFORM,
-	type NormalizationPlatform,
-	normalizeFilePath,
-} from "./filePathNormalizer";
+import type { PLATFORM } from "@shared/constants";
+import { normalizeFilePath } from "./filePathNormalizer";
 
 describe("filePathNormalizer", () => {
 	describe("normalizeFilePath — case-insensitive platforms", () => {
-		it.each<NormalizationPlatform>(["win32", "darwin"])(
+		it.each<PLATFORM>(["win32", "darwin"])(
 			"lowercases an ASCII path on %s",
 			(platform) => {
 				expect(normalizeFilePath("C:/Music/Track.MP3", platform)).toBe(
@@ -33,7 +30,7 @@ describe("filePathNormalizer", () => {
 			},
 		);
 
-		it.each<NormalizationPlatform>(["win32", "darwin"])(
+		it.each<PLATFORM>(["win32", "darwin"])(
 			"lowercases a Unicode path on %s",
 			(platform) => {
 				expect(normalizeFilePath("/Music/Élément.MP3", platform)).toBe(
@@ -42,7 +39,7 @@ describe("filePathNormalizer", () => {
 			},
 		);
 
-		it.each<NormalizationPlatform>(["win32", "darwin"])(
+		it.each<PLATFORM>(["win32", "darwin"])(
 			"lowercases a Windows UNC path on %s",
 			(platform) => {
 				expect(normalizeFilePath("\\\\SERVER\\Share\\File.MP3", platform)).toBe(
@@ -51,7 +48,7 @@ describe("filePathNormalizer", () => {
 			},
 		);
 
-		it.each<NormalizationPlatform>(["win32", "darwin"])(
+		it.each<PLATFORM>(["win32", "darwin"])(
 			"is idempotent on %s (already-normalized path is unchanged)",
 			(platform) => {
 				const normalized = "c:/music/track.mp3";
@@ -83,26 +80,7 @@ describe("filePathNormalizer", () => {
 		});
 	});
 
-	describe("normalizeFilePath — default platform", () => {
-		it("uses the detected platform when no explicit platform is provided", () => {
-			const path = "C:/Test/FILE.MP3";
-			const explicit = normalizeFilePath(path, DETECTED_PLATFORM);
-			const implicit = normalizeFilePath(path);
-			expect(implicit).toBe(explicit);
-		});
-	});
-
-	describe("DETECTED_PLATFORM", () => {
-		it("is one of the supported platforms", () => {
-			expect(["win32", "darwin", "linux"]).toContain(DETECTED_PLATFORM);
-		});
-
-		it("is frozen (immutable)", () => {
-			expect(Object.isFrozen(DETECTED_PLATFORM)).toBe(true);
-		});
-	});
-
-	describe("cross-platform consistency (INV-8 regression)", () => {
+	describe("cross-platform consistency", () => {
 		it("produces the same key for 'C:/A.MP3' and 'c:/a.mp3' on Windows", () => {
 			expect(normalizeFilePath("C:/A.MP3", "win32")).toBe(
 				normalizeFilePath("c:/a.mp3", "win32"),
@@ -118,6 +96,29 @@ describe("filePathNormalizer", () => {
 		it("produces DIFFERENT keys for paths differing only by case on Linux", () => {
 			expect(normalizeFilePath("/Music/Track.MP3", "linux")).not.toBe(
 				normalizeFilePath("/music/track.mp3", "linux"),
+			);
+		});
+	});
+
+	describe("normalizeFilePath — Unicode NFC folding", () => {
+		it.each<PLATFORM>(["win32", "darwin", "linux"])(
+			"composes NFD input to NFC before folding on %s",
+			(platform) => {
+				// "É" as E + combining acute (NFD) → precomposed "É" (NFC).
+				const nfdInput = "/Music/E\u0301le\u0301ment.MP3";
+				const result = normalizeFilePath(nfdInput, platform);
+				const expectedNfc = "/Music/\u00c9l\u00e9ment.MP3";
+				const isCaseInsensitive = platform === "win32" || platform === "darwin";
+				expect(result).toBe(
+					isCaseInsensitive ? expectedNfc.toLowerCase() : expectedNfc,
+				);
+			},
+		);
+
+		it("NFC folding is idempotent (already-NFC input is unchanged)", () => {
+			const nfc = "/Music/\u00c9l\u00e9ment.MP3";
+			expect(normalizeFilePath(nfc, "darwin")).toBe(
+				"/music/\u00e9l\u00e9ment.mp3",
 			);
 		});
 	});
