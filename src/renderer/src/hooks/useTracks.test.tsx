@@ -702,12 +702,12 @@ describe("useTracks", () => {
 			const payload: AddTracksPayload = {
 				tracks: [
 					makeTrack({
-						id: "a",
-						filePath: "/music/same.mp3",
+						id: "duplicate-id",
+						filePath: "/music/a.mp3",
 					}),
 					makeTrack({
-						id: "b",
-						filePath: "/music/same.mp3",
+						id: "duplicate-id",
+						filePath: "/music/b.mp3",
 					}),
 				],
 				options: {
@@ -723,7 +723,7 @@ describe("useTracks", () => {
 				expect(result.current.addTracksState.isError).toBe(true),
 			);
 			expect(result.current.addTracksState.isPending).toBe(false);
-			expect(result.current.addTracksState.error).toBeInstanceOf(Error);
+			expect(result.current.addTracksState.error).toBeInstanceOf(ConflictError);
 		});
 
 		it("propagates repository validation errors from updateTrackAsync", async () => {
