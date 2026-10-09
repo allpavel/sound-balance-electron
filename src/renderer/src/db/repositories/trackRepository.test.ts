@@ -28,6 +28,7 @@ import {
 } from "@shared/errors";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
+import { configurePlatform, resetPlatform } from "@shared/utils";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeTrack } from "@tests/factories";
 
@@ -611,8 +612,11 @@ describe("tracksRepository", () => {
 
 	describe("addMany — case-variant filePath dedupe", () => {
 		beforeEach(async () => {
+			configurePlatform("win32");
 			await resetDatabase();
 		});
+
+		afterEach(() => resetPlatform());
 
 		it("merges a case-variant re-import onto the existing row (single INV-8 row)", async () => {
 			await tracksRepository.addMany(
