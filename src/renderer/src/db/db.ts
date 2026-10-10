@@ -16,7 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { DATABASE_NAME, SYSTEM_COLLECTION_ID } from "@renderer/db/constants";
+import {
+	DATABASE_NAME,
+	SYSTEM_COLLECTION_ID,
+	TRACKS_STORES_V1,
+	TRACKS_STORES_V2,
+} from "@renderer/db/constants";
 import { isLegacyPicture } from "@renderer/db/utils/dbUtils";
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { Artwork } from "@shared/types";
@@ -32,19 +37,10 @@ const db = new Dexie(DATABASE_NAME) as Dexie & {
 	artworks: EntityTable<Artwork, "id">;
 };
 
-db.version(1).stores({
-	tracks: "id, &filePath, *collectionIds, selected",
-	settings: "id",
-	collections: "id",
-});
+db.version(1).stores(TRACKS_STORES_V1);
 
 db.version(2)
-	.stores({
-		tracks: "id, &filePath, *collectionIds, selected",
-		settings: "id",
-		collections: "id",
-		artworks: "id",
-	})
+	.stores(TRACKS_STORES_V2)
 	.upgrade(async (tx) => {
 		const tracks = await tx.table("tracks").toArray();
 		for (const track of tracks) {

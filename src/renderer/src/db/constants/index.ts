@@ -23,3 +23,17 @@ export const SYSTEM_COLLECTION_ID = "all";
  * Maximum number of missing collection IDs to display in the error message.
  */
 export const MAX_DISPLAY_MISSING = 5;
+
+/**
+ * IndexedDB store definitions per schema version.
+ */
+export const TRACKS_STORES_V1 = {
+	tracks: "id, &filePath, *collectionIds, selected",
+	settings: "id",
+	collections: "id",
+} as const;
+
+export const TRACKS_STORES_V2 = {
+	...TRACKS_STORES_V1,
+	artworks: "id",
+} as const;
