@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { type Data, dataSchema } from "@shared/schemas/data.schema";
 import {
 	looseSettingsSchema,
@@ -22,6 +23,8 @@ import {
 	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
 import {
+	type AddManyOptions,
+	addManyOptionsSchema,
 	type CollectionId,
 	type IngestionMetadata,
 	type TrackChanges,
@@ -63,6 +66,7 @@ export type TracksParseResult = ValidationResult<IngestionMetadata[]>;
 export type DataParseResult = ValidationResult<Data>;
 export type TrackChangesParseResult = ValidationResult<TrackChanges>;
 export type CollectionIdParseResult = ValidationResult<CollectionId>;
+export type AddManyOptionsParseResult = ValidationResult<AddManyOptions>;
 
 export interface Issue {
 	readonly path?: PropertyKey[];
@@ -248,4 +252,17 @@ export function safeParseData(input: unknown): DataParseResult {
  */
 export function safeParseTrackChanges(input: unknown): TrackChangesParseResult {
 	return validate(trackChangesSchema, input);
+}
+
+/**
+ * Validates `tracksRepository.addMany` options against
+ * {@link addManyOptionsSchema}.
+ *
+ * @param input - Untrusted options payload.
+ * @returns A {@link AddManyOptionsParseResult}.
+ */
+export function safeParseAddManyOptions(
+	input: unknown,
+): AddManyOptionsParseResult {
+	return validate(addManyOptionsSchema, input);
 }
