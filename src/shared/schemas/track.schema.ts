@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import {
+	IMPORT_BATCH_SIZE,
 	MAX_BLOB_IMAGE_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
@@ -25,6 +26,7 @@ import {
 	NULL_BYTE_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
+import type { AddManyProgressCallback } from "@shared/types";
 import { getPlatform, normalizeFilePath } from "@shared/utils";
 import z from "zod";
 
@@ -500,6 +502,63 @@ export const trackChangesSchema = z.union([
 	trackChangesFieldsSchema,
 	trackChangesStatusSchema,
 ]);
+
+/**
+ * Type-guard schema for the `onProgress` callback in {@link addManyOptionsSchema}.
+ *
+ * Uses `z.custom` with a `typeof === "function"` type guard (not
+ * `z.function()`, which would wrap the callback with per-call arg validation
+ * and change its identity). The guard narrows `unknown` →
+ * {@link AddManyProgressCallback} without runtime side-effects.
+ */
+const progressCallbackSchema = z.custom<AddManyProgressCallback>(
+	(value): value is AddManyProgressCallback => typeof value === "function",
+	{ error: "onProgress must be a function" },
+);
+
+/**
+ * Runtime-validated schema for `tracksRepository.addMany` options.
+ *
+ * Replaces the type-only `AddManyOptions` contract that let
+ * `batchSize: NaN` bypass `chunkArray`'s `size < 1` guard (`NaN < 1` is
+ * `false`) and produce a single empty batch — returning empty success for
+ * non-empty input (silent, total, success-reported data loss). This schema
+ * validates the options at the trust boundary (UI/Redux → data layer; options
+ * may later cross IPC where TS types no longer hold) and **rejects** invalid
+ * values rather than clamping:
+ *
+ * @property targetCollectionId - Reuses `targetCollectionIdSchema`
+ *   (non-empty, null-byte-free, length-bounded). Optional; defaults to
+ *   `SYSTEM_COLLECTION_ID` in `addMany`.
+ * @property batchSize - Integer in `[1, MAX_IMPORT_BATCH_SIZE]`. Rejects `0`,
+ *   negative, `NaN`, fractional, `Infinity`, and string-typed values (no
+ *   coercion reliance). Optional; defaults to `IMPORT_BATCH_SIZE`.
+ * @property onProgress - Must be a function (typeof guard). The callback must
+ *   be **synchronous and non-throwing**; `addMany` isolates it in a try/catch
+ *   so a throwing observer cannot abort the remaining batches.
+ *
+ * `.strict()` rejects unknown keys (defense in depth — options cross a trust
+ * boundary, so unexpected fields are a caller bug, not a feature).
+ *
+ * @see {@link assertAddManyOptions} for the throwing boundary helper.
+ */
+export const addManyOptionsSchema = z
+	.object({
+		targetCollectionId: targetCollectionIdSchema.optional(),
+		batchSize: z
+			.number()
+			.int({ error: "batchSize must be an integer" })
+			.min(1, { error: "batchSize must be ≥ 1" })
+			.max(IMPORT_BATCH_SIZE, {
+				error: `batchSize must not exceed ${IMPORT_BATCH_SIZE}`,
+			})
+			.optional(),
+		onProgress: progressCallbackSchema.optional(),
+	})
+	.strict();
+
+/** The `addMany` options type — **derived** from {@link addManyOptionsSchema}  */
+export type AddManyOptions = z.infer<typeof addManyOptionsSchema>;
 
 type InputTrack = z.infer<typeof trackInputSchema>;
 
