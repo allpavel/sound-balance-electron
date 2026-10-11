@@ -17,7 +17,6 @@
  */
 
 import { db } from "@renderer/db/db";
-import type { AddManyOptions } from "@renderer/db/types";
 import { checkStorageHeadroom } from "@renderer/db/utils/dbUtils";
 import {
 	applyGuardedTrackUpdate,
@@ -43,6 +42,7 @@ import {
 	TrackValidationError,
 } from "@shared/errors";
 import type {
+	AddManyOptions,
 	IngestionMetadata,
 	Metadata,
 	TrackChanges,

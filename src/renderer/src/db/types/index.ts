@@ -17,7 +17,7 @@
  */
 
 import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
-import type { AddManyProgressCallback, Artwork } from "@shared/types";
+import type { Artwork } from "@shared/types";
 import type Dexie from "dexie";
 import type { EntityTable } from "dexie";
 
@@ -28,25 +28,6 @@ import type { EntityTable } from "dexie";
 export type TrackBatchDatabase = Pick<Dexie, "transaction"> & {
 	readonly tracks: EntityTable<Metadata, "id">;
 	readonly artworks: EntityTable<Artwork, "id">;
-};
-
-/**
- * Options for {@link tracksRepository.addMany}.
- *
- * @property targetCollectionId - Collection to assign (defaults to `"all"`).
- * @property onProgress        - Optional callback invoked after each batch
- *                               completes, receiving cumulative outcome counts
- *                               (PERF-4). The callback is synchronous and
- *                               should not perform heavy work.
- * @property batchSize          - Maximum tracks per transaction (PERF-3).
- *                               Defaults to {@link IMPORT_BATCH_SIZE} (500).
- *                               Each batch runs in its own IndexedDB
- *                               transaction to keep lock duration bounded.
- */
-export type AddManyOptions = {
-	readonly targetCollectionId?: string;
-	readonly onProgress?: AddManyProgressCallback;
-	readonly batchSize?: number;
 };
 
 /**

@@ -35,14 +35,16 @@ import {
 	TrackValidationError,
 } from "@shared/errors";
 import type {
+	AddManyOptions,
 	CollectionId,
 	IngestionMetadata,
 	Metadata,
 	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyResult, Artwork } from "@shared/types";
-import { isLegalStatusTransition } from "@shared/utils";
+import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
 import {
+	safeParseAddManyOptions,
 	safeParseTargetCollectionId,
 	safeParseTrack,
 	safeParseTrackChanges,
@@ -196,7 +198,7 @@ function mapStorageWriteError(error: unknown): never {
  * @param fieldPath – Template for the error context, e.g. `"tracks[{i}].filePath"`.
  * @param label     – Human-readable noun for the message, e.g. `"filePath"`.
  *
- * @throws {TrackValidationError} On the first duplicate detected.
+ * @throws {ConflictError} On the first duplicate detected.
  */
 function assertBatchUniqueness<T>(
 	items: readonly T[],
@@ -209,7 +211,7 @@ function assertBatchUniqueness<T>(
 		const key = getKey(item);
 		if (seen.has(key)) {
 			throw new ConflictError(
-				`Batch contains duplicate ${label}: "${key}" at ${fieldPath(index)}`,
+				`Batch contains duplicate ${sanitizeControlChars(label)}: "${sanitizeControlChars(key)}" at ${sanitizeControlChars(fieldPath(index))}`,
 			);
 		}
 		seen.add(key);
@@ -262,13 +264,16 @@ async function assertReferentialIntegrity(
 
 	const missing = idsToCheck.filter((id) => !existingIds.has(id));
 	if (missing.length > 0) {
-		const display = missing.slice(0, MAX_DISPLAY_MISSING).join(", ");
+		const display = missing
+			.slice(0, MAX_DISPLAY_MISSING)
+			.map(sanitizeControlChars)
+			.join(", ");
 		const suffix =
 			missing.length > MAX_DISPLAY_MISSING
 				? ` (and ${missing.length - MAX_DISPLAY_MISSING} more)`
 				: "";
 		throw new ReferentialIntegrityError(
-			`${context}: Referenced collection(s) do not exist: ${display}${suffix}`,
+			`${sanitizeControlChars(context)}: Referenced collection(s) do not exist: ${display}${suffix}`,
 		);
 	}
 }
@@ -288,6 +293,28 @@ function assertTrackInput(track: unknown, index: number): IngestionMetadata {
 	const result = safeParseTrack(track);
 	if (!result.success) {
 		throw new TrackValidationError(context, result.issues);
+	}
+	return result.data;
+}
+
+/**
+ * Asserts that the untrusted `addMany` options satisfy
+ * {@link addManyOptionsSchema}.
+ *
+ * Rejects (does not clamp) invalid `batchSize` / `onProgress`
+ * at the trust boundary, throwing {@link TrackValidationError} carrying the
+ * structured issues from the schema. Callers receive the validated options
+ * with `batchSize` guaranteed to be an integer in `[1, MAX_IMPORT_BATCH_SIZE]`
+ * and `onProgress` guaranteed to be a function (or `undefined`).
+ *
+ * @param options - Untrusted options payload (UI/Redux → data layer).
+ * @returns The schema-validated options.
+ * @throws {TrackValidationError} When validation fails.
+ */
+function assertAddManyOptions(options: unknown): AddManyOptions {
+	const result = safeParseAddManyOptions(options);
+	if (!result.success) {
+		throw new TrackValidationError("options", result.issues);
 	}
 	return result.data;
 }
@@ -717,6 +744,7 @@ function dedupeByFilePath(
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
+	assertAddManyOptions,
 	assertBatchPayloadSize,
 	assertBatchUniqueness,
 	assertReferentialIntegrity,
