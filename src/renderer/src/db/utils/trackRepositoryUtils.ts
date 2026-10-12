@@ -41,7 +41,12 @@ import type {
 	Metadata,
 	TrackChanges,
 } from "@shared/schemas/track.schema";
-import type { AddManyResult, Artwork } from "@shared/types";
+import type {
+	AddManyProgress,
+	AddManyProgressCallback,
+	AddManyResult,
+	Artwork,
+} from "@shared/types";
 import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
 import {
 	safeParseAddManyOptions,
@@ -741,6 +746,40 @@ function dedupeByFilePath(
 	return { unique, skipped };
 }
 
+/**
+ * Invokes the `addMany` progress callback in a failure-isolated wrapper.
+ *
+ * [F-07 / S-2] A throwing UI observer must not abort the remaining batches
+ * (which would cause a partial commit per F-03) nor corrupt the data-layer
+ * error path. The callback is wrapped in `try/catch`; on throw, a single
+ * **sanitized** warning is logged (the error `name` only — never the
+ * `message`, which could contain attacker-influenceable content) and the
+ * import continues. The callback contract (documented on
+ * {@link AddManyProgressCallback}) is: synchronous, non-throwing, no heavy
+ * work. A misbehaving callback is observed, not propagated.
+ *
+ * @param onProgress - The validated callback (may be `undefined`).
+ * @param progress   - The cumulative progress snapshot to emit.
+ */
+function emitProgress(
+	onProgress: AddManyProgressCallback | undefined,
+	progress: AddManyProgress,
+): void {
+	if (onProgress === undefined) return;
+	try {
+		onProgress(progress);
+	} catch (callbackError: unknown) {
+		const errorName = isErrorWithName(callbackError)
+			? sanitizeControlChars(callbackError.name)
+			: "unknown";
+		// biome-ignore lint/suspicious/noConsole: Intentional diagnostic for a throwing onProgress callback; sanitized output only (error name, never message).
+		console.warn(
+			"[tracksRepository.addMany] onProgress callback threw; continuing import",
+			{ processed: progress.processed, total: progress.total, errorName },
+		);
+	}
+}
+
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
@@ -753,6 +792,7 @@ export {
 	calculateBatchPayloadSize,
 	chunkArray,
 	dedupeByFilePath,
+	emitProgress,
 	fetchExistingTrackKeys,
 	isErrorWithName,
 	isNonEmptyString,
