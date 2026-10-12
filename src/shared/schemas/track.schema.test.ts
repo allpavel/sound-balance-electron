@@ -17,7 +17,9 @@
  */
 
 import {
+	IMPORT_BATCH_SIZE,
 	MAX_BLOB_IMAGE_SIZE,
+	MAX_IMPORT_BATCH_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
@@ -28,6 +30,7 @@ import { configurePlatform, resetPlatform } from "@shared/utils";
 import { makeTrack } from "@tests/factories";
 import { expectFailure, expectSuccess, hasIssueWithPath } from "@tests/utils";
 import {
+	addManyOptionsSchema,
 	collectionIdsSchema,
 	filePathSchema,
 	selectedSchema,
@@ -916,6 +919,76 @@ describe("track.schema", () => {
 				trackInputSchema.safeParse(makeTrack({ filePath: nfdInput })),
 			);
 			expect(parsed.filePath).toBe("/music/\u00e9l\u00e9ment.mp3");
+		});
+	});
+
+	describe("addManyOptionsSchema", () => {
+		it("accepts an empty object (all fields optional)", () => {
+			expectSuccess(addManyOptionsSchema.safeParse({}));
+		});
+
+		it("accepts a fully valid options object", () => {
+			const data = expectSuccess(
+				addManyOptionsSchema.safeParse({
+					targetCollectionId: "all",
+					batchSize: 100,
+					onProgress: () => undefined,
+				}),
+			);
+			expect(data.targetCollectionId).toBe("all");
+			expect(data.batchSize).toBe(100);
+			expect(typeof data.onProgress).toBe("function");
+		});
+
+		it("accepts batchSize at the upper bound (MAX_IMPORT_BATCH_SIZE)", () => {
+			const data = expectSuccess(
+				addManyOptionsSchema.safeParse({ batchSize: MAX_IMPORT_BATCH_SIZE }),
+			);
+			expect(data.batchSize).toBe(MAX_IMPORT_BATCH_SIZE);
+		});
+
+		it.each<[string, number]>([
+			["0", 0],
+			["negative (-5)", -5],
+			["NaN", Number.NaN],
+			["fractional (1.5)", 1.5],
+			["Infinity", Number.POSITIVE_INFINITY],
+		])("rejects numeric batchSize = %s", (_label, value) => {
+			expectFailure(addManyOptionsSchema.safeParse({ batchSize: value }));
+		});
+
+		it("rejects batchSize above MAX_IMPORT_BATCH_SIZE", () => {
+			expectFailure(
+				addManyOptionsSchema.safeParse({
+					batchSize: IMPORT_BATCH_SIZE + 1,
+				}),
+			);
+		});
+
+		it('rejects string-typed batchSize ("500")', () => {
+			expectFailure(addManyOptionsSchema.safeParse({ batchSize: "500" }));
+		});
+
+		it("rejects a non-function onProgress (string)", () => {
+			expectFailure(
+				addManyOptionsSchema.safeParse({ onProgress: "not-a-function" }),
+			);
+		});
+
+		it("rejects a non-function onProgress (number)", () => {
+			expectFailure(addManyOptionsSchema.safeParse({ onProgress: 42 }));
+		});
+
+		it("rejects unknown keys (.strict())", () => {
+			expectFailure(addManyOptionsSchema.safeParse({ unexpected: true }));
+		});
+
+		it.each([
+			["null", null],
+			["number", 42],
+			["string", "not-an-object"],
+		])("rejects a non-object options payload: %s", (_label, input) => {
+			expectFailure(addManyOptionsSchema.safeParse(input));
 		});
 	});
 });

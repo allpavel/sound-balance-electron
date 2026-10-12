@@ -19,7 +19,11 @@
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import { resetDatabase, seedCollection } from "@renderer/utils/test-utils";
-import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import {
+	MAX_IMPORT_BATCH_SIZE,
+	STATUS_VALUES,
+	SYSTEM_COLLECTION_ID,
+} from "@shared/constants";
 import {
 	ConflictError,
 	ReferentialIntegrityError,
@@ -707,6 +711,100 @@ describe("tracksRepository", () => {
 			expect((await db.tracks.get("a"))?.collectionIds).toEqual(
 				expect.arrayContaining([SYSTEM_COLLECTION_ID, "mix1"]),
 			);
+		});
+	});
+
+	describe("addMany - options validation & observer isolation", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+		});
+
+		it.each<[string, number]>([
+			["0", 0],
+			["negative (-5)", -5],
+			["NaN", Number.NaN],
+			["fractional (1.5)", 1.5],
+			["Infinity", Number.POSITIVE_INFINITY],
+		])(
+			"rejects batchSize = %s with TrackValidationError and writes nothing",
+			async (_label, value) => {
+				await expect(
+					tracksRepository.addMany([makeTrack()], { batchSize: value }),
+				).rejects.toThrow(TrackValidationError);
+				expect(await db.tracks.count()).toBe(0);
+			},
+		);
+
+		it("rejects batchSize above MAX_IMPORT_BATCH_SIZE", async () => {
+			await expect(
+				tracksRepository.addMany([makeTrack()], {
+					batchSize: MAX_IMPORT_BATCH_SIZE + 1,
+				}),
+			).rejects.toThrow(TrackValidationError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it.each([
+			["string-typed batchSize", '{"batchSize":"500"}'],
+			["non-function onProgress", '{"onProgress":"not-a-function"}'],
+			["unknown options keys", '{"unexpected":true}'],
+		])(
+			"rejects %s — simulates untrusted IPC/JSON input",
+			async (_label, jsonString) => {
+				const opts = JSON.parse(jsonString);
+				await expect(
+					tracksRepository.addMany([makeTrack()], opts),
+				).rejects.toThrow(TrackValidationError);
+				expect(await db.tracks.count()).toBe(0);
+			},
+		);
+
+		it.each([
+			["string", '"not-an-object"'],
+			["number", "42"],
+			["null", "null"],
+		])(
+			"rejects a non-object options payload (%s)",
+			async (_label, jsonString) => {
+				const opts = JSON.parse(jsonString);
+				await expect(
+					tracksRepository.addMany([makeTrack()], opts),
+				).rejects.toThrow(TrackValidationError);
+				expect(await db.tracks.count()).toBe(0);
+			},
+		);
+
+		it("isolates a throwing onProgress callback — import continues", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const throwing = vi.fn(() => {
+				throw new Error("error");
+			});
+			const tracks = [makeTrack({ id: "a" }), makeTrack({ id: "b" })];
+			// batchSize: 1 → 2 batches → 2 callback invocations, both throwing.
+			const result = await tracksRepository.addMany(tracks, {
+				onProgress: throwing,
+				batchSize: 1,
+			});
+			expect(result.added).toEqual(["a", "b"]);
+			expect(await db.tracks.count()).toBe(2);
+			expect(throwing).toHaveBeenCalledTimes(2);
+			expect(warnSpy).toHaveBeenCalledTimes(2);
+			const warnArg = warnSpy.mock.calls[0]?.[1];
+			expect(warnArg).not.toHaveProperty("message");
+			warnSpy.mockRestore();
+		});
+
+		it("still accepts a valid custom batchSize and emits progress (regression)", async () => {
+			const progressCalls: AddManyProgress[] = [];
+			const tracks = Array.from({ length: 10 }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+			await tracksRepository.addMany(tracks, {
+				batchSize: 4,
+				onProgress: (p) => progressCalls.push(p),
+			});
+			expect(progressCalls).toHaveLength(3);
+			expect(await db.tracks.count()).toBe(10);
 		});
 	});
 
