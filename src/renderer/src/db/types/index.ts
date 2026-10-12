@@ -17,7 +17,7 @@
  */
 
 import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
-import type { Artwork } from "@shared/types";
+import type { AddManyProgress, Artwork } from "@shared/types";
 import type Dexie from "dexie";
 import type { EntityTable } from "dexie";
 
@@ -41,4 +41,26 @@ export type FilePathDedupeResult = {
 	/** IDs of the folded (duplicate) tracks, reported via the `skipped`
 	 *  lane of {@link AddManyResult}. */
 	readonly skipped: readonly string[];
+};
+
+/**
+ * A failure-isolated progress emitter for `addMany` observers.
+ *
+ * Produced by {@link createProgressEmitter}; consumed by `addMany`, which
+ * calls {@link ProgressEmitter.emit} after each batch and
+ * {@link ProgressEmitter.flush} exactly once from a `finally` block (so the
+ * terminal summary is emitted on both the success and the abort path).
+ */
+export type ProgressEmitter = {
+	/**
+	 * Delivers a cumulative snapshot to the wrapped callback. A throwing
+	 * callback is caught, counted, and reported per the log-once policy;
+	 * `emit` never propagates observer failures into the import loop.
+	 */
+	readonly emit: (progress: AddManyProgress) => void;
+	/**
+	 * Logs the terminal summary of suppressed callback failures, if any.
+	 * Must be invoked exactly once when the import loop finishes or aborts.
+	 */
+	readonly flush: () => void;
 };
