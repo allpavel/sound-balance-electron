@@ -89,3 +89,9 @@ export const ANYOF_CHUNK_SIZE = 500;
 
 /** Supported platform identifiers for filePath normalization. */
 export type PLATFORM = "win32" | "darwin" | "linux";
+
+/**
+ * Maximum length of an error `name` echoed into diagnostic
+ * logs (e.g. when an `onProgress` callback throws).
+ */
+export const MAX_LOGGED_ERROR_NAME_LENGTH = 64;
