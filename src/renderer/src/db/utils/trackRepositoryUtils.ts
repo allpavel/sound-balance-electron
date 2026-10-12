@@ -19,11 +19,13 @@
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type {
 	FilePathDedupeResult,
+	ProgressEmitter,
 	TrackBatchDatabase,
 } from "@renderer/db/types";
 import {
 	ANYOF_CHUNK_SIZE,
 	MAX_BATCH_PAYLOAD_SIZE,
+	MAX_LOGGED_ERROR_NAME_LENGTH,
 	SYSTEM_COLLECTION_ID,
 } from "@shared/constants";
 import {
@@ -36,7 +38,6 @@ import {
 } from "@shared/errors";
 import type {
 	AddManyOptions,
-	CollectionId,
 	IngestionMetadata,
 	Metadata,
 	TrackChanges,
@@ -50,9 +51,9 @@ import type {
 import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
 import {
 	safeParseAddManyOptions,
-	safeParseTargetCollectionId,
 	safeParseTrack,
 	safeParseTrackChanges,
+	type ValidationResult,
 } from "@shared/validators";
 import type { EntityTable } from "dexie";
 import { v7 as uuidV7 } from "uuid";
@@ -224,21 +225,6 @@ function assertBatchUniqueness<T>(
 }
 
 /**
- * Validates that the target collection ID is a non-empty string.
- *
- * @param value - Untrusted input to validate.
- * @throws {TrackValidationError} When validation fails. Carries the
- *         full structured issue list from `targetCollectionIdSchema`.
- */
-function assertTargetCollectionId(value: unknown): CollectionId {
-	const result = safeParseTargetCollectionId(value);
-	if (!result.success) {
-		throw new TrackValidationError("targetCollectionId", result.issues);
-	}
-	return result.data;
-}
-
-/**
  * Verifies that all collection IDs in the provided array exist in the database.
  *
  * @param collectionIds - Array of collection IDs to verify.
@@ -284,6 +270,29 @@ async function assertReferentialIntegrity(
 }
 
 /**
+ * Generic parse-or-throw boundary helper.
+ *
+ * @typeParam T - The parsed output type of the schema.
+ * @param parse   - A `safeParseX` validator from `@shared/validators`.
+ * @param context - Location prefix for the thrown error (e.g. `"tracks[0]"`).
+ * @param input   - Untrusted input to validate.
+ * @returns The parsed, schema-validated data.
+ * @throws {TrackValidationError} When validation fails. Carries the full
+ *         structured issue list — no issues are discarded.
+ */
+function assertParsed<T>(
+	parse: (input: unknown) => ValidationResult<T>,
+	context: string,
+	input: unknown,
+): T {
+	const result = parse(input);
+	if (!result.success) {
+		throw new TrackValidationError(context, result.issues);
+	}
+	return result.data;
+}
+
+/**
  * Validates a single track object against `trackInputSchema` and returns
  * the parsed `Metadata` on success.
  *
@@ -294,12 +303,7 @@ async function assertReferentialIntegrity(
  *         structured issue list — no issues are discarded.
  */
 function assertTrackInput(track: unknown, index: number): IngestionMetadata {
-	const context = `tracks[${index}]`;
-	const result = safeParseTrack(track);
-	if (!result.success) {
-		throw new TrackValidationError(context, result.issues);
-	}
-	return result.data;
+	return assertParsed(safeParseTrack, `tracks[${index}]`, track);
 }
 
 /**
@@ -317,11 +321,7 @@ function assertTrackInput(track: unknown, index: number): IngestionMetadata {
  * @throws {TrackValidationError} When validation fails.
  */
 function assertAddManyOptions(options: unknown): AddManyOptions {
-	const result = safeParseAddManyOptions(options);
-	if (!result.success) {
-		throw new TrackValidationError("options", result.issues);
-	}
-	return result.data;
+	return assertParsed(safeParseAddManyOptions, "options", options);
 }
 
 function normalizeCollectionIds(
@@ -389,12 +389,7 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
  * @throws {TrackValidationError} When validation fails.
  */
 function validateTrackChanges(changes: unknown, context: string): TrackChanges {
-	const result = safeParseTrackChanges(changes);
-	if (!result.success) {
-		throw new TrackValidationError(context, result.issues);
-	}
-
-	const validated = result.data;
+	const validated = assertParsed(safeParseTrackChanges, context, changes);
 	if (
 		!("collectionIds" in validated) ||
 		validated.collectionIds === undefined
@@ -747,37 +742,70 @@ function dedupeByFilePath(
 }
 
 /**
- * Invokes the `addMany` progress callback in a failure-isolated wrapper.
+ * Derives a log-safe, length-bounded descriptor for a thrown value.
  *
- * [F-07 / S-2] A throwing UI observer must not abort the remaining batches
- * (which would cause a partial commit per F-03) nor corrupt the data-layer
- * error path. The callback is wrapped in `try/catch`; on throw, a single
- * **sanitized** warning is logged (the error `name` only — never the
- * `message`, which could contain attacker-influenceable content) and the
- * import continues. The callback contract (documented on
- * {@link AddManyProgressCallback}) is: synchronous, non-throwing, no heavy
- * work. A misbehaving callback is observed, not propagated.
- *
- * @param onProgress - The validated callback (may be `undefined`).
- * @param progress   - The cumulative progress snapshot to emit.
+ * @param error - The caught unknown value from a callback invocation.
+ * @returns A sanitized, truncated name safe for diagnostic logs.
  */
-function emitProgress(
+function describeThrownValue(error: unknown): string {
+	const name = isErrorWithName(error) ? error.name : "unknown";
+	return sanitizeControlChars(name).slice(0, MAX_LOGGED_ERROR_NAME_LENGTH);
+}
+
+/**
+ * Creates the failure-isolated progress emitter for an `addMany` import.
+ *
+ * The callback contract (synchronous, non-throwing, lightweight,
+ * renderer-local) is documented on {@link AddManyProgressCallback}.
+ *
+ * @param onProgress - The schema-validated callback (may be `undefined`,
+ *   in which case both emitter operations are no-ops and the hot path
+ *   carries no try/catch or closure bookkeeping).
+ * @returns A {@link ProgressEmitter} bound to this single import.
+ */
+function createProgressEmitter(
 	onProgress: AddManyProgressCallback | undefined,
-	progress: AddManyProgress,
-): void {
-	if (onProgress === undefined) return;
-	try {
-		onProgress(progress);
-	} catch (callbackError: unknown) {
-		const errorName = isErrorWithName(callbackError)
-			? sanitizeControlChars(callbackError.name)
-			: "unknown";
-		// biome-ignore lint/suspicious/noConsole: Intentional diagnostic for a throwing onProgress callback; sanitized output only (error name, never message).
-		console.warn(
-			"[tracksRepository.addMany] onProgress callback threw; continuing import",
-			{ processed: progress.processed, total: progress.total, errorName },
-		);
+): ProgressEmitter {
+	if (onProgress === undefined) {
+		return { emit: (): void => {}, flush: (): void => {} };
 	}
+	const callback: AddManyProgressCallback = onProgress;
+	let failureCount = 0;
+	let firstFailureLogged = false;
+
+	return {
+		emit(progress: AddManyProgress): void {
+			try {
+				callback(progress);
+			} catch (callbackError: unknown) {
+				failureCount += 1;
+				if (!firstFailureLogged) {
+					firstFailureLogged = true;
+					// biome-ignore lint/suspicious/noConsole: Intentional diagnostic for a throwing onProgress callback; sanitized and truncated output only (error name, never message); logged once per import.
+					console.warn(
+						"[tracksRepository.addMany] onProgress callback threw; continuing import. Further callback failures are suppressed and summarized on completion.",
+						{
+							processed: progress.processed,
+							total: progress.total,
+							errorName: describeThrownValue(callbackError),
+						},
+					);
+				}
+			}
+		},
+		flush(): void {
+			if (failureCount > 1) {
+				// biome-ignore lint/suspicious/noConsole: Terminal diagnostic summary; pure counts only — no attacker-influenceable content.
+				console.warn(
+					"[tracksRepository.addMany] onProgress callback failed repeatedly during this import; every failure was isolated (see the first warning for detail)",
+					{
+						totalFailures: failureCount,
+						suppressedAfterFirst: failureCount - 1,
+					},
+				);
+			}
+		},
+	};
 }
 
 export {
@@ -786,13 +814,13 @@ export {
 	assertAddManyOptions,
 	assertBatchPayloadSize,
 	assertBatchUniqueness,
+	assertParsed,
 	assertReferentialIntegrity,
-	assertTargetCollectionId,
 	assertTrackInput,
 	calculateBatchPayloadSize,
 	chunkArray,
+	createProgressEmitter,
 	dedupeByFilePath,
-	emitProgress,
 	fetchExistingTrackKeys,
 	isErrorWithName,
 	isNonEmptyString,
