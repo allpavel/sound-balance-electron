@@ -75,6 +75,19 @@ export const filePathSchema = nonEmptyStringSchema.transform((path) =>
 );
 
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
+
+/**
+ * Collection identifier accepted as `addMany`'s `targetCollectionId` and as
+ * members of `collectionIds`.
+ *
+ * C0 control characters other than the null byte (e.g. U+0001)
+ * currently *pass* this schema; rejecting them at entry is deferred
+ * pending a stored-data compatibility evaluation (existing databases
+ * may contain such ids). The residual exposure is contained by defense
+ * in depth: every surface that interpolates a collection id into
+ * an error message or log record applies `sanitizeControlChars`
+ * (see `assertReferentialIntegrity`, `assertBatchUniqueness`, `mapZodIssues`).
+ */
 export const targetCollectionIdSchema = nonEmptyStringSchema;
 export const selectedSchema = z.union([z.literal(0), z.literal(1)], {
 	error: "Must be 0 or 1",
