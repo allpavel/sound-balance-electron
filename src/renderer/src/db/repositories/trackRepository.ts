@@ -27,8 +27,8 @@ import {
 	assertTrackInput,
 	calculateBatchPayloadSize,
 	chunkArray,
+	createProgressEmitter,
 	dedupeByFilePath,
-	emitProgress,
 	isNonEmptyString,
 	isPlainObject,
 	mapStorageWriteError,
@@ -73,9 +73,17 @@ export const tracksRepository = {
 	 * collection.
 	 *
 	 * @param tracks – Array of track metadata objects to persist.
+	 * @param options – Untrusted, runtime-validated import options.
 	 * @param options.targetCollectionId – Collection to assign (defaults to `"all"`).
+	 * @param options.batchSize – Maximum tracks per IndexedDB transaction;
+	 *   each batch commits in its own transaction to keep lock duration bounded.
+	 *   Defaults to `IMPORT_BATCH_SIZE`, hard-capped at `MAX_IMPORT_BATCH_SIZE`.
+	 * @param options.onProgress – Optional observer invoked after each batch
+	 *   with cumulative outcome counts. Must be synchronous and
+	 *   non-throwing; throws are isolated and diagnosed with bounded logging.
 	 * @returns A structured {@link AddManyResult} discriminating outcomes.
-	 * @throws {TrackValidationError} On validation failure.
+	 * @throws {TrackValidationError} On validation failure — of `tracks`,
+	 *   of any individual track, **or of `options` (raised before any write)**.
 	 * @throws {ConflictError} On uniqueness conflict.
 	 * @throws {ReferentialIntegrityError} On missing collection reference.
 	 * @throws {StorageCapacityError} On storage exhaustion.
@@ -145,8 +153,10 @@ export const tracksRepository = {
 		const allAdded: string[] = [];
 		const allMerged: string[] = [];
 		const allSkipped: string[] = [...preSkipped];
-		let processed = 0;
+		let processed = preSkipped.length;
 		const total = parsedTracks.length;
+
+		const progressEmitter = createProgressEmitter(onProgress);
 
 		try {
 			for (const batch of batches) {
@@ -157,7 +167,7 @@ export const tracksRepository = {
 				for (const id of batchResult.skipped) allSkipped.push(id);
 				processed += batch.length;
 
-				emitProgress(onProgress, {
+				progressEmitter.emit({
 					processed,
 					total,
 					added: allAdded.length,
@@ -180,6 +190,8 @@ export const tracksRepository = {
 				throw error;
 			}
 			mapStorageWriteError(error);
+		} finally {
+			progressEmitter.flush();
 		}
 	},
 
