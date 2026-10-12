@@ -74,10 +74,13 @@ export const MAX_YEAR = 9999;
 export const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/g;
 
 /**
- * Maximum number of tracks processed in a single IndexedDB transaction
+ * Default number of tracks processed in a single IndexedDB transaction
  * during `addMany`.
  */
 export const IMPORT_BATCH_SIZE = 500;
+
+/** Upper bound on the user-supplied `batchSize` in {@link AddManyOptions}. */
+export const MAX_IMPORT_BATCH_SIZE = IMPORT_BATCH_SIZE;
 
 /**
  * Maximum number of keys passed to a single IndexedDB `anyOf()` call.

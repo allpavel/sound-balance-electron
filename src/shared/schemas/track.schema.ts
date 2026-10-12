@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import {
-	IMPORT_BATCH_SIZE,
 	MAX_BLOB_IMAGE_SIZE,
+	MAX_IMPORT_BATCH_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
@@ -549,8 +549,8 @@ export const addManyOptionsSchema = z
 			.number()
 			.int({ error: "batchSize must be an integer" })
 			.min(1, { error: "batchSize must be ≥ 1" })
-			.max(IMPORT_BATCH_SIZE, {
-				error: `batchSize must not exceed ${IMPORT_BATCH_SIZE}`,
+			.max(MAX_IMPORT_BATCH_SIZE, {
+				error: `batchSize must not exceed ${MAX_IMPORT_BATCH_SIZE}`,
 			})
 			.optional(),
 		onProgress: progressCallbackSchema.optional(),
