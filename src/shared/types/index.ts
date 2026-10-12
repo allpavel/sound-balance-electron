@@ -55,11 +55,12 @@ export type AddManyResult = {
  * All counts are **cumulative** (not per-batch) so callers can render
  * ratios directly without aggregation.
  *
- * @property processed - Number of input tracks processed so far (across all batches).
+ * @property processed - Number of input tracks accounted for so far.
  * @property total     - Total number of input tracks in the import.
  * @property added     - Cumulative count of newly inserted tracks.
  * @property merged    - Cumulative count of tracks whose `collectionIds` were updated.
- * @property skipped   - Cumulative count of tracks already in the target collection (no-op).
+ * @property skipped   - Cumulative count of tracks already in the target
+ * collection (no-op), including duplicates folded by `filePath` deduplication.
  */
 export type AddManyProgress = {
 	readonly processed: number;

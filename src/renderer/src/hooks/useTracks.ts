@@ -16,22 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
-import type { AddManyProgressCallback } from "@shared/types";
+import type {
+	AddManyOptions,
+	Metadata,
+	TrackChanges,
+} from "@shared/schemas/track.schema";
 import { useMutation } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 
-export type AddTracksOptions = {
-	targetCollectionId?: string;
-	/** Optional progress callback invoked after each batch in `addMany`. */
-	onProgress?: AddManyProgressCallback;
-	/** Maximum tracks per IndexedDB transaction (default: 500). */
-	batchSize?: number;
-};
-
 export type AddTracksPayload = {
 	tracks: Metadata[];
-	options?: AddTracksOptions;
+	options?: AddManyOptions;
 };
 
 export type UpdateTrackPayload = {
