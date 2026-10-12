@@ -20,14 +20,15 @@ import { db } from "@renderer/db/db";
 import { checkStorageHeadroom } from "@renderer/db/utils/dbUtils";
 import {
 	applyGuardedTrackUpdate,
+	assertAddManyOptions,
 	assertBatchPayloadSize,
 	assertBatchUniqueness,
 	assertReferentialIntegrity,
-	assertTargetCollectionId,
 	assertTrackInput,
 	calculateBatchPayloadSize,
 	chunkArray,
 	dedupeByFilePath,
+	emitProgress,
 	isNonEmptyString,
 	isPlainObject,
 	mapStorageWriteError,
@@ -48,6 +49,7 @@ import type {
 	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
+import { sanitizeControlChars } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
@@ -83,13 +85,11 @@ export const tracksRepository = {
 		tracks: Metadata[],
 		options: AddManyOptions = {},
 	): Promise<AddManyResult> {
-		const {
-			targetCollectionId: rawId = SYSTEM_COLLECTION_ID,
-			onProgress,
-			batchSize = IMPORT_BATCH_SIZE,
-		} = options;
-
-		const targetCollectionId = assertTargetCollectionId(rawId);
+		const validatedOptions = assertAddManyOptions(options);
+		const targetCollectionId =
+			validatedOptions.targetCollectionId ?? SYSTEM_COLLECTION_ID;
+		const onProgress = validatedOptions.onProgress;
+		const batchSize = validatedOptions.batchSize ?? IMPORT_BATCH_SIZE;
 
 		if (!Array.isArray(tracks)) {
 			throw new TrackValidationError("tracks", [
@@ -141,8 +141,7 @@ export const tracksRepository = {
 			);
 		}
 
-		const effectiveBatchSize = Math.max(1, batchSize);
-		const batches = chunkArray(dedupedTracks, effectiveBatchSize);
+		const batches = chunkArray(dedupedTracks, batchSize);
 		const allAdded: string[] = [];
 		const allMerged: string[] = [];
 		const allSkipped: string[] = [...preSkipped];
@@ -153,20 +152,18 @@ export const tracksRepository = {
 			for (const batch of batches) {
 				const batchResult = await processBatch(batch, targetCollectionId, db);
 
-				allAdded.push(...batchResult.added);
-				allMerged.push(...batchResult.merged);
-				allSkipped.push(...batchResult.skipped);
+				for (const id of batchResult.added) allAdded.push(id);
+				for (const id of batchResult.merged) allMerged.push(id);
+				for (const id of batchResult.skipped) allSkipped.push(id);
 				processed += batch.length;
 
-				if (onProgress) {
-					onProgress({
-						processed,
-						total,
-						added: allAdded.length,
-						merged: allMerged.length,
-						skipped: allSkipped.length,
-					});
-				}
+				emitProgress(onProgress, {
+					processed,
+					total,
+					added: allAdded.length,
+					merged: allMerged.length,
+					skipped: allSkipped.length,
+				});
 			}
 
 			return {
@@ -245,7 +242,9 @@ export const tracksRepository = {
 				]);
 			}
 			if (seenIds.has(update.id)) {
-				throw new ConflictError(`Updates contains duplicate id: ${update.id}`);
+				throw new ConflictError(
+					`Updates contains duplicate id: ${sanitizeControlChars(update.id)}`,
+				);
 			}
 			seenIds.add(update.id);
 			normalizedUpdates.push({
