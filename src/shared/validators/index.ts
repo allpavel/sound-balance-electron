@@ -33,7 +33,7 @@ import {
 	trackInputSchema,
 	tracksArraySchema,
 } from "@shared/schemas/track.schema";
-import { pathToString } from "@shared/utils";
+import { pathToString, sanitizeControlChars } from "@shared/utils";
 import type { ZodError, ZodSafeParseResult, ZodType, z } from "zod";
 
 export const MAX_VALIDATION_ISSUES = 100;
@@ -153,7 +153,7 @@ function mapZodIssues(error: ZodError): readonly ValidationIssue[] {
 			}
 
 			const pathString = pathToString(currentPath);
-			const message = issue.message ?? FALLBACK_MESSAGE;
+			const message = sanitizeControlChars(issue.message ?? FALLBACK_MESSAGE);
 			let code = issue.code ?? FALLBACK_CODE;
 			if (code === "invalid_union") {
 				code = "invalid_type";
@@ -257,6 +257,8 @@ export function safeParseTrackChanges(input: unknown): TrackChangesParseResult {
 /**
  * Validates `tracksRepository.addMany` options against
  * {@link addManyOptionsSchema}.
+ *
+ * Issue messages produced by this validator are sanitized at creation.
  *
  * @param input - Untrusted options payload.
  * @returns A {@link AddManyOptionsParseResult}.
