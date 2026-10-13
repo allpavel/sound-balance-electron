@@ -1,5 +1,6 @@
 export {
 	ConflictError,
+	ImportAbortedError,
 	PayloadLimitExceededError,
 	ReferentialIntegrityError,
 	StorageCapacityError,

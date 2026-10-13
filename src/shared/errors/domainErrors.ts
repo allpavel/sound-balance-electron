@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import type { AddManyProgress, AddManyResult } from "@shared/types";
 import type { TrackValidationError } from "./TrackValidationError";
 
 /**
@@ -29,6 +30,7 @@ export const TrackErrorCode = {
 	StorageCapacity: "storage_capacity",
 	StorageUnavailable: "storage_unavailable",
 	PayloadLimitExceeded: "payload_limit_exceeded",
+	ImportAborted: "import_aborted",
 } as const;
 
 export type TrackErrorCode =
@@ -79,10 +81,41 @@ export class PayloadLimitExceededError extends Error {
 	}
 }
 
+/**
+ * Thrown when `tracksRepository.addMany` aborts mid-import (a batch failed
+ * after one or more prior batches committed, or the caller cancelled via
+ * `AbortSignal`). Carries the partial outcome so the UI can render
+ * "imported N of M before failure" and the user can re-run (idempotent).
+ *
+ * @property partial  - Counts committed before the abort (batches 1..k−1,
+ *                      including pre-batch `filePath`-dedupe `skipped` ids).
+ * @property progress - Cumulative `processed/total` + counts at the abort.
+ * @property cause    - The underlying failure (domain storage error, mid-batch
+ *                      `ReferentialIntegrityError`, or `AbortError`).
+ */
+export class ImportAbortedError extends Error {
+	readonly code: TrackErrorCode = TrackErrorCode.ImportAborted;
+	readonly partial: AddManyResult;
+	readonly progress: AddManyProgress;
+	constructor(
+		message: string,
+		partial: AddManyResult,
+		progress: AddManyProgress,
+		cause: unknown,
+	) {
+		super(message, { cause });
+		this.name = "ImportAbortedError";
+		this.partial = partial;
+		this.progress = progress;
+		Object.setPrototypeOf(this, ImportAbortedError.prototype);
+	}
+}
+
 export type TrackRepositoryError =
 	| TrackValidationError
 	| ConflictError
 	| ReferentialIntegrityError
 	| StorageCapacityError
 	| StorageUnavailableError
-	| PayloadLimitExceededError;
+	| PayloadLimitExceededError
+	| ImportAbortedError;
