@@ -549,6 +549,10 @@ const progressCallbackSchema = z.custom<AddManyProgressCallback>(
  * @property onProgress - Must be a function (typeof guard). The callback must
  *   be **synchronous and non-throwing**; `addMany` isolates it in a try/catch
  *   so a throwing observer cannot abort the remaining batches.
+ * @property signal - Optional `AbortSignal` for user-initiated cancellation.
+ *   Checked **between** batches (coarse-grained); a batch in progress
+ *   completes before the abort is observed. On abort, `addMany` throws `ImportAbortedError`
+ *   carrying the partials (same contract as a mid-import failure).
  *
  * `.strict()` rejects unknown keys (defense in depth — options cross a trust
  * boundary, so unexpected fields are a caller bug, not a feature).
@@ -567,6 +571,7 @@ export const addManyOptionsSchema = z
 			})
 			.optional(),
 		onProgress: progressCallbackSchema.optional(),
+		signal: z.instanceof(AbortSignal).optional(),
 	})
 	.strict();
 
