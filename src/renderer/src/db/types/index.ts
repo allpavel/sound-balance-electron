@@ -20,6 +20,7 @@ import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyProgress, Artwork } from "@shared/types";
 import type Dexie from "dexie";
 import type { EntityTable } from "dexie";
+import type { CollectionType } from "@/types";
 
 /**
  * Structural type representing the minimal database shape required by
@@ -28,6 +29,7 @@ import type { EntityTable } from "dexie";
 export type TrackBatchDatabase = Pick<Dexie, "transaction"> & {
 	readonly tracks: EntityTable<Metadata, "id">;
 	readonly artworks: EntityTable<Artwork, "id">;
+	readonly collections: EntityTable<CollectionType, "id">; // [F-05]
 };
 
 /**

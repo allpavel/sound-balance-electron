@@ -588,9 +588,35 @@ async function fetchExistingTrackKeys(
 }
 
 /**
+ * Gathers the set of collection ids referenced by a batch/import: the target
+ * collection plus every track's `collectionIds`. Pure; no I/O.
+ *
+ * @param tracks              - Parsed, validated ingestion tracks.
+ * @param targetCollectionId - The target collection of this import/batch.
+ * @returns The referenced collection-id set (always includes the target).
+ */
+function gatherReferencedCollectionIds(
+	tracks: readonly IngestionMetadata[],
+	targetCollectionId: string,
+): Set<string> {
+	const ids = new Set<string>();
+	ids.add(targetCollectionId);
+	for (const track of tracks) {
+		if (Array.isArray(track.collectionIds)) {
+			for (const cid of track.collectionIds) {
+				if (isNonEmptyString(cid)) {
+					ids.add(cid);
+				}
+			}
+		}
+	}
+	return ids;
+}
+
+/**
  * Processes a single batch of tracks within its own IndexedDB transaction.
  *
- * @param tracks              - Parsed, validated, normalized ingestion tracks.
+ * @param tracks             - Parsed, validated, normalized ingestion tracks.
  * @param targetCollectionId - The collection to assign to new/merged tracks.
  * @returns A partial {@link AddManyResult} for this batch.
  * @throws Re-throws domain errors; maps storage errors via
@@ -605,7 +631,18 @@ async function processBatch(
 		"rw",
 		db.tracks,
 		db.artworks,
+		db.collections,
 		async (): Promise<AddManyResult> => {
+			const batchCollectionIds = gatherReferencedCollectionIds(
+				tracks,
+				targetCollectionId,
+			);
+			await assertReferentialIntegrity(
+				[...batchCollectionIds],
+				db.collections,
+				"tracks.batch.collectionIds",
+			);
+
 			const filePaths = tracks.map((t) => t.filePath);
 			const existingByFilePath = await fetchExistingTrackKeys(
 				filePaths,
@@ -744,7 +781,8 @@ function dedupeByFilePath(
 /**
  * Derives a log-safe, length-bounded descriptor for a thrown value.
  *
- * @param error - The caught unknown value from a callback invocation.
+ * @param error - The caught unknown value from a callback invocation or a
+ *                mid-import failure.
  * @returns A sanitized, truncated name safe for diagnostic logs.
  */
 function describeThrownValue(error: unknown): string {
@@ -821,7 +859,9 @@ export {
 	chunkArray,
 	createProgressEmitter,
 	dedupeByFilePath,
+	describeThrownValue,
 	fetchExistingTrackKeys,
+	gatherReferencedCollectionIds,
 	isErrorWithName,
 	isNonEmptyString,
 	isPlainObject,
