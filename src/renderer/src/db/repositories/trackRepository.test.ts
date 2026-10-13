@@ -26,6 +26,7 @@ import {
 } from "@shared/constants";
 import {
 	ConflictError,
+	ImportAbortedError,
 	ReferentialIntegrityError,
 	StorageCapacityError,
 	TrackValidationError,
@@ -447,7 +448,7 @@ describe("tracksRepository", () => {
 			expect(result.added).toEqual(["a"]);
 		});
 
-		it("validates referential integrity atomically within the transaction", async () => {
+		it("rejects a payload referencing a non-existent collection before any write", async () => {
 			await seedCollection("valid-col");
 			await expect(
 				tracksRepository.addMany(
@@ -461,7 +462,7 @@ describe("tracksRepository", () => {
 			expect(await db.tracks.count()).toBe(0);
 		});
 
-		it("maps QuotaExceededError to a domain StorageCapacityError", async () => {
+		it("maps QuotaExceededError to ImportAbortedError wrapping StorageCapacityError", async () => {
 			const quotaError = new DOMException(
 				"Storage quota exceeded",
 				"QuotaExceededError",
@@ -471,23 +472,34 @@ describe("tracksRepository", () => {
 				await tracksRepository.addMany([makeTrack({ id: "wrap-test" })]);
 				expect.unreachable("should have thrown");
 			} catch (err: unknown) {
-				expect(err).toBeInstanceOf(StorageCapacityError);
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBeInstanceOf(StorageCapacityError);
+					expect(err.progress.total).toBe(1);
+					expect(err.progress.processed).toBe(0);
+				}
 			}
 		});
 
-		it("maps a Dexie BulkError with ConstraintError failures to a domain error", async () => {
+		it("maps a Dexie BulkError with ConstraintError failures to ImportAbortedError wrapping ConflictError", async () => {
 			const bulkError: unknown = {
 				name: "BulkError",
 				message: "bulkAdd failed",
 				failures: [new DOMException("Key already exists", "ConstraintError")],
 			};
 			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(bulkError);
-			await expect(
-				tracksRepository.addMany([makeTrack({ id: "c" })]),
-			).rejects.toThrow(ConflictError);
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "c" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBeInstanceOf(ConflictError);
+				}
+			}
 		});
 
-		it("re-throws TrackValidationError without double-wrapping", async () => {
+		it("wraps a mid-batch TrackValidationError in ImportAbortedError carrying the cause", async () => {
 			const original = new TrackValidationError("collectionIds", [
 				{
 					path: Object.freeze([]),
@@ -501,16 +513,26 @@ describe("tracksRepository", () => {
 				await tracksRepository.addMany([makeTrack({ id: "d" })]);
 				expect.unreachable("should have thrown");
 			} catch (err: unknown) {
-				expect(err).toBe(original);
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBe(original);
+				}
 			}
 		});
 
-		it("propagates unknown errors without swallowing them", async () => {
+		it("wraps unknown errors in ImportAbortedError without swallowing them", async () => {
 			const unknownError = new TypeError("unexpected internal failure");
 			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(unknownError);
-			await expect(
-				tracksRepository.addMany([makeTrack({ id: "e" })]),
-			).rejects.toThrow("unexpected internal failure");
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "e" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBe(unknownError);
+					expect(err.message).toContain("TypeError");
+				}
+			}
 		});
 
 		it("in-batch filePath duplicate is folded (first-wins, skipped)", async () => {
@@ -805,6 +827,156 @@ describe("tracksRepository", () => {
 			});
 			expect(progressCalls).toHaveLength(3);
 			expect(await db.tracks.count()).toBe(10);
+		});
+	});
+
+	describe("addMany - partial-failure contract & idempotent retry", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "a",
+					filePath: "/music/a.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+		});
+
+		it("batch 2 of 3 fails → batch 1 committed; ImportAbortedError carries partials; retry is idempotent", async () => {
+			const tracks = [
+				makeTrack({
+					id: "a",
+					filePath: "/music/a.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+				makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+				makeTrack({ id: "c", filePath: "/music/c.mp3", collectionIds: [] }),
+			];
+			const bulkAddSpy = vi.spyOn(db.tracks, "bulkAdd");
+			bulkAddSpy.mockRejectedValueOnce(
+				new DOMException("Quota exceeded mid-import", "QuotaExceededError"),
+			);
+			let aborted: ImportAbortedError | undefined;
+			try {
+				await tracksRepository.addMany(tracks, {
+					batchSize: 1,
+					targetCollectionId: "mix1",
+				});
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				if (err instanceof ImportAbortedError) aborted = err;
+			}
+			expect(aborted).toBeInstanceOf(ImportAbortedError);
+			expect(aborted?.partial.merged).toEqual(["a"]);
+			expect(aborted?.progress.processed).toBe(1);
+			expect(aborted?.progress.total).toBe(3);
+			expect(aborted?.progress.merged).toBe(1);
+			expect(aborted?.cause).toBeInstanceOf(StorageCapacityError);
+			expect(await db.tracks.count()).toBe(1);
+			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+			bulkAddSpy.mockRestore();
+			const retry = await tracksRepository.addMany(tracks, {
+				batchSize: 1,
+				targetCollectionId: "mix1",
+			});
+			expect(retry.added).toEqual(["b", "c"]);
+			expect(retry.skipped).toEqual(["a"]);
+			expect(await db.tracks.count()).toBe(3);
+		});
+	});
+
+	describe("addMany - per-batch RI atomicity", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "a",
+					filePath: "/music/a.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+		});
+
+		it("a collection deleted between batch 1 and batch 2 is caught by the in-transaction RI check", async () => {
+			const originalBulkUpdate = db.tracks.bulkUpdate;
+			const updateSpy = vi.spyOn(db.tracks, "bulkUpdate");
+			let deleted = false;
+			// @ts-expect-error - Dexie returns PromiseExtended, but Vitest mocks use native Promises.
+			updateSpy.mockImplementation(async (...args) => {
+				const result = await Reflect.apply(originalBulkUpdate, db.tracks, args);
+				if (!deleted) {
+					deleted = true;
+					await db.collections.delete("mix1");
+				}
+				return result;
+			});
+
+			let aborted: ImportAbortedError | undefined;
+			try {
+				await tracksRepository.addMany(
+					[
+						makeTrack({
+							id: "a",
+							filePath: "/music/a.mp3",
+							collectionIds: [SYSTEM_COLLECTION_ID],
+						}),
+						makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+					],
+					{ batchSize: 1, targetCollectionId: "mix1" },
+				);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				if (err instanceof ImportAbortedError) aborted = err;
+			} finally {
+				updateSpy.mockRestore();
+			}
+			expect(aborted).toBeInstanceOf(ImportAbortedError);
+			expect(aborted?.partial.merged).toEqual(["a"]);
+			expect(aborted?.progress.processed).toBe(1);
+			expect(aborted?.progress.total).toBe(2);
+			expect(aborted?.cause).toBeInstanceOf(ReferentialIntegrityError);
+			expect(await db.tracks.count()).toBe(1);
+			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+			expect(await db.collections.get("mix1")).toBeUndefined();
+		});
+
+		it("an AbortSignal cancelled between batches throws ImportAbortedError with partials", async () => {
+			const controller = new AbortController();
+			const tracks = [
+				makeTrack({ id: "a", filePath: "/music/a.mp3", collectionIds: [] }),
+				makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+				makeTrack({ id: "c", filePath: "/music/c.mp3", collectionIds: [] }),
+			];
+			const progress = (p: AddManyProgress): void => {
+				if (p.processed === 1) controller.abort();
+			};
+			let aborted: ImportAbortedError | undefined;
+			try {
+				await tracksRepository.addMany(tracks, {
+					batchSize: 1,
+					signal: controller.signal,
+					onProgress: progress,
+				});
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				if (err instanceof ImportAbortedError) aborted = err;
+			}
+			expect(aborted).toBeInstanceOf(ImportAbortedError);
+			expect(aborted?.partial.skipped).toEqual(["a"]);
+			expect(aborted?.progress.processed).toBe(1);
+			expect(aborted?.progress.total).toBe(3);
+			expect(aborted?.cause).toBeInstanceOf(DOMException);
+			if (aborted?.cause instanceof DOMException) {
+				expect(aborted.cause.name).toBe("AbortError");
+			}
 		});
 	});
 
