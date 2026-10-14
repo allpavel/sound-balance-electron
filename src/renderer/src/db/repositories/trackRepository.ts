@@ -71,22 +71,37 @@ export const tracksRepository = {
 	 * Batch-inserts tracks, merging duplicates by `filePath` into the target
 	 * collection.
 	 *
-	 * @param tracks – Array of track metadata objects to persist.
+	 * Batches are atomic; the import is idempotent. On a mid-import failure
+	 * (quota, a collection deleted mid-import, or `signal` abort) this throws
+	 * {@link ImportAbortedError} carrying `partial` (committed counts from
+	 * batches 1..k−1), `progress` (processed/total), and `cause`. Recovery
+	 * is to re-run the import — prior `added` rows become `merged`/`skipped`
+	 * by `filePath`. Pre-flight failures throw their native domain error
+	 * directly (no partials — caller bug).
+	 *
+	 * Referential integrity is re-asserted inside each batch's transaction,
+	 * atomically with the writes (the pre-flight check is a non-authoritative
+	 * fast-fail).
+	 *
+	 * @param tracks – Untrusted array; each element is validated into
+	 *   {@link IngestionMetadata} before any write.
 	 * @param options – Untrusted, runtime-validated import options.
-	 * @param options.targetCollectionId – Collection to assign (defaults to `"all"`).
-	 * @param options.batchSize – Maximum tracks per IndexedDB transaction;
-	 *   each batch commits in its own transaction to keep lock duration bounded.
-	 *   Defaults to `IMPORT_BATCH_SIZE`, hard-capped at `MAX_IMPORT_BATCH_SIZE`.
-	 * @param options.onProgress – Optional observer invoked after each batch
-	 *   with cumulative outcome counts. Must be synchronous and
-	 *   non-throwing; throws are isolated and diagnosed with bounded logging.
+	 * @param options.targetCollectionId – Collection to assign (default `"all"`).
+	 * @param options.batchSize – Max tracks per transaction (default
+	 *   `IMPORT_BATCH_SIZE`, capped at `MAX_IMPORT_BATCH_SIZE`).
+	 * @param options.onProgress – Synchronous, non-throwing observer invoked
+	 *   after each batch with cumulative counts; a throw is isolated, not
+	 *   propagated.
+	 * @param options.signal – Coarse-grained cancellation checked between
+	 *   batches; abort throws `ImportAbortedError` with the partials.
 	 * @returns A structured {@link AddManyResult} discriminating outcomes.
-	 * @throws {TrackValidationError} On validation failure — of `tracks`,
-	 *   of any individual track, **or of `options` (raised before any write)**.
-	 * @throws {ConflictError} On uniqueness conflict.
-	 * @throws {ReferentialIntegrityError} On missing collection reference.
-	 * @throws {StorageCapacityError} On storage exhaustion.
-	 * @throws {PayloadLimitExceededError} If batch payload exceeds size cap.
+	 * @throws {TrackValidationError} Pre-flight: invalid `options` or `tracks`.
+	 * @throws {ConflictError} Pre-flight: duplicate `id` in the payload.
+	 * @throws {ReferentialIntegrityError} Pre-flight: payload references a
+	 *   non-existent collection.
+	 * @throws {PayloadLimitExceededError} Pre-flight: payload exceeds the size cap.
+	 * @throws {ImportAbortedError} Mid-import failure or cancellation — carries
+	 *   `partial` + `progress` + `cause`; retry-safe.
 	 */
 	async addMany(
 		tracks: readonly unknown[],
@@ -134,13 +149,12 @@ export const tracksRepository = {
 			dedupedTracks,
 			targetCollectionId,
 		);
-		if (collectionIds.size > 0) {
-			await assertReferentialIntegrity(
-				[...collectionIds],
-				db.collections,
-				"tracks.collectionIds",
-			);
-		}
+
+		await assertReferentialIntegrity(
+			[...collectionIds],
+			db.collections,
+			"tracks.collectionIds",
+		);
 
 		const batches = chunkArray(dedupedTracks, batchSize);
 		const allAdded: string[] = [];
