@@ -694,6 +694,33 @@ describe("useTracks", () => {
 			);
 			expect(result.current.removeManyTracksState.error).toBe(error);
 		});
+
+		it("forwards onProgress and batchSize to tracksRepository.addMany (F-12.8)", async () => {
+			const result = await renderUseTracks();
+			const onProgress = vi.fn();
+			const payload: AddTracksPayload = {
+				tracks: [
+					makeTrack({ id: "fwd-track", filePath: "/music/fwd-track.mp3" }),
+				],
+				options: {
+					onProgress,
+					batchSize: 2,
+					targetCollectionId: SYSTEM_COLLECTION_ID,
+				},
+			};
+			const addSpy = vi
+				.spyOn(tracksRepository, "addMany")
+				.mockResolvedValue({ added: [], merged: [], skipped: [] });
+			await act(async () => {
+				await result.current.addTracksAsync(payload);
+			});
+			expect(addSpy).toHaveBeenCalledTimes(1);
+			expect(addSpy).toHaveBeenCalledWith(
+				payload.tracks,
+				expect.objectContaining({ onProgress, batchSize: 2 }),
+			);
+			addSpy.mockRestore();
+		});
 	});
 
 	describe("error propagation", () => {
