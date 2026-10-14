@@ -18,7 +18,11 @@
 
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { resetDatabase, seedCollection } from "@renderer/utils/test-utils";
+import {
+	resetDatabase,
+	resetTestState,
+	seedCollection,
+} from "@renderer/utils/test-utils";
 import {
 	MAX_IMPORT_BATCH_SIZE,
 	STATUS_VALUES,
@@ -977,6 +981,142 @@ describe("tracksRepository", () => {
 			if (aborted?.cause instanceof DOMException) {
 				expect(aborted.cause.name).toBe("AbortError");
 			}
+		});
+	});
+
+	describe("addMany - artwork extraction lane", async () => {
+		let artworksBulkAddSpy: ReturnType<typeof vi.spyOn>;
+
+		beforeEach(async () => {
+			await resetTestState();
+			artworksBulkAddSpy = vi
+				.spyOn(db.artworks, "bulkAdd")
+				.mockResolvedValue("mock-uuid-1");
+		});
+
+		afterEach(() => {
+			artworksBulkAddSpy.mockRestore();
+		});
+
+		it("extracts artwork into the artworks table and replaces common.picture with UUID refs", async () => {
+			const pictureData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
+			const trackWithArt = {
+				...makeTrack({
+					id: "art-track",
+					filePath: "/music/art.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [
+						{
+							format: "image/png",
+							data: pictureData,
+							description: "Front cover",
+							name: "cover.png",
+						},
+					],
+				},
+			};
+			const result = await tracksRepository.addMany([trackWithArt], {
+				targetCollectionId: SYSTEM_COLLECTION_ID,
+			});
+			expect(result.added).toEqual(["art-track"]);
+			const storedTrack = await db.tracks.get("art-track");
+			expect(storedTrack).toBeDefined();
+			expect(storedTrack?.common?.picture).toBeDefined();
+			expect(storedTrack?.common?.picture).toHaveLength(1);
+			const pictureRef = storedTrack?.common?.picture?.[0];
+			expect(typeof pictureRef).toBe("string");
+			expect(pictureRef).not.toBe("");
+			expect(artworksBulkAddSpy).toHaveBeenCalledTimes(1);
+			const savedArtworks = artworksBulkAddSpy.mock.calls[0]?.[0];
+			expect(savedArtworks).toHaveLength(1);
+			const artwork = savedArtworks?.[0];
+			expect(artwork).toBeDefined();
+			expect(artwork?.id).toBe(pictureRef);
+			expect(artwork?.format).toBe("image/png");
+			expect(artwork?.description).toBe("Front cover");
+			expect(artwork?.name).toBe("cover.png");
+			expect(artwork?.blob).toBeInstanceOf(Blob);
+		});
+
+		it("extracts multiple artwork entries from a single track", async () => {
+			const trackWithMultipleArt = {
+				...makeTrack({
+					id: "multi-art",
+					filePath: "/music/multi.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [
+						{ format: "image/jpeg", data: new Uint8Array([1, 2, 3]) },
+						{ format: "image/png", data: new Uint8Array([4, 5, 6]) },
+					],
+				},
+			};
+			await tracksRepository.addMany([trackWithMultipleArt]);
+			const storedTrack = await db.tracks.get("multi-art");
+			expect(storedTrack?.common?.picture).toHaveLength(2);
+			expect(artworksBulkAddSpy).toHaveBeenCalledTimes(1);
+			const savedArtworks = artworksBulkAddSpy.mock.calls[0]?.[0];
+			expect(savedArtworks).toHaveLength(2);
+			expect(savedArtworks?.[0]?.format).toBe("image/jpeg");
+			expect(savedArtworks?.[1]?.format).toBe("image/png");
+		});
+
+		it("merged tracks persist no artwork (orphan-artwork regression)", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "existing",
+					filePath: "/music/song.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			await seedCollection("mix1");
+			const reimport = {
+				...makeTrack({
+					id: "new-id",
+					filePath: "/music/song.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [{ format: "image/jpeg", data: new Uint8Array([1, 2, 3]) }],
+				},
+			};
+			const result = await tracksRepository.addMany([reimport], {
+				targetCollectionId: "mix1",
+			});
+			expect(result.merged).toEqual(["existing"]);
+			expect(result.added).toEqual([]);
+			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
+		});
+
+		it("skipped tracks persist no artwork (orphan-artwork regression)", async () => {
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "existing",
+					filePath: "/music/song.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+			);
+			const reimport = {
+				...makeTrack({
+					id: "new-id",
+					filePath: "/music/song.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [{ format: "image/jpeg", data: new Uint8Array([7, 8, 9]) }],
+				},
+			};
+			const result = await tracksRepository.addMany([reimport], {
+				targetCollectionId: "mix1",
+			});
+			expect(result.skipped).toEqual(["existing"]);
+			expect(result.added).toEqual([]);
+			expect(result.merged).toEqual([]);
+			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
 		});
 	});
 
