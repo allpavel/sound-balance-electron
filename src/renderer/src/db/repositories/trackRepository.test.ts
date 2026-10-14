@@ -632,7 +632,6 @@ describe("tracksRepository", () => {
 		});
 
 		it("preserves added+merged+skipped === processed at every emission (F-12.7)", async () => {
-			await resetDatabase();
 			await seedCollection("mix1");
 			await db.tracks.bulkAdd([
 				makeTrack({
@@ -674,7 +673,7 @@ describe("tracksRepository", () => {
 				targetCollectionId: "mix1",
 				onProgress: (p) => emissions.push(p),
 			});
-			expect(emissions.length).toBeGreaterThan(0);
+			expect(emissions.length).toBe(3);
 			for (const p of emissions) {
 				expect(p.added + p.merged + p.skipped).toBe(p.processed);
 			}
