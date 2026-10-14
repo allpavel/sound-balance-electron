@@ -18,6 +18,7 @@
 
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type {
+	ExistingTrackRef,
 	FilePathDedupeResult,
 	ProgressEmitter,
 	TrackBatchDatabase,
@@ -522,66 +523,46 @@ function assertBatchPayloadSize(size: number): void {
 }
 
 /**
- * Fetches existing tracks by `filePath` using the **keys-first strategy**.
- * Every `filePath` that reaches this function has been
- * normalized by {@link filePathSchema} at the schema boundary.
+ * Looks up existing tracks by `filePath` and projects each match to an
+ * {@link ExistingTrackRef} (id + collectionIds). Single pass per chunk:
+ * `anyOf(chunk).each(...)` hydrates rows transiently and retains only the
+ * compact projection, so there is one request per chunk (not two) and no
+ * full-row retention.
  *
- * @param filePaths   - Array of (already-normalized) filePaths to look up.
- *                      Duplicates are handled gracefully (the same row
- *                      may appear once in the result map).
+ * Every `filePath` that reaches this function has been normalized by
+ * {@link filePathSchema} at the schema boundary, so the `&filePath` index
+ * and the input keys agree.
+ *
+ * @param filePaths   - Already-normalized filePaths to look up. Duplicates
+ *                      are handled gracefully (the same row appears once).
  * @param tracksTable - The Dexie `EntityTable` for tracks.
- * @returns Returns an empty map when `filePaths`
+ * @returns A map of `filePath → ExistingTrackRef`. Empty when `filePaths`
  *          is empty or no matches are found.
  */
-async function fetchExistingTrackKeys(
+async function fetchExistingTrackRefs(
 	filePaths: readonly string[],
 	tracksTable: EntityTable<Metadata, "id">,
-): Promise<
-	Map<
-		string,
-		{
-			readonly id: string;
-			readonly collectionIds: readonly string[];
-		}
-	>
-> {
-	const result = new Map<
-		string,
-		{
-			readonly id: string;
-			readonly collectionIds: readonly string[];
-		}
-	>();
+): Promise<Map<string, ExistingTrackRef>> {
+	const result = new Map<string, ExistingTrackRef>();
 
 	if (filePaths.length === 0) {
 		return result;
 	}
 
 	const chunks = chunkArray(filePaths, ANYOF_CHUNK_SIZE);
-	const existingIds: string[] = [];
 
 	for (const chunk of chunks) {
-		const keys = await tracksTable.where("filePath").anyOf(chunk).primaryKeys();
-		for (const key of keys) {
-			if (typeof key === "string") {
-				existingIds.push(key);
-			}
-		}
-	}
-
-	if (existingIds.length === 0) {
-		return result;
-	}
-
-	const rows = await tracksTable.bulkGet(existingIds);
-
-	for (const row of rows) {
-		if (row === undefined) continue;
-		if (!isNonEmptyString(row.filePath)) continue;
-		result.set(row.filePath, {
-			id: row.id,
-			collectionIds: row.collectionIds,
-		});
+		await tracksTable
+			.where("filePath")
+			.anyOf(chunk)
+			.each((row) => {
+				if (isNonEmptyString(row.filePath)) {
+					result.set(row.filePath, {
+						id: row.id,
+						collectionIds: row.collectionIds,
+					});
+				}
+			});
 	}
 
 	return result;
@@ -644,7 +625,7 @@ async function processBatch(
 			);
 
 			const filePaths = tracks.map((t) => t.filePath);
-			const existingByFilePath = await fetchExistingTrackKeys(
+			const existingByFilePath = await fetchExistingTrackRefs(
 				filePaths,
 				db.tracks,
 			);
@@ -860,7 +841,7 @@ export {
 	createProgressEmitter,
 	dedupeByFilePath,
 	describeThrownValue,
-	fetchExistingTrackKeys,
+	fetchExistingTrackRefs,
 	gatherReferencedCollectionIds,
 	isErrorWithName,
 	isNonEmptyString,

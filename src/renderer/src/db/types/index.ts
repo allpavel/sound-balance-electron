@@ -66,3 +66,13 @@ export type ProgressEmitter = {
 	 */
 	readonly flush: () => void;
 };
+
+/**
+ * Projected reference to an existing track row, used by the import merge/skip
+ * lookup. Carries only the fields the import loop needs (identity + collection
+ * membership) — not the full row — so the transient lookup map stays compact.
+ */
+export type ExistingTrackRef = {
+	readonly id: string;
+	readonly collectionIds: readonly string[];
+};
