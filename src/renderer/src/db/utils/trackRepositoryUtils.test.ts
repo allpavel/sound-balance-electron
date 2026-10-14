@@ -18,7 +18,11 @@
 
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { resetDatabase } from "@renderer/utils/test-utils";
+import {
+	resetDatabase,
+	resetTestState,
+	seedCollection,
+} from "@renderer/utils/test-utils";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import {
 	ConflictError,
@@ -37,7 +41,6 @@ import {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
-	assertTargetCollectionId,
 	assertTrackInput,
 	fetchExistingTrackKeys,
 	isPlainObject,
@@ -86,49 +89,6 @@ describe("trackRepositoryUtils", () => {
 
 		it("returns false for functions", () => {
 			expect(isPlainObject(() => {})).toBe(false);
-		});
-	});
-
-	describe("assertTargetCollectionId", () => {
-		it.each([
-			["custom collection id", "mix-1"],
-			["system collection id", SYSTEM_COLLECTION_ID],
-		])("accepts %s", (_desc, value) => {
-			expect(() => assertTargetCollectionId(value)).not.toThrow();
-		});
-
-		it("rejects an empty string", () => {
-			expect(() => assertTargetCollectionId("")).toThrow(TrackValidationError);
-		});
-
-		it("rejects a whitespace-only string", () => {
-			expect(() => assertTargetCollectionId("   ")).toThrow(
-				TrackValidationError,
-			);
-		});
-
-		it.each([
-			["null", null],
-			["undefined", undefined],
-			["number", 123],
-			["array", []],
-			["object", {}],
-		])("rejects non-string value: %s", (_desc, value) => {
-			expect(() => assertTargetCollectionId(value)).toThrow(
-				TrackValidationError,
-			);
-		});
-
-		it("sets the context to 'targetCollectionId' on failure", () => {
-			try {
-				assertTargetCollectionId("");
-				expect.unreachable("should have thrown");
-			} catch (err) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				expect((err as TrackValidationError).context).toBe(
-					"targetCollectionId",
-				);
-			}
 		});
 	});
 
@@ -989,9 +949,18 @@ describe("trackRepositoryUtils", () => {
 		});
 	});
 
-	describe("processBatch", () => {
+	describe("processBatch", async () => {
+		let artworksBulkAddSpy: ReturnType<typeof vi.spyOn>;
+
 		beforeEach(async () => {
-			await resetDatabase();
+			await resetTestState();
+			artworksBulkAddSpy = vi
+				.spyOn(db.artworks, "bulkAdd")
+				.mockResolvedValue("mock-uuid-1");
+		});
+
+		afterEach(() => {
+			artworksBulkAddSpy.mockRestore();
 		});
 
 		it("classifies tracks and persists them correctly within a transaction", async () => {
@@ -1028,6 +997,98 @@ describe("trackRepositoryUtils", () => {
 			expect(newTrack?.collectionIds).toEqual(["all", "mix1"]);
 			const mergedTrack = await db.tracks.get("exist");
 			expect(mergedTrack?.collectionIds).toEqual(["all", "mix1"]);
+		});
+
+		it("returns an empty AddManyResult for an empty input array", async () => {
+			const result = await processBatch([], SYSTEM_COLLECTION_ID, db);
+			expect(result).toEqual({ added: [], merged: [], skipped: [] });
+			expect(await db.tracks.count()).toBe(0);
+			expect(await db.artworks.count()).toBe(0);
+		});
+
+		it("classifies a track already in the target collection as skipped", async () => {
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "already-there",
+					filePath: "/music/skip.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+			);
+			const tracks: IngestionMetadata[] = [
+				trackInputSchema.parse(
+					makeTrack({
+						id: "input-skip",
+						filePath: "/music/skip.mp3",
+						collectionIds: [],
+					}),
+				),
+			];
+			const result = await processBatch(tracks, "mix1", db);
+			expect(result.skipped).toEqual(["already-there"]);
+			expect(result.added).toEqual([]);
+			expect(result.merged).toEqual([]);
+			const stored = await db.tracks.get("already-there");
+			expect(stored?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
+		});
+
+		it("extracts artwork from new tracks and stores UUID refs", async () => {
+			const pictureBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+			const tracks: IngestionMetadata[] = [
+				trackInputSchema.parse({
+					...makeTrack({
+						id: "art-new",
+						filePath: "/music/art.mp3",
+						collectionIds: [],
+					}),
+					common: {
+						picture: [
+							{ format: "image/jpeg", data: pictureBytes, name: "cover.jpg" },
+						],
+					},
+				}),
+			];
+			const result = await processBatch(tracks, SYSTEM_COLLECTION_ID, db);
+			expect(result.added).toHaveLength(1);
+			const stored = await db.tracks.get("art-new");
+			expect(stored?.common?.picture).toHaveLength(1);
+			const ref = stored?.common?.picture?.[0];
+			expect(typeof ref).toBe("string");
+			expect(artworksBulkAddSpy).toHaveBeenCalledTimes(1);
+			const savedArtworks = artworksBulkAddSpy.mock.calls[0]?.[0];
+			expect(savedArtworks).toHaveLength(1);
+			const artwork = savedArtworks?.[0];
+			expect(artwork).toBeDefined();
+			expect(artwork?.id).toBe(ref);
+			expect(artwork?.format).toBe("image/jpeg");
+			expect(artwork?.name).toBe("cover.jpg");
+			expect(artwork?.blob).toBeInstanceOf(Blob);
+		});
+
+		it("does not create artwork rows for merged tracks", async () => {
+			await seedCollection("target");
+			await db.tracks.add(
+				makeTrack({
+					id: "existing-merge",
+					filePath: "/music/merge.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			const tracks: IngestionMetadata[] = [
+				trackInputSchema.parse({
+					...makeTrack({
+						id: "reimport",
+						filePath: "/music/merge.mp3",
+						collectionIds: [],
+					}),
+					common: {
+						picture: [{ format: "image/png", data: new Uint8Array([1]) }],
+					},
+				}),
+			];
+			const result = await processBatch(tracks, "target", db);
+			expect(result.merged).toEqual(["existing-merge"]);
+			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
 		});
 	});
 });
