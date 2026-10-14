@@ -23,7 +23,11 @@ import {
 	resetTestState,
 	seedCollection,
 } from "@renderer/utils/test-utils";
-import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import {
+	ANYOF_CHUNK_SIZE,
+	STATUS_VALUES,
+	SYSTEM_COLLECTION_ID,
+} from "@shared/constants";
 import {
 	ConflictError,
 	ReferentialIntegrityError,
@@ -42,7 +46,7 @@ import {
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
 	assertTrackInput,
-	fetchExistingTrackKeys,
+	fetchExistingTrackRefs,
 	isPlainObject,
 	normalizeCollectionIds,
 	processBatch,
@@ -881,71 +885,89 @@ describe("trackRepositoryUtils", () => {
 		});
 	});
 
-	describe("fetchExistingTrackKeys", () => {
-		let mockTable: EntityTable<Metadata, "id">;
-		let mockCollection: { primaryKeys: ReturnType<typeof vi.fn> };
-
-		beforeEach(() => {
-			mockCollection = {
-				primaryKeys: vi.fn(),
-			};
-			mockTable = {
-				where: vi.fn(() => ({
-					anyOf: vi.fn(() => mockCollection),
-				})),
-				bulkGet: vi.fn(),
-			} as unknown as EntityTable<Metadata, "id">;
+	describe("fetchExistingTrackRefs", () => {
+		beforeEach(async () => {
+			await resetDatabase();
 		});
 
-		it("returns an empty map for empty input without querying the DB", async () => {
-			const result = await fetchExistingTrackKeys([], mockTable);
+		it("returns an empty map for empty input", async () => {
+			const result = await fetchExistingTrackRefs([], db.tracks);
 			expect(result.size).toBe(0);
-			expect(mockTable.where).not.toHaveBeenCalled();
 		});
 
-		it("chunks filePaths, fetches primary keys, then bulkGets and projects to {id, collectionIds}", async () => {
-			const filePaths = ["/music/a.mp3", "/music/b.mp3"];
-			mockCollection.primaryKeys.mockResolvedValue(["id1", "id2"]);
-			vi.mocked(mockTable.bulkGet).mockResolvedValue([
+		it("projects matching rows to {id, collectionIds} keyed by filePath", async () => {
+			await db.tracks.bulkAdd([
 				makeTrack({
-					id: "id1",
+					id: "t1",
 					filePath: "/music/a.mp3",
-					collectionIds: ["all"],
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				}),
 				makeTrack({
-					id: "id2",
+					id: "t2",
 					filePath: "/music/b.mp3",
-					collectionIds: ["all", "mix1"],
+					collectionIds: [SYSTEM_COLLECTION_ID],
 				}),
 			]);
-			const result = await fetchExistingTrackKeys(filePaths, mockTable);
+			const result = await fetchExistingTrackRefs(
+				["/music/a.mp3", "/music/b.mp3", "/music/ghost.mp3"],
+				db.tracks,
+			);
 			expect(result.size).toBe(2);
 			expect(result.get("/music/a.mp3")).toEqual({
-				id: "id1",
-				collectionIds: ["all"],
+				id: "t1",
+				collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 			});
 			expect(result.get("/music/b.mp3")).toEqual({
-				id: "id2",
-				collectionIds: ["all", "mix1"],
+				id: "t2",
+				collectionIds: [SYSTEM_COLLECTION_ID],
 			});
-			expect(mockTable.where).toHaveBeenCalledWith("filePath");
-			expect(mockTable.bulkGet).toHaveBeenCalledWith(["id1", "id2"]);
+			expect(result.has("/music/ghost.mp3")).toBe(false);
 		});
 
-		it("skips undefined rows returned by bulkGet", async () => {
-			const filePaths = ["/music/a.mp3", "/music/ghost.mp3"];
-			mockCollection.primaryKeys.mockResolvedValue(["id1", "id2"]);
-			vi.mocked(mockTable.bulkGet).mockResolvedValue([
+		it("deduplicates input filePaths (the same row appears once)", async () => {
+			await db.tracks.add(
 				makeTrack({
-					id: "id1",
+					id: "t1",
 					filePath: "/music/a.mp3",
-					collectionIds: ["all"],
+					collectionIds: [SYSTEM_COLLECTION_ID],
 				}),
-				undefined,
-			]);
-			const result = await fetchExistingTrackKeys(filePaths, mockTable);
+			);
+			const result = await fetchExistingTrackRefs(
+				["/music/a.mp3", "/music/a.mp3"],
+				db.tracks,
+			);
 			expect(result.size).toBe(1);
-			expect(result.has("/music/ghost.mp3")).toBe(false);
+			expect(result.get("/music/a.mp3")?.id).toBe("t1");
+		});
+
+		it("returns an empty map when no filePaths match", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "t1",
+					filePath: "/music/a.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			const result = await fetchExistingTrackRefs(
+				["/music/ghost.mp3", "/music/another.mp3"],
+				db.tracks,
+			);
+			expect(result.size).toBe(0);
+		});
+
+		it("resolves more than ANYOF_CHUNK_SIZE filePaths (chunking is exercised)", async () => {
+			const count = ANYOF_CHUNK_SIZE + 10;
+			const tracks = Array.from({ length: count }, (_, i) =>
+				makeTrack({
+					id: `t${i}`,
+					filePath: `/music/t${i}.mp3`,
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			await db.tracks.bulkAdd(tracks);
+			const filePaths = tracks.map((t) => t.filePath);
+			const result = await fetchExistingTrackRefs(filePaths, db.tracks);
+			expect(result.size).toBe(count);
 		});
 	});
 
