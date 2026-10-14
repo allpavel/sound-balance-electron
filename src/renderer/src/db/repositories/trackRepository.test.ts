@@ -580,23 +580,19 @@ describe("tracksRepository", () => {
 			await resetDatabase();
 		});
 
-		it("invokes onProgress callback with cumulative counts after each batch (PERF-4)", async () => {
+		it("invokes onProgress callback with cumulative counts after each batch", async () => {
 			const TRACK_COUNT = 1200;
 			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
 				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
 			);
-
 			const progressCalls: AddManyProgress[] = [];
 			const onProgress = (progress: AddManyProgress) => {
 				progressCalls.push(progress);
 			};
-
 			await tracksRepository.addMany(bigBatch, { onProgress });
 
 			// Default batch size is 500. 1200 / 500 = 2 full batches, 1 partial (200).
 			expect(progressCalls).toHaveLength(3);
-
-			// Check first batch
 			expect(progressCalls[0]).toEqual({
 				processed: 500,
 				total: 1200,
@@ -604,7 +600,6 @@ describe("tracksRepository", () => {
 				merged: 0,
 				skipped: 0,
 			});
-
 			expect(progressCalls[2]).toEqual({
 				processed: 1200,
 				total: 1200,
@@ -614,22 +609,19 @@ describe("tracksRepository", () => {
 			});
 		});
 
-		it("respects custom batchSize option for chunking (PERF-3)", async () => {
+		it("respects custom batchSize option for chunking", async () => {
 			const tracks: Metadata[] = Array.from({ length: 10 }, (_, i) =>
 				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
 			);
-
 			const progressCalls: AddManyProgress[] = [];
 			await tracksRepository.addMany(tracks, {
 				batchSize: 4,
 				onProgress: (p) => progressCalls.push(p),
 			});
-
 			expect(progressCalls).toHaveLength(3);
 			expect(progressCalls[0]?.processed).toBe(4);
 			expect(progressCalls[1]?.processed).toBe(8);
 			expect(progressCalls[2]?.processed).toBe(10);
-
 			expect(await db.tracks.count()).toBe(10);
 		});
 
@@ -637,6 +629,60 @@ describe("tracksRepository", () => {
 			const onProgress = vi.fn();
 			await tracksRepository.addMany([], { onProgress });
 			expect(onProgress).not.toHaveBeenCalled();
+		});
+
+		it("preserves added+merged+skipped === processed at every emission (F-12.7)", async () => {
+			await resetDatabase();
+			await seedCollection("mix1");
+			await db.tracks.bulkAdd([
+				makeTrack({
+					id: "skip-me",
+					filePath: "/music/skip-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+				makeTrack({
+					id: "merge-me",
+					filePath: "/music/merge-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			]);
+			const emissions: AddManyProgress[] = [];
+			const payload = [
+				makeTrack({
+					id: "skip-me",
+					filePath: "/music/skip-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+				makeTrack({
+					id: "merge-me",
+					filePath: "/music/merge-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+				makeTrack({
+					id: "new1",
+					filePath: "/music/new1.mp3",
+					collectionIds: [],
+				}),
+				makeTrack({
+					id: "dup2",
+					filePath: "/music/new1.mp3",
+					collectionIds: [],
+				}),
+			];
+			await tracksRepository.addMany(payload, {
+				batchSize: 1,
+				targetCollectionId: "mix1",
+				onProgress: (p) => emissions.push(p),
+			});
+			expect(emissions.length).toBeGreaterThan(0);
+			for (const p of emissions) {
+				expect(p.added + p.merged + p.skipped).toBe(p.processed);
+			}
+			const last = emissions[emissions.length - 1];
+			expect(last?.processed).toBe(payload.length);
+			expect(last?.added).toBe(1);
+			expect(last?.merged).toBe(1);
+			expect(last?.skipped).toBe(2);
 		});
 	});
 
