@@ -89,7 +89,7 @@ export const tracksRepository = {
 	 * @throws {PayloadLimitExceededError} If batch payload exceeds size cap.
 	 */
 	async addMany(
-		tracks: Metadata[],
+		tracks: readonly unknown[],
 		options: AddManyOptions = {},
 	): Promise<AddManyResult> {
 		const validatedOptions = assertAddManyOptions(options);
@@ -129,11 +129,13 @@ export const tracksRepository = {
 		const { unique: dedupedTracks, skipped: preSkipped } =
 			dedupeByFilePath(parsedTracks);
 
-		if (
-			gatherReferencedCollectionIds(dedupedTracks, targetCollectionId).size > 0
-		) {
+		const collectionIds = gatherReferencedCollectionIds(
+			dedupedTracks,
+			targetCollectionId,
+		);
+		if (collectionIds.size > 0) {
 			await assertReferentialIntegrity(
-				[...gatherReferencedCollectionIds(dedupedTracks, targetCollectionId)],
+				[...collectionIds],
 				db.collections,
 				"tracks.collectionIds",
 			);
