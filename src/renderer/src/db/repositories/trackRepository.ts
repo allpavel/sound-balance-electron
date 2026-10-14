@@ -48,7 +48,7 @@ import type {
 	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
-import { sanitizeControlChars } from "@shared/utils";
+import { getAddManySummary, sanitizeControlChars } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
@@ -98,6 +98,7 @@ export const tracksRepository = {
 		const onProgress = validatedOptions.onProgress;
 		const batchSize = validatedOptions.batchSize ?? IMPORT_BATCH_SIZE;
 		const signal = validatedOptions.signal;
+		const startedAt = Date.now();
 
 		if (!Array.isArray(tracks)) {
 			throw new TrackValidationError("tracks", [
@@ -187,11 +188,21 @@ export const tracksRepository = {
 				});
 			}
 
-			return {
+			const result: AddManyResult = {
 				added: allAdded,
 				merged: allMerged,
 				skipped: allSkipped,
 			};
+
+			// biome-ignore lint/suspicious/noConsole: Intentional telemetry at import completion.
+			console.info("[tracksRepository.addMany] import complete", {
+				summary: getAddManySummary(result),
+				durationMs: Date.now() - startedAt,
+				batchCount: batches.length,
+				total,
+			});
+
+			return result;
 		} catch (error: unknown) {
 			if (error instanceof ImportAbortedError) throw error;
 			const partial: AddManyResult = {
