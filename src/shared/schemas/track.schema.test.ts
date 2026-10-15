@@ -27,7 +27,7 @@ import {
 	STATUS_VALUES,
 } from "@shared/constants";
 import { configurePlatform, resetPlatform } from "@shared/utils";
-import { makeTrack } from "@tests/factories";
+import { makeIngestionTrack, makeTrack } from "@tests/factories";
 import { expectFailure, expectSuccess, hasIssueWithPath } from "@tests/utils";
 import {
 	addManyOptionsSchema,
@@ -109,10 +109,11 @@ describe("track.schema", () => {
 		it("rejects picture data exceeding MAX_BLOB_IMAGE_SIZE", () => {
 			const oversizedData = new Uint8Array(MAX_BLOB_IMAGE_SIZE + 1);
 			const issues = expectFailure(
-				trackInputSchema.safeParse({
-					...makeTrack(),
-					common: { picture: [{ format: "image/jpeg", data: oversizedData }] },
-				}),
+				trackInputSchema.safeParse(
+					makeIngestionTrack({}, [
+						{ format: "image/jpeg", data: oversizedData },
+					]),
+				),
 			);
 			expect(hasIssueWithPath(issues, ["common", "picture", 0, "data"])).toBe(
 				true,
@@ -124,10 +125,9 @@ describe("track.schema", () => {
 				format: "image/jpeg",
 				data: new Uint8Array([1, 2, 3]),
 			}));
-			const result = trackInputSchema.safeParse({
-				...makeTrack(),
-				common: { picture: pictures },
-			});
+			const result = trackInputSchema.safeParse(
+				makeIngestionTrack({}, pictures),
+			);
 			expect(result.success).toBe(false);
 		});
 	});

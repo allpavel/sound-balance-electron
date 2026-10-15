@@ -28,6 +28,7 @@ import {
 	getValidData,
 	getValidSettings,
 	makeCollection,
+	makeIngestionTrack,
 	makeIssue,
 	makeTrack,
 	resetFactorySequences,
@@ -377,6 +378,72 @@ describe("shared/utils/factories", () => {
 				expect(first.path).toEqual(["id"]);
 				expect(second.path).toEqual(["file"]);
 			});
+		});
+	});
+
+	describe("makeIngestionTrack", () => {
+		it("builds a pending fixture that satisfies trackInputSchema", () => {
+			const track = makeIngestionTrack();
+			expect(trackInputSchema.safeParse(track).success).toBe(true);
+			expect(track).toMatchObject({
+				id: "track-1",
+				file: "track-1.mp3",
+				filePath: "/music/track-1.mp3",
+				status: "pending",
+				selected: 0,
+				collectionIds: [SYSTEM_COLLECTION_ID],
+			});
+			expect(track.common.picture).toBeUndefined();
+		});
+
+		it("applies scalar overrides without dropping factory defaults", () => {
+			const track = makeIngestionTrack({
+				id: "custom",
+				filePath: "/music/custom.mp3",
+				collectionIds: [],
+			});
+			expect(track).toMatchObject({
+				id: "custom",
+				filePath: "/music/custom.mp3",
+				collectionIds: [],
+				status: "pending",
+				file: "track-1.mp3",
+			});
+			expect(trackInputSchema.safeParse(track).success).toBe(true);
+		});
+
+		it("injects binary pictures into common.picture", () => {
+			const pictures = [{ format: "image/png", data: new Uint8Array([1, 2]) }];
+			const track = makeIngestionTrack({}, pictures);
+			expect(track.common.picture).toEqual(pictures);
+			expect(trackInputSchema.safeParse(track).success).toBe(true);
+		});
+
+		it("merges overrides.common with the pictures argument (pictures authoritative)", () => {
+			const winner = [{ format: "image/png", data: new Uint8Array([9]) }];
+			const track = makeIngestionTrack(
+				{ common: { title: "Cover Test" } },
+				winner,
+			);
+			expect(track.common.title).toBe("Cover Test");
+			expect(track.common.picture).toEqual(winner);
+			expect(trackInputSchema.safeParse(track).success).toBe(true);
+		});
+
+		it("is a raw builder: constraint violations surface only at the validation boundary", () => {
+			const raw = makeIngestionTrack({ id: "" });
+			expect(raw.id).toBe("");
+			expect(trackInputSchema.safeParse(raw).success).toBe(false);
+		});
+
+		it("shares the track sequence with makeTrack (isolation)", () => {
+			makeTrack();
+			expect(makeIngestionTrack().id).toBe("track-2");
+			expect(makeTrack().id).toBe("track-3");
+		});
+
+		it("returns a distinct object per call", () => {
+			expect(makeIngestionTrack()).not.toBe(makeIngestionTrack());
 		});
 	});
 });

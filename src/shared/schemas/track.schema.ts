@@ -578,11 +578,9 @@ export const addManyOptionsSchema = z
 /** The `addMany` options type — **derived** from {@link addManyOptionsSchema}  */
 export type AddManyOptions = z.infer<typeof addManyOptionsSchema>;
 
-type InputTrack = z.infer<typeof trackInputSchema>;
-
 type StoredTrack = z.infer<typeof storedTrackSchema>;
 
-export type IngestionMetadata = InputTrack;
+export type IngestionMetadata = z.infer<typeof trackInputSchema>;
 export type Metadata = StoredTrack;
 
 export type Picture = z.infer<typeof pictureSchema>;
