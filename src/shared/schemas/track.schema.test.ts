@@ -92,20 +92,26 @@ describe("track.schema", () => {
 			).not.toHaveProperty("unknownField");
 		});
 
+		it("rejects year outside valid range", () => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ common: { year: MAX_YEAR + 1 } }),
+			);
+			expect(result.success).toBe(false);
+		});
+
+		it("rejects negative duration", () => {
+			const result = trackInputSchema.safeParse(
+				makeTrack({ format: { duration: -1 } }),
+			);
+			expect(result.success).toBe(false);
+		});
+
 		it("rejects picture data exceeding MAX_BLOB_IMAGE_SIZE", () => {
 			const oversizedData = new Uint8Array(MAX_BLOB_IMAGE_SIZE + 1);
 			const issues = expectFailure(
 				trackInputSchema.safeParse({
-					id: "track-1",
-					file: "track-1.mp3",
-					filePath: "/music/track-1.mp3",
-					status: "pending",
-					selected: 0,
-					collectionIds: ["all"],
-					common: {
-						picture: [{ format: "image/jpeg", data: oversizedData }],
-					},
-					format: {},
+					...makeTrack(),
+					common: { picture: [{ format: "image/jpeg", data: oversizedData }] },
 				}),
 			);
 			expect(hasIssueWithPath(issues, ["common", "picture", 0, "data"])).toBe(
@@ -119,31 +125,9 @@ describe("track.schema", () => {
 				data: new Uint8Array([1, 2, 3]),
 			}));
 			const result = trackInputSchema.safeParse({
-				id: "track-1",
-				file: "track-1.mp3",
-				filePath: "/music/track-1.mp3",
-				status: "pending",
-				selected: 0,
-				collectionIds: ["all"],
-				common: {
-					picture: pictures,
-				},
-				format: {},
+				...makeTrack(),
+				common: { picture: pictures },
 			});
-			expect(result.success).toBe(false);
-		});
-
-		it("rejects year outside valid range", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ common: { year: MAX_YEAR + 1 } }),
-			);
-			expect(result.success).toBe(false);
-		});
-
-		it("rejects negative duration", () => {
-			const result = trackInputSchema.safeParse(
-				makeTrack({ format: { duration: -1 } }),
-			);
 			expect(result.success).toBe(false);
 		});
 	});
@@ -482,6 +466,94 @@ describe("track.schema", () => {
 		});
 	});
 
+	describe("trackInputSchema - statusSeq", () => {
+		it("accepts a track without statusSeq (optional field)", () => {
+			expectSuccess(trackInputSchema.safeParse(makeTrack()));
+		});
+
+		it("rejects statusSeq 0 (must be >= 1)", () => {
+			expectFailure(trackInputSchema.safeParse(makeTrack({ statusSeq: 0 })));
+		});
+
+		it("accepts a positive integer statusSeq and preserves it", () => {
+			const data = expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ statusSeq: 42 })),
+			);
+			expect(data.statusSeq).toBe(42);
+		});
+
+		it.each([
+			["negative", -1],
+			["fractional", 2.5],
+			["string", "3"],
+			["null", null],
+			["boolean", true],
+		])("rejects %s statusSeq", (_label, value) => {
+			expectFailure(
+				trackInputSchema.safeParse(makeTrack({ statusSeq: value } as any)),
+			);
+		});
+	});
+
+	describe("trackInputSchema — filePath normalization", () => {
+		afterEach(() => resetPlatform());
+
+		it("normalizes filePath on the ingestion path", () => {
+			configurePlatform("win32");
+			const parsed = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "C:/Music/Track.MP3" }),
+				),
+			);
+			expect(parsed.filePath).toBe("c:/music/track.mp3");
+		});
+
+		it("folds case-variant filePaths to the same canonical key", () => {
+			configurePlatform("win32");
+			const a = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ id: "a", filePath: "C:/A.MP3" }),
+				),
+			);
+			const b = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ id: "b", filePath: "c:/a.mp3" }),
+				),
+			);
+			expect(a.filePath).toBe(b.filePath);
+			expect(a.filePath).toBe("c:/a.mp3");
+		});
+
+		it("preserves already-normalized filePaths (idempotent re-parse)", () => {
+			configurePlatform("win32");
+			const parsed = expectSuccess(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "c:/music/track.mp3" }),
+				),
+			);
+			expect(parsed.filePath).toBe("c:/music/track.mp3");
+		});
+
+		it("still rejects empty / null-byte filePaths after the transform", () => {
+			configurePlatform("win32");
+			expectFailure(trackInputSchema.safeParse(makeTrack({ filePath: "" })));
+			expectFailure(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "/music/\0track.mp3" }),
+				),
+			);
+		});
+
+		it("applies NFC folding on the ingestion path", () => {
+			configurePlatform("darwin");
+			const nfdInput = "/Music/E\u0301le\u0301ment.MP3";
+			const parsed = expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ filePath: nfdInput })),
+			);
+			expect(parsed.filePath).toBe("/music/\u00e9l\u00e9ment.mp3");
+		});
+	});
+
 	describe("tracksArraySchema", () => {
 		it("accepts a valid array of tracks", () => {
 			const tracks = [makeTrack(), makeTrack()];
@@ -733,35 +805,6 @@ describe("track.schema", () => {
 		});
 	});
 
-	describe("trackInputSchema - statusSeq", () => {
-		it("accepts a track without statusSeq (optional field)", () => {
-			expectSuccess(trackInputSchema.safeParse(makeTrack()));
-		});
-
-		it("rejects statusSeq 0 (must be >= 1)", () => {
-			expectFailure(trackInputSchema.safeParse(makeTrack({ statusSeq: 0 })));
-		});
-
-		it("accepts a positive integer statusSeq and preserves it", () => {
-			const data = expectSuccess(
-				trackInputSchema.safeParse(makeTrack({ statusSeq: 42 })),
-			);
-			expect(data.statusSeq).toBe(42);
-		});
-
-		it.each([
-			["negative", -1],
-			["fractional", 2.5],
-			["string", "3"],
-			["null", null],
-			["boolean", true],
-		])("rejects %s statusSeq", (_label, value) => {
-			expectFailure(
-				trackInputSchema.safeParse(makeTrack({ statusSeq: value } as any)),
-			);
-		});
-	});
-
 	describe("trackChangesSchema - seq (status event sequencing)", () => {
 		it.each([
 			["processing", { status: "processing", seq: 1 }],
@@ -860,65 +903,6 @@ describe("track.schema", () => {
 			const firstData = expectSuccess(filePathSchema.safeParse("C:/A.MP3"));
 			const reparsedData = expectSuccess(filePathSchema.safeParse(firstData));
 			expect(reparsedData).toBe(firstData);
-		});
-	});
-
-	describe("trackInputSchema — filePath normalization", () => {
-		afterEach(() => resetPlatform());
-
-		it("normalizes filePath on the ingestion path", () => {
-			configurePlatform("win32");
-			const parsed = expectSuccess(
-				trackInputSchema.safeParse(
-					makeTrack({ filePath: "C:/Music/Track.MP3" }),
-				),
-			);
-			expect(parsed.filePath).toBe("c:/music/track.mp3");
-		});
-
-		it("folds case-variant filePaths to the same canonical key", () => {
-			configurePlatform("win32");
-			const a = expectSuccess(
-				trackInputSchema.safeParse(
-					makeTrack({ id: "a", filePath: "C:/A.MP3" }),
-				),
-			);
-			const b = expectSuccess(
-				trackInputSchema.safeParse(
-					makeTrack({ id: "b", filePath: "c:/a.mp3" }),
-				),
-			);
-			expect(a.filePath).toBe(b.filePath);
-			expect(a.filePath).toBe("c:/a.mp3");
-		});
-
-		it("preserves already-normalized filePaths (idempotent re-parse)", () => {
-			configurePlatform("win32");
-			const parsed = expectSuccess(
-				trackInputSchema.safeParse(
-					makeTrack({ filePath: "c:/music/track.mp3" }),
-				),
-			);
-			expect(parsed.filePath).toBe("c:/music/track.mp3");
-		});
-
-		it("still rejects empty / null-byte filePaths after the transform", () => {
-			configurePlatform("win32");
-			expectFailure(trackInputSchema.safeParse(makeTrack({ filePath: "" })));
-			expectFailure(
-				trackInputSchema.safeParse(
-					makeTrack({ filePath: "/music/\0track.mp3" }),
-				),
-			);
-		});
-
-		it("applies NFC folding on the ingestion path", () => {
-			configurePlatform("darwin");
-			const nfdInput = "/Music/E\u0301le\u0301ment.MP3";
-			const parsed = expectSuccess(
-				trackInputSchema.safeParse(makeTrack({ filePath: nfdInput })),
-			);
-			expect(parsed.filePath).toBe("/music/\u00e9l\u00e9ment.mp3");
 		});
 	});
 

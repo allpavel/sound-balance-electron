@@ -33,13 +33,9 @@ import {
 	ReferentialIntegrityError,
 	TrackValidationError,
 } from "@shared/errors";
-import {
-	type IngestionMetadata,
-	type Metadata,
-	trackInputSchema,
-} from "@shared/schemas/track.schema";
+import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
-import { makeTrack } from "@tests/factories";
+import { makeIngestionTrack, makeTrack } from "@tests/factories";
 import type { EntityTable } from "dexie";
 import {
 	applyGuardedTrackUpdate,
@@ -996,20 +992,16 @@ describe("trackRepositoryUtils", () => {
 			);
 
 			const tracks: IngestionMetadata[] = [
-				trackInputSchema.parse(
-					makeTrack({
-						id: "new",
-						filePath: "/music/new.mp3",
-						collectionIds: [],
-					}),
-				),
-				trackInputSchema.parse(
-					makeTrack({
-						id: "exist-merge",
-						filePath: "/music/exist.mp3",
-						collectionIds: ["all"],
-					}),
-				),
+				makeIngestionTrack({
+					id: "new",
+					filePath: "/music/new.mp3",
+					collectionIds: [],
+				}),
+				makeIngestionTrack({
+					id: "exist-merge",
+					filePath: "/music/exist.mp3",
+					collectionIds: ["all"],
+				}),
 			];
 			const result: AddManyResult = await processBatch(tracks, "mix1", db);
 			expect(result.added).toHaveLength(1);
@@ -1038,18 +1030,16 @@ describe("trackRepositoryUtils", () => {
 				}),
 			);
 			const tracks: IngestionMetadata[] = [
-				trackInputSchema.parse(
-					makeTrack({
-						id: "input-skip",
-						filePath: "/music/skip.mp3",
-						collectionIds: [],
-					}),
+				makeIngestionTrack(
+					{ id: "input-skip", filePath: "/music/skip.mp3", collectionIds: [] },
+					[{ format: "image/jpeg", data: new Uint8Array([1]) }],
 				),
 			];
 			const result = await processBatch(tracks, "mix1", db);
 			expect(result.skipped).toEqual(["already-there"]);
 			expect(result.added).toEqual([]);
 			expect(result.merged).toEqual([]);
+			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
 			const stored = await db.tracks.get("already-there");
 			expect(stored?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
 		});
@@ -1057,18 +1047,10 @@ describe("trackRepositoryUtils", () => {
 		it("extracts artwork from new tracks and stores UUID refs", async () => {
 			const pictureBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
 			const tracks: IngestionMetadata[] = [
-				trackInputSchema.parse({
-					...makeTrack({
-						id: "art-new",
-						filePath: "/music/art.mp3",
-						collectionIds: [],
-					}),
-					common: {
-						picture: [
-							{ format: "image/jpeg", data: pictureBytes, name: "cover.jpg" },
-						],
-					},
-				}),
+				makeIngestionTrack(
+					{ id: "art-new", filePath: "/music/art.mp3", collectionIds: [] },
+					[{ format: "image/jpeg", data: pictureBytes, name: "cover.jpg" }],
+				),
 			];
 			const result = await processBatch(tracks, SYSTEM_COLLECTION_ID, db);
 			expect(result.added).toHaveLength(1);
@@ -1097,16 +1079,10 @@ describe("trackRepositoryUtils", () => {
 				}),
 			);
 			const tracks: IngestionMetadata[] = [
-				trackInputSchema.parse({
-					...makeTrack({
-						id: "reimport",
-						filePath: "/music/merge.mp3",
-						collectionIds: [],
-					}),
-					common: {
-						picture: [{ format: "image/png", data: new Uint8Array([1]) }],
-					},
-				}),
+				makeIngestionTrack(
+					{ id: "reimport", filePath: "/music/merge.mp3", collectionIds: [] },
+					[{ format: "image/png", data: new Uint8Array([1]) }],
+				),
 			];
 			const result = await processBatch(tracks, "target", db);
 			expect(result.merged).toEqual(["existing-merge"]);

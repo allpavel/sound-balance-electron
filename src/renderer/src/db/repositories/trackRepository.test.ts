@@ -24,6 +24,7 @@ import {
 	seedCollection,
 } from "@renderer/utils/test-utils";
 import {
+	IMPORT_BATCH_SIZE,
 	MAX_IMPORT_BATCH_SIZE,
 	STATUS_VALUES,
 	SYSTEM_COLLECTION_ID,
@@ -580,35 +581,6 @@ describe("tracksRepository", () => {
 			await resetDatabase();
 		});
 
-		it("invokes onProgress callback with cumulative counts after each batch", async () => {
-			const TRACK_COUNT = 1200;
-			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
-				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
-			);
-			const progressCalls: AddManyProgress[] = [];
-			const onProgress = (progress: AddManyProgress) => {
-				progressCalls.push(progress);
-			};
-			await tracksRepository.addMany(bigBatch, { onProgress });
-
-			// Default batch size is 500. 1200 / 500 = 2 full batches, 1 partial (200).
-			expect(progressCalls).toHaveLength(3);
-			expect(progressCalls[0]).toEqual({
-				processed: 500,
-				total: 1200,
-				added: 500,
-				merged: 0,
-				skipped: 0,
-			});
-			expect(progressCalls[2]).toEqual({
-				processed: 1200,
-				total: 1200,
-				added: 1200,
-				merged: 0,
-				skipped: 0,
-			});
-		});
-
 		it("respects custom batchSize option for chunking", async () => {
 			const tracks: Metadata[] = Array.from({ length: 10 }, (_, i) =>
 				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
@@ -714,6 +686,35 @@ describe("tracksRepository", () => {
 			} finally {
 				infoSpy.mockRestore();
 			}
+		});
+
+		it("invokes onProgress callback with cumulative counts after each batch", async () => {
+			const TRACK_COUNT = 1200;
+			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+			const progressCalls: AddManyProgress[] = [];
+			const onProgress = (progress: AddManyProgress) => {
+				progressCalls.push(progress);
+			};
+			await tracksRepository.addMany(bigBatch, { onProgress });
+			const expectedBatchCount = Math.ceil(TRACK_COUNT / IMPORT_BATCH_SIZE);
+			const firstBatchSize = Math.min(IMPORT_BATCH_SIZE, TRACK_COUNT);
+			expect(progressCalls).toHaveLength(expectedBatchCount);
+			expect(progressCalls[0]).toEqual({
+				processed: firstBatchSize,
+				total: TRACK_COUNT,
+				added: firstBatchSize,
+				merged: 0,
+				skipped: 0,
+			});
+			expect(progressCalls[expectedBatchCount - 1]).toEqual({
+				processed: TRACK_COUNT,
+				total: TRACK_COUNT,
+				added: TRACK_COUNT,
+				merged: 0,
+				skipped: 0,
+			});
 		});
 	});
 
