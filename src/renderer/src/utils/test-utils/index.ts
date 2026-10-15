@@ -32,6 +32,7 @@ export async function resetDatabase(): Promise<void> {
 	await db.tracks.clear();
 	await db.collections.clear();
 	await db.settings.clear();
+	await db.artworks.clear();
 	await db.collections.add({ id: "all", title: "All" });
 }
 
