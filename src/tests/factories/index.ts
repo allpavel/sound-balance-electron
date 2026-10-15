@@ -21,7 +21,12 @@ import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
 } from "@shared/schemas/settings.schema";
-import type { Metadata } from "@shared/schemas/track.schema";
+import {
+	type IngestionMetadata,
+	type Metadata,
+	type Picture,
+	trackInputSchema,
+} from "@shared/schemas/track.schema";
 import type { ValidationIssue } from "@shared/validators";
 import { deepMerge } from "@tests/utils";
 import type { CollectionType } from "@/types";
@@ -58,6 +63,32 @@ export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
 		format: {},
 		...overrides,
 	} as Metadata;
+}
+
+/**
+ * Builds a parsed ingestion track with sensible defaults. Accepts scalar
+ * overrides (id/filePath/collectionIds/status/…) and an optional binary
+ * artwork list — the latter cannot go through `makeTrack` (its stored
+ * `common.picture` is `string[]`). Prefer this over
+ * `trackInputSchema.parse(makeTrack(...))`.
+ *
+ * @param overrides - Partial scalar fields (same shape as {@link makeTrack}.
+ * @param pictures  - Optional binary artwork list for `common.picture`.
+ * @returns A schema-validated {@link IngestionMetadata}.
+ * @throws {TrackValidationError} If the combined input is invalid (callers
+ *         that need issue inspection should use `makeTrack()` + spread +
+ *         `trackInputSchema.safeParse` instead — this factory parses).
+ */
+export function makeIngestionTrack(
+	overrides: Partial<Metadata> = {},
+	pictures?: readonly Picture[],
+): IngestionMetadata {
+	const base = makeTrack(overrides);
+	const input =
+		pictures && pictures.length > 0
+			? { ...base, common: { ...base.common, picture: [...pictures] } }
+			: base;
+	return trackInputSchema.parse(input);
 }
 
 /**
