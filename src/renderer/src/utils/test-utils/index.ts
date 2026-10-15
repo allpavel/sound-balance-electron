@@ -28,6 +28,11 @@ export function configureUuidMock(): void {
 	vi.mocked(uuidV7).mockImplementation(() => `mock-uuid-${++uuidSeq}` as any);
 }
 
+/**
+ * Resets every IndexedDB store the application writes to, then re-seeds the
+ * protected system collection. Any new persistent store MUST be added here —
+ * an omitted store leaks rows across tests.
+ */
 export async function resetDatabase(): Promise<void> {
 	await db.tracks.clear();
 	await db.collections.clear();
