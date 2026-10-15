@@ -972,9 +972,7 @@ describe("trackRepositoryUtils", () => {
 
 		beforeEach(async () => {
 			await resetTestState();
-			artworksBulkAddSpy = vi
-				.spyOn(db.artworks, "bulkAdd")
-				.mockResolvedValue("mock-uuid-1");
+			artworksBulkAddSpy = vi.spyOn(db.artworks, "bulkAdd");
 		});
 
 		afterEach(() => {
@@ -1040,6 +1038,7 @@ describe("trackRepositoryUtils", () => {
 			expect(result.added).toEqual([]);
 			expect(result.merged).toEqual([]);
 			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
+			expect(await db.artworks.count()).toBe(0);
 			const stored = await db.tracks.get("already-there");
 			expect(stored?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
 		});
@@ -1087,6 +1086,7 @@ describe("trackRepositoryUtils", () => {
 			const result = await processBatch(tracks, "target", db);
 			expect(result.merged).toEqual(["existing-merge"]);
 			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
+			expect(await db.artworks.count()).toBe(0);
 		});
 	});
 });

@@ -1067,9 +1067,7 @@ describe("tracksRepository", () => {
 
 		beforeEach(async () => {
 			await resetTestState();
-			artworksBulkAddSpy = vi
-				.spyOn(db.artworks, "bulkAdd")
-				.mockResolvedValue("mock-uuid-1");
+			artworksBulkAddSpy = vi.spyOn(db.artworks, "bulkAdd");
 		});
 
 		afterEach(() => {
@@ -1140,6 +1138,7 @@ describe("tracksRepository", () => {
 			expect(savedArtworks).toHaveLength(2);
 			expect(savedArtworks?.[0]?.format).toBe("image/jpeg");
 			expect(savedArtworks?.[1]?.format).toBe("image/png");
+			expect(await db.artworks.count()).toBe(2);
 		});
 
 		it("merged tracks persist no artwork (orphan-artwork regression)", async () => {
@@ -1167,6 +1166,7 @@ describe("tracksRepository", () => {
 			expect(result.merged).toEqual(["existing"]);
 			expect(result.added).toEqual([]);
 			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
+			expect(await db.artworks.count()).toBe(0);
 		});
 
 		it("skipped tracks persist no artwork (orphan-artwork regression)", async () => {
@@ -1195,6 +1195,7 @@ describe("tracksRepository", () => {
 			expect(result.added).toEqual([]);
 			expect(result.merged).toEqual([]);
 			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
+			expect(await db.artworks.count()).toBe(0);
 		});
 	});
 
