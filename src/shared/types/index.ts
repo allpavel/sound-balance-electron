@@ -43,9 +43,9 @@ export type Artwork = {
  *                     to the target collection (no mutation performed).
  */
 export type AddManyResult = {
-	added: string[];
-	merged: string[];
-	skipped: string[];
+	readonly added: string[];
+	readonly merged: string[];
+	readonly skipped: string[];
 };
 
 /**
