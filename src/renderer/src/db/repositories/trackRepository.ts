@@ -17,6 +17,7 @@
  */
 
 import { db } from "@renderer/db/db";
+import { processBatch } from "@renderer/db/import";
 import { checkStorageHeadroom } from "@renderer/db/utils/dbUtils";
 import {
 	applyGuardedTrackUpdate,
@@ -34,7 +35,6 @@ import {
 	isNonEmptyString,
 	isPlainObject,
 	mapStorageWriteError,
-	processBatch,
 	uniqueTracks,
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";

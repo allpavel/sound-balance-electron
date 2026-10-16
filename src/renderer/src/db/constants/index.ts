@@ -17,7 +17,6 @@
  */
 
 export const DATABASE_NAME = "AudioDB";
-export const SYSTEM_COLLECTION_ID = "all";
 
 /**
  * Maximum number of missing collection IDs to display in the error message.

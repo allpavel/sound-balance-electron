@@ -17,14 +17,14 @@
  */
 
 import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
-import type { AddManyProgress, Artwork } from "@shared/types";
+import type { AddManyProgress, AddManyResult, Artwork } from "@shared/types";
 import type Dexie from "dexie";
 import type { EntityTable } from "dexie";
 import type { CollectionType } from "@/types";
 
 /**
  * Structural type representing the minimal database shape required by
- * {@link processBatch} to execute a transactional batch write.
+ * `processBatch` to execute a transactional batch write.
  */
 export type TrackBatchDatabase = Pick<Dexie, "transaction"> & {
 	readonly tracks: EntityTable<Metadata, "id">;
@@ -48,7 +48,7 @@ export type FilePathDedupeResult = {
 /**
  * A failure-isolated progress emitter for `addMany` observers.
  *
- * Produced by {@link createProgressEmitter}; consumed by `addMany`, which
+ * Produced by `createProgressEmitter`; consumed by `addMany`, which
  * calls {@link ProgressEmitter.emit} after each batch and
  * {@link ProgressEmitter.flush} exactly once from a `finally` block (so the
  * terminal summary is emitted on both the success and the abort path).
