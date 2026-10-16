@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { MAX_BASE64_IMAGE_SIZE } from "@shared/constants";
+import { MAX_BLOB_IMAGE_SIZE } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import { getValidSettings, makeTrack } from "@tests/factories";
 import {
@@ -327,7 +327,7 @@ describe("safeParseTrack", () => {
 						picture: [
 							{
 								format: "image/jpeg",
-								data: "x".repeat(MAX_BASE64_IMAGE_SIZE + 1),
+								data: "x".repeat(MAX_BLOB_IMAGE_SIZE + 1),
 							},
 						],
 					},
