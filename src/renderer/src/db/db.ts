@@ -18,11 +18,11 @@
 
 import {
 	DATABASE_NAME,
-	SYSTEM_COLLECTION_ID,
 	TRACKS_STORES_V1,
 	TRACKS_STORES_V2,
 } from "@renderer/db/constants";
 import { isLegacyPicture } from "@renderer/db/utils/dbUtils";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { Artwork } from "@shared/types";
 import Dexie, { type EntityTable } from "dexie";

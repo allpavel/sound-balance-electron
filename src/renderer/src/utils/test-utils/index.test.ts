@@ -17,13 +17,13 @@
  */
 
 import { db } from "@renderer/db/db";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { makeCollection, makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 import {
 	type SettingsForm,
 	strictSettingsSchema as settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
-import { SYSTEM_COLLECTION_ID } from "../../db/constants";
 import {
 	configureUuidMock,
 	resetDatabase,
