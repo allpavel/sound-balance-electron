@@ -28,6 +28,7 @@ import {
 	TrackValidationError,
 } from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
+import type { AddManyProgress } from "@shared/types";
 import { makeTrack } from "@tests/factories";
 import type { EntityTable } from "dexie";
 import {
@@ -35,6 +36,7 @@ import {
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
 	assertTrackInput,
+	createProgressEmitter,
 	isPlainObject,
 	mapStorageWriteError,
 	normalizeCollectionIds,
@@ -886,7 +888,7 @@ describe("trackRepositoryUtils", () => {
 		});
 	});
 
-	describe("mapStorageWriteError — precedence rules (T04-A / TST-2 / INV-5)", () => {
+	describe("mapStorageWriteErro", () => {
 		describe("rule 1 — domain re-throw (identity)", () => {
 			it.each([
 				["TrackValidationError", new TrackValidationError("ctx", [])],
@@ -1011,6 +1013,65 @@ describe("trackRepositoryUtils", () => {
 				};
 				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
 			});
+		});
+	});
+
+	describe("createProgressEmitter", () => {
+		const snapshot: AddManyProgress = {
+			processed: 1,
+			total: 3,
+			added: 1,
+			merged: 0,
+			skipped: 0,
+		};
+
+		it("returns no-op emit/flush when onProgress is undefined", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const emitter = createProgressEmitter(undefined);
+			emitter.emit(snapshot);
+			emitter.flush();
+			expect(warnSpy).not.toHaveBeenCalled();
+			warnSpy.mockRestore();
+		});
+
+		it("delivers the snapshot to a non-throwing callback; flush is a no-op", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const cb = vi.fn();
+			const emitter = createProgressEmitter(cb);
+			emitter.emit(snapshot);
+			expect(cb).toHaveBeenCalledWith(snapshot);
+			emitter.flush();
+			expect(warnSpy).not.toHaveBeenCalled();
+			warnSpy.mockRestore();
+		});
+
+		it("logs the first callback failure once; suppresses subsequent; flush summarizes", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const throwing = vi.fn(() => {
+				throw new Error("boom");
+			});
+			const emitter = createProgressEmitter(throwing);
+			emitter.emit(snapshot);
+			emitter.emit(snapshot);
+			emitter.emit(snapshot);
+			expect(throwing).toHaveBeenCalledTimes(3);
+			expect(warnSpy).toHaveBeenCalledTimes(1);
+			emitter.flush();
+			expect(warnSpy).toHaveBeenCalledTimes(2);
+			const summary = warnSpy.mock.calls[1]?.[1];
+			expect(summary).toEqual(
+				expect.objectContaining({ totalFailures: 3, suppressedAfterFirst: 2 }),
+			);
+			warnSpy.mockRestore();
+		});
+
+		it("emit never propagates a callback throw", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const emitter = createProgressEmitter(() => {
+				throw new Error("boom");
+			});
+			expect(() => emitter.emit(snapshot)).not.toThrow();
+			warnSpy.mockRestore();
 		});
 	});
 });
