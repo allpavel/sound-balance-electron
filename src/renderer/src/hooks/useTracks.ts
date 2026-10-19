@@ -16,17 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
+import type {
+	AddManyOptions,
+	Metadata,
+	TrackChanges,
+} from "@shared/schemas/track.schema";
 import { useMutation } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 
-export type AddTracksOptions = {
-	targetCollectionId?: string;
-};
-
 export type AddTracksPayload = {
 	tracks: Metadata[];
-	options?: AddTracksOptions;
+	options?: AddManyOptions;
 };
 
 export type UpdateTrackPayload = {

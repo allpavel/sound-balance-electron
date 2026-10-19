@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import {
-	MAX_BASE64_IMAGE_SIZE,
+	MAX_BLOB_IMAGE_SIZE,
+	MAX_IMPORT_BATCH_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
@@ -25,6 +26,8 @@ import {
 	NULL_BYTE_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
+import type { AddManyProgressCallback } from "@shared/types";
+import { getPlatform, normalizeFilePath } from "@shared/utils";
 import z from "zod";
 
 export const nonEmptyStringSchema = z
@@ -53,7 +56,38 @@ export const reasonSchema = z
 		error: "Reason must not contain null bytes",
 	});
 
+/**
+ * Schema for the `filePath` field with OS-aware case normalization.
+ *
+ * On case-insensitive filesystems (Windows, macOS), the path is lowercased
+ * after all string validations pass. On case-sensitive filesystems (Linux),
+ * the path is stored unchanged. This ensures the `&filePath` unique index
+ * treats `"C:/A.mp3"` and `"c:/a.MP3"` as the same file on Windows/macOS,
+ * while preserving case-distinct paths on Linux.
+ *
+ * The transform is **idempotent**: normalizing an already-normalized path
+ * is a no-op, so re-parsing stored data is safe.
+ *
+ * @see {@link normalizeFilePath} for the full policy documentation.
+ */
+export const filePathSchema = nonEmptyStringSchema.transform((path) =>
+	normalizeFilePath(path, getPlatform()),
+);
+
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
+
+/**
+ * Collection identifier accepted as `addMany`'s `targetCollectionId` and as
+ * members of `collectionIds`.
+ *
+ * C0 control characters other than the null byte (e.g. U+0001)
+ * currently *pass* this schema; rejecting them at entry is deferred
+ * pending a stored-data compatibility evaluation (existing databases
+ * may contain such ids). The residual exposure is contained by defense
+ * in depth: every surface that interpolates a collection id into
+ * an error message or log record applies `sanitizeControlChars`
+ * (see `assertReferentialIntegrity`, `assertBatchUniqueness`, `mapZodIssues`).
+ */
 export const targetCollectionIdSchema = nonEmptyStringSchema;
 export const selectedSchema = z.union([z.literal(0), z.literal(1)], {
 	error: "Must be 0 or 1",
@@ -62,19 +96,24 @@ export const statusSchema = z.enum(STATUS_VALUES, {
 	error: `Must be one of: ${STATUS_VALUES.join(", ")}`,
 });
 export const eventSeqSchema = z.number().int().min(1).optional();
+
 export const pictureSchema = z
 	.object({
 		format: z.string().min(1).max(50),
 		data: z
-			.string()
-			.max(
-				MAX_BASE64_IMAGE_SIZE,
-				"Album art exceeds maximum allowed size (5MB)",
+			.instanceof(Blob)
+			.or(z.instanceof(Uint8Array))
+			.refine(
+				(val) =>
+					(val instanceof Blob ? val.size : val.byteLength) <=
+					MAX_BLOB_IMAGE_SIZE,
+				`Album art exceeds maximum allowed size (${MAX_BLOB_IMAGE_SIZE / 1024 / 1024}MB)`,
 			),
 		description: z.string().max(500).optional(),
 		name: z.string().max(255).optional(),
 	})
 	.strict();
+
 const trackInfoSchema = z
 	.object({
 		id: z.number().int().optional(),
@@ -96,7 +135,7 @@ const chapterSchema = z
 	})
 	.strict();
 
-const commonSchema = z
+const baseCommonSchema = z
 	.object({
 		artist: z.string().optional(),
 		title: z.string().optional(),
@@ -108,7 +147,6 @@ const commonSchema = z
 		disk: z
 			.object({ no: z.number().nullable(), of: z.number().nullable() })
 			.optional(),
-		picture: z.array(pictureSchema).max(MAX_PICTURE_COUNT).optional(),
 		genre: z.array(z.string()).optional(),
 		composer: z.array(z.string()).optional(),
 		artists: z.array(z.string()).optional(),
@@ -322,6 +360,24 @@ const commonSchema = z
 	})
 	.strict();
 
+/**
+ * Schema for the `common` metadata fields during ingestion (IPC boundary).
+ * Accepts raw binary artwork (`Blob` or `Uint8Array`) and enforces payload
+ * size limits before the data reaches the database layer.
+ */
+const ingestionCommonSchema = baseCommonSchema.extend({
+	picture: z.array(pictureSchema).max(MAX_PICTURE_COUNT).optional(),
+});
+
+/**
+ * Schema for the `common` metadata fields at the storage boundary (IndexedDB).
+ * Artwork is represented as an array of string UUIDs referencing the separate
+ * `artworks` table, preventing quota bloat and improving query performance.
+ */
+const storedCommonSchema = baseCommonSchema.extend({
+	picture: z.array(z.string()).max(MAX_PICTURE_COUNT).optional(),
+});
+
 const formatSchema = z
 	.object({
 		duration: z.number().min(0).max(1000000).optional(),
@@ -348,33 +404,78 @@ const formatSchema = z
 	})
 	.strict();
 
+/**
+ * Base schema containing track fields that are identical across both
+ * ingestion (IPC) and storage (IndexedDB) boundaries.
+ * Excludes `common` and `status`, which are composed later to prevent
+ * type duplication.
+ */
 const trackBaseSchema = z
 	.object({
 		id: nonEmptyStringSchema,
 		file: nonEmptyStringSchema,
-		filePath: nonEmptyStringSchema,
+		filePath: filePathSchema,
 		selected: selectedSchema,
 		collectionIds: collectionIdsSchema,
 		statusSeq: eventSeqSchema,
-		common: commonSchema.default({}),
 		format: formatSchema.default({}),
 	})
 	.strip();
 
+/**
+ * Validation schema for untrusted track payloads entering the Renderer process
+ * via IPC. Enforces ingestion constraints, including raw binary artwork validation.
+ */
 export const trackInputSchema = z.discriminatedUnion("status", [
-	trackBaseSchema.extend({ status: z.literal("pending") }),
-	trackBaseSchema.extend({ status: z.literal("processing") }),
-	trackBaseSchema.extend({ status: z.literal("completed") }),
+	trackBaseSchema.extend({
+		status: z.literal("pending"),
+		common: ingestionCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("processing"),
+		common: ingestionCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("completed"),
+		common: ingestionCommonSchema.default({}),
+	}),
 	trackBaseSchema.extend({
 		status: z.literal("failed"),
 		reason: reasonSchema,
+		common: ingestionCommonSchema.default({}),
 	}),
 ]);
+
+/**
+ * Validation schema for tracks being persisted to or read from IndexedDB.
+ * Enforces storage constraints, verifying that artwork references are stored
+ * as string UUIDs pointing to the `artworks` table.
+ */
+export const storedTrackSchema = z.discriminatedUnion("status", [
+	trackBaseSchema.extend({
+		status: z.literal("pending"),
+		common: storedCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("processing"),
+		common: storedCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("completed"),
+		common: storedCommonSchema.default({}),
+	}),
+	trackBaseSchema.extend({
+		status: z.literal("failed"),
+		reason: reasonSchema,
+		common: storedCommonSchema.default({}),
+	}),
+]);
+
 export const tracksArraySchema = z.array(trackInputSchema);
 
 const trackChangesFieldsSchema = z
 	.object({
-		filePath: nonEmptyStringSchema.optional(),
+		filePath: filePathSchema.optional(),
 		selected: selectedSchema.optional(),
 		collectionIds: collectionIdsSchema.optional(),
 	})
@@ -415,11 +516,74 @@ export const trackChangesSchema = z.union([
 	trackChangesStatusSchema,
 ]);
 
-type TrackInput = z.infer<typeof trackInputSchema>;
+/**
+ * Type-guard schema for the `onProgress` callback in {@link addManyOptionsSchema}.
+ *
+ * Uses `z.custom` with a `typeof === "function"` type guard (not
+ * `z.function()`, which would wrap the callback with per-call arg validation
+ * and change its identity). The guard narrows `unknown` →
+ * {@link AddManyProgressCallback} without runtime side-effects.
+ */
+const progressCallbackSchema = z.custom<AddManyProgressCallback>(
+	(value): value is AddManyProgressCallback => typeof value === "function",
+	{ error: "onProgress must be a function" },
+);
+
+/**
+ * Runtime-validated schema for `tracksRepository.addMany` options.
+ *
+ * Replaces the type-only `AddManyOptions` contract that let
+ * `batchSize: NaN` bypass `chunkArray`'s `size < 1` guard (`NaN < 1` is
+ * `false`) and produce a single empty batch — returning empty success for
+ * non-empty input (silent, total, success-reported data loss). This schema
+ * validates the options at the trust boundary (UI/Redux → data layer; options
+ * may later cross IPC where TS types no longer hold) and **rejects** invalid
+ * values rather than clamping:
+ *
+ * @property targetCollectionId - Reuses `targetCollectionIdSchema`
+ *   (non-empty, null-byte-free, length-bounded). Optional; defaults to
+ *   `SYSTEM_COLLECTION_ID` in `addMany`.
+ * @property batchSize - Integer in `[1, MAX_IMPORT_BATCH_SIZE]`. Rejects `0`,
+ *   negative, `NaN`, fractional, `Infinity`, and string-typed values (no
+ *   coercion reliance). Optional; defaults to `IMPORT_BATCH_SIZE`.
+ * @property onProgress - Must be a function (typeof guard). The callback must
+ *   be **synchronous and non-throwing**; `addMany` isolates it in a try/catch
+ *   so a throwing observer cannot abort the remaining batches.
+ * @property signal - Optional `AbortSignal` for user-initiated cancellation.
+ *   Checked **between** batches (coarse-grained); a batch in progress
+ *   completes before the abort is observed. On abort, `addMany` throws `ImportAbortedError`
+ *   carrying the partials (same contract as a mid-import failure).
+ *
+ * `.strict()` rejects unknown keys (defense in depth — options cross a trust
+ * boundary, so unexpected fields are a caller bug, not a feature).
+ *
+ * @see {@link assertAddManyOptions} for the throwing boundary helper.
+ */
+export const addManyOptionsSchema = z
+	.object({
+		targetCollectionId: targetCollectionIdSchema.optional(),
+		batchSize: z
+			.number()
+			.int({ error: "batchSize must be an integer" })
+			.min(1, { error: "batchSize must be ≥ 1" })
+			.max(MAX_IMPORT_BATCH_SIZE, {
+				error: `batchSize must not exceed ${MAX_IMPORT_BATCH_SIZE}`,
+			})
+			.optional(),
+		onProgress: progressCallbackSchema.optional(),
+		signal: z.instanceof(AbortSignal).optional(),
+	})
+	.strict();
+
+/** The `addMany` options type — **derived** from {@link addManyOptionsSchema}  */
+export type AddManyOptions = z.infer<typeof addManyOptionsSchema>;
+
+type StoredTrack = z.infer<typeof storedTrackSchema>;
+
+export type IngestionMetadata = z.infer<typeof trackInputSchema>;
+export type Metadata = StoredTrack;
 
 export type Picture = z.infer<typeof pictureSchema>;
-
-export type Metadata = TrackInput;
 
 export type TrackChanges = z.infer<typeof trackChangesSchema>;
 

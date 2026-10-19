@@ -17,20 +17,38 @@
  */
 
 import { db } from "@renderer/db/db";
+import { processBatch } from "@renderer/db/import";
+import { checkStorageHeadroom } from "@renderer/db/utils/dbUtils";
 import {
 	applyGuardedTrackUpdate,
-	areCollectionIdsEqual,
-	assertTargetCollectionId,
+	assertAddManyOptions,
+	assertBatchPayloadSize,
+	assertBatchUniqueness,
+	assertReferentialIntegrity,
 	assertTrackInput,
+	calculateBatchPayloadSize,
+	chunkArray,
+	createProgressEmitter,
+	dedupeByFilePath,
+	describeThrownValue,
+	gatherReferencedCollectionIds,
 	isNonEmptyString,
 	isPlainObject,
-	normalizeCollectionIds,
+	mapStorageWriteError,
 	uniqueTracks,
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { TrackValidationError } from "@shared/errors";
-import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
+import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { ConflictError, TrackValidationError } from "@shared/errors";
+import { ImportAbortedError } from "@shared/errors/domainErrors";
+import type {
+	AddManyOptions,
+	IngestionMetadata,
+	Metadata,
+	TrackChanges,
+} from "@shared/schemas/track.schema";
+import type { AddManyProgress, AddManyResult } from "@shared/types";
+import { getAddManySummary, sanitizeControlChars } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
@@ -49,11 +67,53 @@ export const tracksRepository = {
 		return await db.tracks.get(id);
 	},
 
+	/**
+	 * Batch-inserts tracks, merging duplicates by `filePath` into the target
+	 * collection.
+	 *
+	 * Batches are atomic; the import is idempotent. On a mid-import failure
+	 * (quota, a collection deleted mid-import, or `signal` abort) this throws
+	 * {@link ImportAbortedError} carrying `partial` (committed counts from
+	 * batches 1..k−1), `progress` (processed/total), and `cause`. Recovery
+	 * is to re-run the import — prior `added` rows become `merged`/`skipped`
+	 * by `filePath`. Pre-flight failures throw their native domain error
+	 * directly (no partials — caller bug).
+	 *
+	 * Referential integrity is re-asserted inside each batch's transaction,
+	 * atomically with the writes (the pre-flight check is a non-authoritative
+	 * fast-fail).
+	 *
+	 * @param tracks – Untrusted array; each element is validated into
+	 *   {@link IngestionMetadata} before any write.
+	 * @param options – Untrusted, runtime-validated import options.
+	 * @param options.targetCollectionId – Collection to assign (default `"all"`).
+	 * @param options.batchSize – Max tracks per transaction (default
+	 *   `IMPORT_BATCH_SIZE`, capped at `MAX_IMPORT_BATCH_SIZE`).
+	 * @param options.onProgress – Synchronous, non-throwing observer invoked
+	 *   after each batch with cumulative counts; a throw is isolated, not
+	 *   propagated.
+	 * @param options.signal – Coarse-grained cancellation checked between
+	 *   batches; abort throws `ImportAbortedError` with the partials.
+	 * @returns A structured {@link AddManyResult} discriminating outcomes.
+	 * @throws {TrackValidationError} Pre-flight: invalid `options` or `tracks`.
+	 * @throws {ConflictError} Pre-flight: duplicate `id` in the payload.
+	 * @throws {ReferentialIntegrityError} Pre-flight: payload references a
+	 *   non-existent collection.
+	 * @throws {PayloadLimitExceededError} Pre-flight: payload exceeds the size cap.
+	 * @throws {ImportAbortedError} Mid-import failure or cancellation — carries
+	 *   `partial` + `progress` + `cause`; retry-safe.
+	 */
 	async addMany(
-		tracks: Metadata[],
-		{ targetCollectionId: rawId = SYSTEM_COLLECTION_ID } = {},
-	): Promise<string[]> {
-		const targetCollectionId = assertTargetCollectionId(rawId);
+		tracks: readonly unknown[],
+		options: AddManyOptions = {},
+	): Promise<AddManyResult> {
+		const validatedOptions = assertAddManyOptions(options);
+		const targetCollectionId =
+			validatedOptions.targetCollectionId ?? SYSTEM_COLLECTION_ID;
+		const onProgress = validatedOptions.onProgress;
+		const batchSize = validatedOptions.batchSize ?? IMPORT_BATCH_SIZE;
+		const signal = validatedOptions.signal;
+		const startedAt = Date.now();
 
 		if (!Array.isArray(tracks)) {
 			throw new TrackValidationError("tracks", [
@@ -61,88 +121,129 @@ export const tracksRepository = {
 			]);
 		}
 		if (tracks.length === 0) {
-			return [];
+			return { added: [], merged: [], skipped: [] };
 		}
 
-		const parsedTracks: Metadata[] = [];
-		const seenFilePaths = new Set<string>();
+		const parsedTracks: IngestionMetadata[] = [];
 
 		for (const [index, track] of tracks.entries()) {
 			const parsedTrack = assertTrackInput(track, index);
-			const filePath = parsedTrack.filePath;
-			if (seenFilePaths.has(filePath)) {
-				throw new TrackValidationError(`tracks[${index}].filePath`, [
-					createRootIssue(
-						"duplicate_file_path",
-						`Tracks contains duplicate filePath: ${filePath}`,
-					),
-				]);
-			}
-			seenFilePaths.add(filePath);
 			parsedTracks.push(parsedTrack);
 		}
 
-		const filePaths = parsedTracks.map((track) => track.filePath);
+		const payloadSize = calculateBatchPayloadSize(parsedTracks);
+		assertBatchPayloadSize(payloadSize);
+		await checkStorageHeadroom(payloadSize);
 
-		return await db.transaction("rw", db.tracks, async () => {
-			const existingTracks = await db.tracks
-				.where("filePath")
-				.anyOf(filePaths)
-				.toArray();
+		assertBatchUniqueness(
+			parsedTracks,
+			(t) => t.id,
+			(i) => `tracks[${i}].id`,
+			"id",
+		);
 
-			const existingByFilePath = new Map<string, Metadata>();
+		const { unique: dedupedTracks, skipped: preSkipped } =
+			dedupeByFilePath(parsedTracks);
 
-			for (const existingTrack of existingTracks) {
-				if (isNonEmptyString(existingTrack.filePath)) {
-					existingByFilePath.set(existingTrack.filePath, existingTrack);
-				}
-			}
+		const collectionIds = gatherReferencedCollectionIds(
+			dedupedTracks,
+			targetCollectionId,
+		);
 
-			const toAdd: Metadata[] = [];
-			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
+		await assertReferentialIntegrity(
+			[...collectionIds],
+			db.collections,
+			"tracks.collectionIds",
+		);
 
-			for (const track of parsedTracks) {
-				const existingRow = existingByFilePath.get(track.filePath);
+		const batches = chunkArray(dedupedTracks, batchSize);
+		const allAdded: string[] = [];
+		const allMerged: string[] = [];
+		const allSkipped: string[] = [...preSkipped];
+		let processed = preSkipped.length;
+		const total = parsedTracks.length;
 
-				if (existingRow) {
-					const nextCollectionIds = normalizeCollectionIds(
-						existingRow.collectionIds,
-						targetCollectionId,
+		const progressEmitter = createProgressEmitter(onProgress);
+
+		try {
+			for (const batch of batches) {
+				if (signal?.aborted) {
+					throw new ImportAbortedError(
+						`Import cancelled by the caller after ${processed} of ${total} tracks`,
+						{
+							added: allAdded,
+							merged: allMerged,
+							skipped: allSkipped,
+						},
+						{
+							processed,
+							total,
+							added: allAdded.length,
+							merged: allMerged.length,
+							skipped: allSkipped.length,
+						},
+						new DOMException("Import cancelled", "AbortError"),
 					);
-					if (
-						!areCollectionIdsEqual(existingRow.collectionIds, nextCollectionIds)
-					) {
-						toUpdate.push({
-							key: existingRow.id,
-							changes: {
-								collectionIds: nextCollectionIds,
-							},
-						});
-					}
-				} else {
-					toAdd.push({
-						...track,
-						collectionIds: normalizeCollectionIds(
-							track.collectionIds,
-							targetCollectionId,
-						),
-					});
 				}
+
+				const batchResult = await processBatch(batch, targetCollectionId, db);
+
+				for (const id of batchResult.added) allAdded.push(id);
+				for (const id of batchResult.merged) allMerged.push(id);
+				for (const id of batchResult.skipped) allSkipped.push(id);
+				processed += batch.length;
+
+				progressEmitter.emit({
+					processed,
+					total,
+					added: allAdded.length,
+					merged: allMerged.length,
+					skipped: allSkipped.length,
+				});
 			}
 
-			const resultIds: string[] = [];
+			const result: AddManyResult = {
+				added: allAdded,
+				merged: allMerged,
+				skipped: allSkipped,
+			};
 
-			if (toAdd.length > 0) {
-				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys: true });
-				const addedIdArray = Array.isArray(addedIds) ? addedIds : [addedIds];
-				resultIds.push(...(addedIdArray as string[]));
-			}
+			// biome-ignore lint/suspicious/noConsole: Intentional telemetry at import completion.
+			console.info("[tracksRepository.addMany] import complete", {
+				summary: getAddManySummary(result),
+				durationMs: Date.now() - startedAt,
+				batchCount: batches.length,
+				total,
+			});
 
-			if (toUpdate.length > 0) {
-				await db.tracks.bulkUpdate(toUpdate);
+			return result;
+		} catch (error: unknown) {
+			if (error instanceof ImportAbortedError) throw error;
+			const partial: AddManyResult = {
+				added: allAdded,
+				merged: allMerged,
+				skipped: allSkipped,
+			};
+			const progress: AddManyProgress = {
+				processed,
+				total,
+				added: allAdded.length,
+				merged: allMerged.length,
+				skipped: allSkipped.length,
+			};
+			try {
+				mapStorageWriteError(error);
+			} catch (cause: unknown) {
+				throw new ImportAbortedError(
+					`Import aborted after ${processed} of ${total} tracks (cause: ${describeThrownValue(cause)})`,
+					partial,
+					progress,
+					cause,
+				);
 			}
-			return resultIds;
-		});
+		} finally {
+			progressEmitter.flush();
+		}
 	},
 
 	async update(id: string, changes: unknown): Promise<number> {
@@ -153,6 +254,17 @@ export const tracksRepository = {
 		}
 		const validated = validateTrackChanges(changes, "changes");
 		if (!("status" in validated)) {
+			const collectionIds = validated.collectionIds;
+			if (collectionIds !== undefined) {
+				return db.transaction("rw", db.tracks, db.collections, async () => {
+					await assertReferentialIntegrity(
+						collectionIds,
+						db.collections,
+						"changes.collectionIds",
+					);
+					return applyGuardedTrackUpdate(db.tracks, id, validated);
+				});
+			}
 			return db.tracks.update(id, validated);
 		}
 
@@ -193,12 +305,9 @@ export const tracksRepository = {
 				]);
 			}
 			if (seenIds.has(update.id)) {
-				throw new TrackValidationError(`updates[${index}].id`, [
-					createRootIssue(
-						"duplicate_id",
-						`Updates contains duplicate id: ${update.id}`,
-					),
-				]);
+				throw new ConflictError(
+					`Updates contains duplicate id: ${sanitizeControlChars(update.id)}`,
+				);
 			}
 			seenIds.add(update.id);
 			normalizedUpdates.push({
@@ -207,17 +316,37 @@ export const tracksRepository = {
 			});
 		}
 
+		const needsCollectionCheck = normalizedUpdates.some(
+			(u) =>
+				"collectionIds" in u.changes && u.changes.collectionIds !== undefined,
+		);
+
+		const transactionTables = needsCollectionCheck
+			? [db.tracks, db.collections]
+			: [db.tracks];
+
 		let total = 0;
-		await db.transaction("rw", db.tracks, async () => {
-			for (const { id, changes } of normalizedUpdates) {
+		await db.transaction("rw", transactionTables, async () => {
+			for (const [index, { id, changes }] of normalizedUpdates.entries()) {
+				if ("collectionIds" in changes && changes.collectionIds !== undefined) {
+					const collectionIds = changes.collectionIds;
+					await assertReferentialIntegrity(
+						collectionIds,
+						db.collections,
+						`updates[${index}].changes.collectionIds`,
+					);
+				}
 				total += await applyGuardedTrackUpdate(db.tracks, id, changes);
 			}
 		});
 		return total;
 	},
+
 	async remove(id: string): Promise<void> {
 		if (!isNonEmptyString(id)) {
-			throw new Error("ID must be a non-empty string");
+			throw new TrackValidationError("id", [
+				createRootIssue("invalid_type", "ID must be a non-empty string"),
+			]);
 		}
 		await db.tracks.delete(id);
 	},

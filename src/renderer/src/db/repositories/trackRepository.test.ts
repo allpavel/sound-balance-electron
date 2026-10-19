@@ -18,12 +18,37 @@
 
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
-import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { TrackValidationError } from "@shared/errors";
+import {
+	resetDatabase,
+	resetTestState,
+	seedCollection,
+} from "@renderer/utils/test-utils";
+import {
+	IMPORT_BATCH_SIZE,
+	MAX_IMPORT_BATCH_SIZE,
+	STATUS_VALUES,
+	SYSTEM_COLLECTION_ID,
+} from "@shared/constants";
+import {
+	ConflictError,
+	ImportAbortedError,
+	ReferentialIntegrityError,
+	StorageCapacityError,
+	TrackValidationError,
+} from "@shared/errors";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
+import type { AddManyProgress, AddManyResult } from "@shared/types";
+import { configurePlatform, resetPlatform } from "@shared/utils";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeTrack } from "@tests/factories";
+
+vi.mock("@shared/utils", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@shared/utils")>();
+	return {
+		...actual,
+		normalizeFilePath: (filePath: string): string => filePath.toLowerCase(),
+	};
+});
 
 /** Seeds a row in the given status. "failed" requires a reason (schema
  *  invariant), supplied once here for the whole suite.
@@ -42,6 +67,28 @@ async function seedTrackWithStatus(id: string, status: Status): Promise<void> {
 function statusChange(to: Status, seq?: number): Record<string, unknown> {
 	const base = seq === undefined ? { status: to } : { status: to, seq };
 	return to === "failed" ? { ...base, reason: "processing failed" } : base;
+}
+
+/**
+ * Asserts all three lanes of an {@link AddManyResult} in a single call,
+ * reducing boilerplate across the addMany test suite.
+ *
+ * @param result   – The actual result returned by `addMany`.
+ * @param expected – Partial expectation; omitted lanes are not checked.
+ */
+function expectAddManyResult(
+	result: AddManyResult,
+	expected: Partial<AddManyResult>,
+): void {
+	if (expected.added !== undefined) {
+		expect(result.added).toEqual(expected.added);
+	}
+	if (expected.merged !== undefined) {
+		expect(result.merged).toEqual(expected.merged);
+	}
+	if (expected.skipped !== undefined) {
+		expect(result.skipped).toEqual(expected.skipped);
+	}
 }
 
 describe("tracksRepository", () => {
@@ -88,20 +135,25 @@ describe("tracksRepository", () => {
 
 	describe("addMany", () => {
 		it("adds new tracks to the 'all' collection and returns their ids", async () => {
-			const ids = await tracksRepository.addMany(
+			const result: AddManyResult = await tracksRepository.addMany(
 				[
 					makeTrack({ id: "a", collectionIds: [] }),
 					makeTrack({ id: "b", collectionIds: [] }),
 				],
 				{ targetCollectionId: SYSTEM_COLLECTION_ID },
 			);
-			expect(ids).toEqual(["a", "b"]);
+			expectAddManyResult(result, {
+				added: ["a", "b"],
+				merged: [],
+				skipped: [],
+			});
 			expect(
 				(await db.tracks.toArray()).map((t) => t.collectionIds).sort(),
 			).toEqual([[SYSTEM_COLLECTION_ID], [SYSTEM_COLLECTION_ID]]);
 		});
 
 		it("adds new tracks to a specific collection and auto-includes 'all'", async () => {
+			await seedCollection("mix1");
 			await tracksRepository.addMany(
 				[makeTrack({ id: "a", collectionIds: [] })],
 				{ targetCollectionId: "mix1" },
@@ -113,6 +165,8 @@ describe("tracksRepository", () => {
 		});
 
 		it("preserves pre-existing collectionIds and appends 'all' + target", async () => {
+			await seedCollection("preexisting");
+			await seedCollection("mix1");
 			await tracksRepository.addMany(
 				[makeTrack({ id: "a", collectionIds: ["preexisting"] })],
 				{ targetCollectionId: "mix1" },
@@ -125,6 +179,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("appends targetCollectionId to an existing track that lacks it", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "a",
@@ -132,7 +187,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID],
 				}),
 			);
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "a",
@@ -142,7 +197,11 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expect(ids).toEqual([]);
+			expectAddManyResult(result, {
+				added: [],
+				merged: ["a"],
+				skipped: [],
+			});
 			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 				"mix1",
@@ -150,6 +209,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("does not modify an existing track that already has the targetCollectionId", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "a",
@@ -157,7 +217,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				}),
 			);
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "a",
@@ -167,7 +227,11 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expect(ids).toEqual([]);
+			expectAddManyResult(result, {
+				added: [],
+				merged: [],
+				skipped: ["a"],
+			});
 			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 				"mix1",
@@ -175,6 +239,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("handles a mixed batch: new, update, and no-op together", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "exists",
@@ -189,8 +254,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
 				}),
 			);
-
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "new1",
@@ -210,8 +274,11 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-
-			expect(ids).toEqual(["new1"]);
+			expectAddManyResult(result, {
+				added: ["new1"],
+				merged: ["exists"],
+				skipped: ["noop"],
+			});
 			expect((await db.tracks.get("new1"))?.collectionIds).toEqual([
 				SYSTEM_COLLECTION_ID,
 				"mix1",
@@ -227,6 +294,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("matches existing tracks by filePath, not by id", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "orig",
@@ -234,7 +302,7 @@ describe("tracksRepository", () => {
 					collectionIds: [SYSTEM_COLLECTION_ID],
 				}),
 			);
-			const ids = await tracksRepository.addMany(
+			const result = await tracksRepository.addMany(
 				[
 					makeTrack({
 						id: "different-id",
@@ -244,32 +312,890 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expect(ids).toEqual([]);
+			expectAddManyResult(result, {
+				added: [],
+				merged: ["orig"],
+				skipped: [],
+			});
 			const rows = await db.tracks.toArray();
 			expect(rows).toHaveLength(1);
 			expect(rows[0]?.id).toBe("orig");
 			expect(rows[0]?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
 		});
 
-		it("returns an empty array for an empty input and writes nothing", async () => {
-			expect(
-				await tracksRepository.addMany([], {
-					targetCollectionId: SYSTEM_COLLECTION_ID,
-				}),
-			).toEqual([]);
+		it("returns an empty result for an empty input and writes nothing", async () => {
+			const result = await tracksRepository.addMany([], {
+				targetCollectionId: SYSTEM_COLLECTION_ID,
+			});
+			expect(result).toEqual({
+				added: [],
+				merged: [],
+				skipped: [],
+			});
 			expect(await db.tracks.count()).toBe(0);
 		});
 
-		it("rejects duplicate filePaths with TrackValidationError", async () => {
+		it("folds exact duplicate filePaths within the same batch (first-wins)", async () => {
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({ id: "a", filePath: "/music/same.mp3" }),
+					makeTrack({ id: "b", filePath: "/music/same.mp3" }),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(result.added).toEqual(["a"]);
+			expect(result.merged).toEqual([]);
+			expect(result.skipped).toEqual(["b"]);
+			expect(await db.tracks.count()).toBe(1);
+		});
+
+		it("rejects duplicate track ids within the same batch", async () => {
+			await expect(
+				tracksRepository.addMany([
+					makeTrack({ id: "dup", filePath: "/music/a.mp3" }),
+					makeTrack({ id: "dup", filePath: "/music/b.mp3" }),
+				]),
+			).rejects.toThrow(ConflictError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("reports the correct index and field in the duplicate-id error", async () => {
+			try {
+				await tracksRepository.addMany([
+					makeTrack({ id: "x", filePath: "/music/1.mp3" }),
+					makeTrack({ id: "y", filePath: "/music/2.mp3" }),
+					makeTrack({ id: "x", filePath: "/music/3.mp3" }),
+				]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ConflictError);
+				if (err instanceof ConflictError) {
+					expect(err.message).toContain("tracks[2].id");
+					expect(err.message).toContain("duplicate id");
+				}
+			}
+		});
+
+		it("handles >500 tracks via chunked anyOf without data loss", async () => {
+			const TRACK_COUNT = 1_200;
+			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+
+			const result = await tracksRepository.addMany(bigBatch);
+			expect(result.added).toHaveLength(TRACK_COUNT);
+			expect(result.merged).toHaveLength(0);
+			expect(result.skipped).toHaveLength(0);
+			expect(await db.tracks.count()).toBe(TRACK_COUNT);
+		});
+
+		it("correctly merges when a large batch partially overlaps the DB", async () => {
+			await seedCollection("merge-target");
+			const existingTracks: Metadata[] = Array.from({ length: 100 }, (_, i) =>
+				makeTrack({ id: `e-${i}`, filePath: `/music/e-${i}.mp3` }),
+			);
+			await db.tracks.bulkAdd(existingTracks);
+			const batch: Metadata[] = Array.from({ length: 600 }, (_, i) =>
+				i < 100
+					? makeTrack({ id: `new-id-${i}`, filePath: `/music/e-${i}.mp3` })
+					: makeTrack({ id: `n-${i}`, filePath: `/music/n-${i}.mp3` }),
+			);
+			const result = await tracksRepository.addMany(batch, {
+				targetCollectionId: "merge-target",
+			});
+			expect(result.added).toHaveLength(500);
+			expect(result.merged).toHaveLength(100);
+			expect(result.skipped).toHaveLength(0);
+		});
+
+		it("rejects tracks referencing a non-existent targetCollectionId", async () => {
+			await expect(
+				tracksRepository.addMany([makeTrack({ id: "a", collectionIds: [] })], {
+					targetCollectionId: "ghost-collection",
+				}),
+			).rejects.toThrow(ReferentialIntegrityError);
+
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("rejects tracks whose collectionIds reference a non-existent collection", async () => {
+			await expect(
+				tracksRepository.addMany(
+					[makeTrack({ id: "a", collectionIds: ["nonexistent"] })],
+					{ targetCollectionId: SYSTEM_COLLECTION_ID },
+				),
+			).rejects.toThrow(ReferentialIntegrityError);
+
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("reports the missing collection ids in the error", async () => {
+			try {
+				await tracksRepository.addMany(
+					[makeTrack({ id: "a", collectionIds: ["ghost-a", "ghost-b"] })],
+					{ targetCollectionId: SYSTEM_COLLECTION_ID },
+				);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ReferentialIntegrityError);
+				if (err instanceof ReferentialIntegrityError) {
+					expect(err.message).toContain("ghost-a");
+					expect(err.message).toContain("ghost-b");
+				}
+			}
+		});
+
+		it("accepts SYSTEM_COLLECTION_ID without explicit seeding (always exists)", async () => {
+			const result = await tracksRepository.addMany(
+				[makeTrack({ id: "a", collectionIds: [] })],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(result.added).toEqual(["a"]);
+		});
+
+		it("rejects a payload referencing a non-existent collection before any write", async () => {
+			await seedCollection("valid-col");
 			await expect(
 				tracksRepository.addMany(
 					[
-						makeTrack({ id: "a", filePath: "/music/same.mp3" }),
-						makeTrack({ id: "b", filePath: "/music/same.mp3" }),
+						makeTrack({ id: "a", collectionIds: ["valid-col"] }),
+						makeTrack({ id: "b", collectionIds: ["ghost"] }),
 					],
 					{ targetCollectionId: SYSTEM_COLLECTION_ID },
 				),
+			).rejects.toThrow(ReferentialIntegrityError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("maps QuotaExceededError to ImportAbortedError wrapping StorageCapacityError", async () => {
+			const quotaError = new DOMException(
+				"Storage quota exceeded",
+				"QuotaExceededError",
+			);
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(quotaError);
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "wrap-test" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBeInstanceOf(StorageCapacityError);
+					expect(err.progress.total).toBe(1);
+					expect(err.progress.processed).toBe(0);
+				}
+			}
+		});
+
+		it("maps a Dexie BulkError with ConstraintError failures to ImportAbortedError wrapping ConflictError", async () => {
+			const bulkError: unknown = {
+				name: "BulkError",
+				message: "bulkAdd failed",
+				failures: [new DOMException("Key already exists", "ConstraintError")],
+			};
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(bulkError);
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "c" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBeInstanceOf(ConflictError);
+				}
+			}
+		});
+
+		it("wraps a mid-batch TrackValidationError in ImportAbortedError carrying the cause", async () => {
+			const original = new TrackValidationError("collectionIds", [
+				{
+					path: Object.freeze([]),
+					pathString: "",
+					code: "referential_integrity",
+					message: "test",
+				},
+			]);
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(original);
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "d" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBe(original);
+				}
+			}
+		});
+
+		it("wraps unknown errors in ImportAbortedError without swallowing them", async () => {
+			const unknownError = new TypeError("unexpected internal failure");
+			vi.spyOn(db.tracks, "bulkAdd").mockRejectedValueOnce(unknownError);
+			try {
+				await tracksRepository.addMany([makeTrack({ id: "e" })]);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ImportAbortedError);
+				if (err instanceof ImportAbortedError) {
+					expect(err.cause).toBe(unknownError);
+					expect(err.message).toContain("TypeError");
+				}
+			}
+		});
+
+		it("in-batch filePath duplicate is folded (first-wins, skipped)", async () => {
+			const result = await tracksRepository.addMany([
+				makeTrack({ id: "a", filePath: "/music/dup.mp3" }),
+				makeTrack({ id: "b", filePath: "/music/dup.mp3" }),
+			]);
+			expect(result.added).toEqual(["a"]);
+			expect(result.merged).toEqual([]);
+			expect(result.skipped).toEqual(["b"]);
+			expect(await db.tracks.count()).toBe(1);
+		});
+
+		it("DB filePath collision is a merge (user re-add), not a rejection", async () => {
+			await seedCollection("re-add-target");
+			await db.tracks.add(
+				makeTrack({
+					id: "existing",
+					filePath: "/music/song.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "new-id",
+						filePath: "/music/song.mp3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: "re-add-target" },
+			);
+			expect(result.added).toEqual([]);
+			expect(result.merged).toEqual(["existing"]);
+			expect(await db.tracks.count()).toBe(1);
+		});
+	});
+
+	describe("addMany - batch processing and progress", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+		});
+
+		it("respects custom batchSize option for chunking", async () => {
+			const tracks: Metadata[] = Array.from({ length: 10 }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+			const progressCalls: AddManyProgress[] = [];
+			await tracksRepository.addMany(tracks, {
+				batchSize: 4,
+				onProgress: (p) => progressCalls.push(p),
+			});
+			expect(progressCalls).toHaveLength(3);
+			expect(progressCalls[0]?.processed).toBe(4);
+			expect(progressCalls[1]?.processed).toBe(8);
+			expect(progressCalls[2]?.processed).toBe(10);
+			expect(await db.tracks.count()).toBe(10);
+		});
+
+		it("does not invoke onProgress if the input array is empty", async () => {
+			const onProgress = vi.fn();
+			await tracksRepository.addMany([], { onProgress });
+			expect(onProgress).not.toHaveBeenCalled();
+		});
+
+		it("preserves added+merged+skipped === processed at every emission (F-12.7)", async () => {
+			await seedCollection("mix1");
+			await db.tracks.bulkAdd([
+				makeTrack({
+					id: "skip-me",
+					filePath: "/music/skip-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+				makeTrack({
+					id: "merge-me",
+					filePath: "/music/merge-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			]);
+			const emissions: AddManyProgress[] = [];
+			const payload = [
+				makeTrack({
+					id: "skip-me",
+					filePath: "/music/skip-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+				makeTrack({
+					id: "merge-me",
+					filePath: "/music/merge-me.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+				makeTrack({
+					id: "new1",
+					filePath: "/music/new1.mp3",
+					collectionIds: [],
+				}),
+				makeTrack({
+					id: "dup2",
+					filePath: "/music/new1.mp3",
+					collectionIds: [],
+				}),
+			];
+			await tracksRepository.addMany(payload, {
+				batchSize: 1,
+				targetCollectionId: "mix1",
+				onProgress: (p) => emissions.push(p),
+			});
+			expect(emissions.length).toBe(3);
+			for (const p of emissions) {
+				expect(p.added + p.merged + p.skipped).toBe(p.processed);
+			}
+			const last = emissions[emissions.length - 1];
+			expect(last?.processed).toBe(payload.length);
+			expect(last?.added).toBe(1);
+			expect(last?.merged).toBe(1);
+			expect(last?.skipped).toBe(2);
+		});
+
+		it("emits a structured completion log with summary, duration, and batch count (F-08)", async () => {
+			const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+			try {
+				const tracks = [
+					makeTrack({ id: "a", filePath: "/music/a.mp3", collectionIds: [] }),
+					makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+				];
+				await tracksRepository.addMany(tracks, {
+					batchSize: 1,
+					targetCollectionId: SYSTEM_COLLECTION_ID,
+				});
+				const call = infoSpy.mock.calls.find(
+					(c) => typeof c[0] === "string" && c[0].includes("import complete"),
+				);
+				expect(call).toBeDefined();
+				const payload = call?.[1];
+				expect(payload?.summary).toEqual(
+					expect.objectContaining({
+						total: 2,
+						added: 2,
+						merged: 0,
+						skipped: 0,
+					}),
+				);
+				expect(payload?.batchCount).toBe(2);
+				expect(payload?.total).toBe(2);
+				expect(typeof payload?.durationMs).toBe("number");
+			} finally {
+				infoSpy.mockRestore();
+			}
+		});
+
+		it("invokes onProgress callback with cumulative counts after each batch", async () => {
+			const TRACK_COUNT = 1200;
+			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+			const progressCalls: AddManyProgress[] = [];
+			const onProgress = (progress: AddManyProgress) => {
+				progressCalls.push(progress);
+			};
+			await tracksRepository.addMany(bigBatch, { onProgress });
+			const expectedBatchCount = Math.ceil(TRACK_COUNT / IMPORT_BATCH_SIZE);
+			const firstBatchSize = Math.min(IMPORT_BATCH_SIZE, TRACK_COUNT);
+			expect(progressCalls).toHaveLength(expectedBatchCount);
+			expect(progressCalls[0]).toEqual({
+				processed: firstBatchSize,
+				total: TRACK_COUNT,
+				added: firstBatchSize,
+				merged: 0,
+				skipped: 0,
+			});
+			expect(progressCalls[expectedBatchCount - 1]).toEqual({
+				processed: TRACK_COUNT,
+				total: TRACK_COUNT,
+				added: TRACK_COUNT,
+				merged: 0,
+				skipped: 0,
+			});
+		});
+	});
+
+	describe("addMany — case-variant filePath dedupe", () => {
+		beforeEach(async () => {
+			configurePlatform("win32");
+			await resetDatabase();
+		});
+
+		afterEach(() => resetPlatform());
+
+		it("merges a case-variant re-import onto the existing row (single INV-8 row)", async () => {
+			await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "a",
+						filePath: "C:/A.MP3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			const second: AddManyResult = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "b",
+						filePath: "c:/a.mp3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(second.added).toEqual([]);
+			expect(second.merged.length + second.skipped.length).toBe(1);
+			expect(await db.tracks.count()).toBe(1);
+			const onlyRow = await db.tracks.toArray();
+			expect(onlyRow[0]?.filePath).toBe("c:/a.mp3");
+		});
+
+		it("folds case-variant duplicates within one payload (first-wins, skipped)", async () => {
+			const result: AddManyResult = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "a",
+						filePath: "C:/Same.MP3",
+						collectionIds: [],
+					}),
+					makeTrack({
+						id: "b",
+						filePath: "c:/same.mp3",
+						collectionIds: [],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+			expect(result.added).toEqual(["a"]);
+			expect(result.merged).toEqual([]);
+			expect(result.skipped).toEqual(["b"]);
+			expect(await db.tracks.count()).toBe(1);
+		});
+
+		it("still throws ConflictError on duplicate ids (hard integrity violation)", async () => {
+			await expect(
+				tracksRepository.addMany([
+					makeTrack({ id: "dup", filePath: "C:/A.MP3" }),
+					makeTrack({ id: "dup", filePath: "c:/a.mp3" }),
+				]),
+			).rejects.toThrow(ConflictError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("preserves merge semantics across collections for a case-variant re-import", async () => {
+			await seedCollection("mix1");
+			await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "a",
+						filePath: "C:/A.MP3",
+						collectionIds: [SYSTEM_COLLECTION_ID],
+					}),
+				],
+				{ targetCollectionId: SYSTEM_COLLECTION_ID },
+			);
+
+			const second: AddManyResult = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "b",
+						filePath: "c:/a.mp3",
+						collectionIds: [SYSTEM_COLLECTION_ID],
+					}),
+				],
+				{ targetCollectionId: "mix1" },
+			);
+
+			expect(second.merged).toEqual(["a"]);
+			expect(await db.tracks.count()).toBe(1);
+			expect((await db.tracks.get("a"))?.collectionIds).toEqual(
+				expect.arrayContaining([SYSTEM_COLLECTION_ID, "mix1"]),
+			);
+		});
+	});
+
+	describe("addMany - options validation & observer isolation", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+		});
+
+		it.each<[string, number]>([
+			["0", 0],
+			["negative (-5)", -5],
+			["NaN", Number.NaN],
+			["fractional (1.5)", 1.5],
+			["Infinity", Number.POSITIVE_INFINITY],
+		])(
+			"rejects batchSize = %s with TrackValidationError and writes nothing",
+			async (_label, value) => {
+				await expect(
+					tracksRepository.addMany([makeTrack()], { batchSize: value }),
+				).rejects.toThrow(TrackValidationError);
+				expect(await db.tracks.count()).toBe(0);
+			},
+		);
+
+		it("rejects batchSize above MAX_IMPORT_BATCH_SIZE", async () => {
+			await expect(
+				tracksRepository.addMany([makeTrack()], {
+					batchSize: MAX_IMPORT_BATCH_SIZE + 1,
+				}),
 			).rejects.toThrow(TrackValidationError);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it.each([
+			["string-typed batchSize", '{"batchSize":"500"}'],
+			["non-function onProgress", '{"onProgress":"not-a-function"}'],
+			["unknown options keys", '{"unexpected":true}'],
+		])(
+			"rejects %s — simulates untrusted IPC/JSON input",
+			async (_label, jsonString) => {
+				const opts = JSON.parse(jsonString);
+				await expect(
+					tracksRepository.addMany([makeTrack()], opts),
+				).rejects.toThrow(TrackValidationError);
+				expect(await db.tracks.count()).toBe(0);
+			},
+		);
+
+		it.each([
+			["string", '"not-an-object"'],
+			["number", "42"],
+			["null", "null"],
+		])(
+			"rejects a non-object options payload (%s)",
+			async (_label, jsonString) => {
+				const opts = JSON.parse(jsonString);
+				await expect(
+					tracksRepository.addMany([makeTrack()], opts),
+				).rejects.toThrow(TrackValidationError);
+				expect(await db.tracks.count()).toBe(0);
+			},
+		);
+
+		it("isolates a throwing onProgress callback — import continues", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const throwing = vi.fn(() => {
+				throw new Error("error");
+			});
+			const tracks = [makeTrack({ id: "a" }), makeTrack({ id: "b" })];
+			// batchSize: 1 → 2 batches → 2 callback invocations, both throwing.
+			const result = await tracksRepository.addMany(tracks, {
+				onProgress: throwing,
+				batchSize: 1,
+			});
+			expect(result.added).toEqual(["a", "b"]);
+			expect(await db.tracks.count()).toBe(2);
+			expect(throwing).toHaveBeenCalledTimes(2);
+			expect(warnSpy).toHaveBeenCalledTimes(2);
+			const warnArg = warnSpy.mock.calls[0]?.[1];
+			expect(warnArg).not.toHaveProperty("message");
+			warnSpy.mockRestore();
+		});
+
+		it("still accepts a valid custom batchSize and emits progress (regression)", async () => {
+			const progressCalls: AddManyProgress[] = [];
+			const tracks = Array.from({ length: 10 }, (_, i) =>
+				makeTrack({ id: `t-${i}`, filePath: `/music/t-${i}.mp3` }),
+			);
+			await tracksRepository.addMany(tracks, {
+				batchSize: 4,
+				onProgress: (p) => progressCalls.push(p),
+			});
+			expect(progressCalls).toHaveLength(3);
+			expect(await db.tracks.count()).toBe(10);
+		});
+	});
+
+	describe("addMany - partial-failure contract & idempotent retry", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "a",
+					filePath: "/music/a.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+		});
+
+		it("batch 2 of 3 fails → batch 1 committed; ImportAbortedError carries partials; retry is idempotent", async () => {
+			const tracks = [
+				makeTrack({
+					id: "a",
+					filePath: "/music/a.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+				makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+				makeTrack({ id: "c", filePath: "/music/c.mp3", collectionIds: [] }),
+			];
+			const bulkAddSpy = vi.spyOn(db.tracks, "bulkAdd");
+			bulkAddSpy.mockRejectedValueOnce(
+				new DOMException("Quota exceeded mid-import", "QuotaExceededError"),
+			);
+			let aborted: ImportAbortedError | undefined;
+			try {
+				await tracksRepository.addMany(tracks, {
+					batchSize: 1,
+					targetCollectionId: "mix1",
+				});
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				if (err instanceof ImportAbortedError) aborted = err;
+			}
+			expect(aborted).toBeInstanceOf(ImportAbortedError);
+			expect(aborted?.partial.merged).toEqual(["a"]);
+			expect(aborted?.progress.processed).toBe(1);
+			expect(aborted?.progress.total).toBe(3);
+			expect(aborted?.progress.merged).toBe(1);
+			expect(aborted?.cause).toBeInstanceOf(StorageCapacityError);
+			expect(await db.tracks.count()).toBe(1);
+			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+			bulkAddSpy.mockRestore();
+			const retry = await tracksRepository.addMany(tracks, {
+				batchSize: 1,
+				targetCollectionId: "mix1",
+			});
+			expect(retry.added).toEqual(["b", "c"]);
+			expect(retry.skipped).toEqual(["a"]);
+			expect(await db.tracks.count()).toBe(3);
+		});
+	});
+
+	describe("addMany - per-batch RI atomicity", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "a",
+					filePath: "/music/a.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+		});
+
+		it("a collection deleted between batch 1 and batch 2 is caught by the in-transaction RI check", async () => {
+			const originalBulkUpdate = db.tracks.bulkUpdate;
+			const updateSpy = vi.spyOn(db.tracks, "bulkUpdate");
+			let deleted = false;
+			// @ts-expect-error - Dexie returns PromiseExtended, but Vitest mocks use native Promises.
+			updateSpy.mockImplementation(async (...args) => {
+				const result = await Reflect.apply(originalBulkUpdate, db.tracks, args);
+				if (!deleted) {
+					deleted = true;
+					await db.collections.delete("mix1");
+				}
+				return result;
+			});
+
+			let aborted: ImportAbortedError | undefined;
+			try {
+				await tracksRepository.addMany(
+					[
+						makeTrack({
+							id: "a",
+							filePath: "/music/a.mp3",
+							collectionIds: [SYSTEM_COLLECTION_ID],
+						}),
+						makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+					],
+					{ batchSize: 1, targetCollectionId: "mix1" },
+				);
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				if (err instanceof ImportAbortedError) aborted = err;
+			} finally {
+				updateSpy.mockRestore();
+			}
+			expect(aborted).toBeInstanceOf(ImportAbortedError);
+			expect(aborted?.partial.merged).toEqual(["a"]);
+			expect(aborted?.progress.processed).toBe(1);
+			expect(aborted?.progress.total).toBe(2);
+			expect(aborted?.cause).toBeInstanceOf(ReferentialIntegrityError);
+			expect(await db.tracks.count()).toBe(1);
+			expect((await db.tracks.get("a"))?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+			]);
+			expect(await db.collections.get("mix1")).toBeUndefined();
+		});
+
+		it("an AbortSignal cancelled between batches throws ImportAbortedError with partials", async () => {
+			const controller = new AbortController();
+			const tracks = [
+				makeTrack({ id: "a", filePath: "/music/a.mp3", collectionIds: [] }),
+				makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+				makeTrack({ id: "c", filePath: "/music/c.mp3", collectionIds: [] }),
+			];
+			const progress = (p: AddManyProgress): void => {
+				if (p.processed === 1) controller.abort();
+			};
+			let aborted: ImportAbortedError | undefined;
+			try {
+				await tracksRepository.addMany(tracks, {
+					batchSize: 1,
+					signal: controller.signal,
+					onProgress: progress,
+				});
+				expect.unreachable("should have thrown");
+			} catch (err: unknown) {
+				if (err instanceof ImportAbortedError) aborted = err;
+			}
+			expect(aborted).toBeInstanceOf(ImportAbortedError);
+			expect(aborted?.partial.skipped).toEqual(["a"]);
+			expect(aborted?.progress.processed).toBe(1);
+			expect(aborted?.progress.total).toBe(3);
+			expect(aborted?.cause).toBeInstanceOf(DOMException);
+			if (aborted?.cause instanceof DOMException) {
+				expect(aborted.cause.name).toBe("AbortError");
+			}
+		});
+	});
+
+	describe("addMany - artwork extraction lane", async () => {
+		let artworksBulkAddSpy: ReturnType<typeof vi.spyOn>;
+
+		beforeEach(async () => {
+			await resetTestState();
+			artworksBulkAddSpy = vi.spyOn(db.artworks, "bulkAdd");
+		});
+
+		afterEach(() => {
+			artworksBulkAddSpy.mockRestore();
+		});
+
+		it("extracts artwork into the artworks table and replaces common.picture with UUID refs", async () => {
+			const pictureData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
+			const trackWithArt = {
+				...makeTrack({
+					id: "art-track",
+					filePath: "/music/art.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [
+						{
+							format: "image/png",
+							data: pictureData,
+							description: "Front cover",
+							name: "cover.png",
+						},
+					],
+				},
+			};
+			const result = await tracksRepository.addMany([trackWithArt], {
+				targetCollectionId: SYSTEM_COLLECTION_ID,
+			});
+			expect(result.added).toEqual(["art-track"]);
+			const storedTrack = await db.tracks.get("art-track");
+			expect(storedTrack).toBeDefined();
+			expect(storedTrack?.common?.picture).toBeDefined();
+			expect(storedTrack?.common?.picture).toHaveLength(1);
+			const pictureRef = storedTrack?.common?.picture?.[0];
+			expect(typeof pictureRef).toBe("string");
+			expect(pictureRef).not.toBe("");
+			expect(artworksBulkAddSpy).toHaveBeenCalledTimes(1);
+			const savedArtworks = artworksBulkAddSpy.mock.calls[0]?.[0];
+			expect(savedArtworks).toHaveLength(1);
+			const artwork = savedArtworks?.[0];
+			expect(artwork).toBeDefined();
+			expect(artwork?.id).toBe(pictureRef);
+			expect(artwork?.format).toBe("image/png");
+			expect(artwork?.description).toBe("Front cover");
+			expect(artwork?.name).toBe("cover.png");
+			expect(artwork?.blob).toBeInstanceOf(Blob);
+		});
+
+		it("extracts multiple artwork entries from a single track", async () => {
+			const trackWithMultipleArt = {
+				...makeTrack({
+					id: "multi-art",
+					filePath: "/music/multi.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [
+						{ format: "image/jpeg", data: new Uint8Array([1, 2, 3]) },
+						{ format: "image/png", data: new Uint8Array([4, 5, 6]) },
+					],
+				},
+			};
+			await tracksRepository.addMany([trackWithMultipleArt]);
+			const storedTrack = await db.tracks.get("multi-art");
+			expect(storedTrack?.common?.picture).toHaveLength(2);
+			expect(artworksBulkAddSpy).toHaveBeenCalledTimes(1);
+			const savedArtworks = artworksBulkAddSpy.mock.calls[0]?.[0];
+			expect(savedArtworks).toHaveLength(2);
+			expect(savedArtworks?.[0]?.format).toBe("image/jpeg");
+			expect(savedArtworks?.[1]?.format).toBe("image/png");
+			expect(await db.artworks.count()).toBe(2);
+		});
+
+		it("merged tracks persist no artwork (orphan-artwork regression)", async () => {
+			await db.tracks.add(
+				makeTrack({
+					id: "existing",
+					filePath: "/music/song.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			await seedCollection("mix1");
+			const reimport = {
+				...makeTrack({
+					id: "new-id",
+					filePath: "/music/song.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [{ format: "image/jpeg", data: new Uint8Array([1, 2, 3]) }],
+				},
+			};
+			const result = await tracksRepository.addMany([reimport], {
+				targetCollectionId: "mix1",
+			});
+			expect(result.merged).toEqual(["existing"]);
+			expect(result.added).toEqual([]);
+			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
+			expect(await db.artworks.count()).toBe(0);
+		});
+
+		it("skipped tracks persist no artwork (orphan-artwork regression)", async () => {
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "existing",
+					filePath: "/music/song.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+			);
+			const reimport = {
+				...makeTrack({
+					id: "new-id",
+					filePath: "/music/song.mp3",
+					collectionIds: [],
+				}),
+				common: {
+					picture: [{ format: "image/jpeg", data: new Uint8Array([7, 8, 9]) }],
+				},
+			};
+			const result = await tracksRepository.addMany([reimport], {
+				targetCollectionId: "mix1",
+			});
+			expect(result.skipped).toEqual(["existing"]);
+			expect(result.added).toEqual([]);
+			expect(result.merged).toEqual([]);
+			expect(artworksBulkAddSpy).not.toHaveBeenCalled();
+			expect(await db.artworks.count()).toBe(0);
 		});
 	});
 
@@ -299,6 +1225,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("normalizes collectionIds changes and removes duplicate system collection ids", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "t1",
@@ -315,6 +1242,7 @@ describe("tracksRepository", () => {
 		});
 
 		it("adds the system collection id when collectionIds changes omit it", async () => {
+			await seedCollection("mix1");
 			await db.tracks.add(
 				makeTrack({
 					id: "t1",
@@ -443,6 +1371,8 @@ describe("tracksRepository", () => {
 		});
 
 		it("normalizes collectionIds changes and removes duplicate system collection ids", async () => {
+			await seedCollection("mix1");
+			await seedCollection("mix2");
 			await db.tracks.bulkAdd([
 				makeTrack({
 					id: "t1",
@@ -558,13 +1488,13 @@ describe("tracksRepository", () => {
 			).rejects.toThrow(TrackValidationError);
 		});
 
-		it("rejects duplicate IDs in updateMany with TrackValidationError", async () => {
+		it("rejects duplicate IDs in updateMany with ConflictError", async () => {
 			await expect(
 				tracksRepository.updateMany([
 					{ id: "t1", changes: { selected: 1 } },
 					{ id: "t1", changes: { selected: 0 } },
 				]),
-			).rejects.toThrow(TrackValidationError);
+			).rejects.toThrow(ConflictError);
 		});
 	});
 

@@ -17,7 +17,7 @@
  */
 
 import { db } from "@renderer/db/db";
-import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
+import { resetDatabase } from "@renderer/utils/test-utils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { makeTrack } from "@tests/factories";
 

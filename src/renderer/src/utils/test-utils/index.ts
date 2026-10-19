@@ -28,10 +28,16 @@ export function configureUuidMock(): void {
 	vi.mocked(uuidV7).mockImplementation(() => `mock-uuid-${++uuidSeq}` as any);
 }
 
+/**
+ * Resets every IndexedDB store the application writes to, then re-seeds the
+ * protected system collection. Any new persistent store MUST be added here —
+ * an omitted store leaks rows across tests.
+ */
 export async function resetDatabase(): Promise<void> {
 	await db.tracks.clear();
 	await db.collections.clear();
 	await db.settings.clear();
+	await db.artworks.clear();
 	await db.collections.add({ id: "all", title: "All" });
 }
 
@@ -44,4 +50,18 @@ export async function resetTestState() {
 	resetSequences();
 	await resetDatabase();
 	configureUuidMock();
+}
+
+/**
+ * Seeds a collection row so that referential-integrity checks
+ * pass for non-system collection IDs used in test inputs.
+ *
+ * @param id    – The collection primary key to insert.
+ * @param title – Optional human-readable title; defaults to `"Collection <id>"`.
+ */
+export async function seedCollection(
+	id: string,
+	title?: string,
+): Promise<void> {
+	await db.collections.add({ id, title: title ?? `Collection ${id}` });
 }

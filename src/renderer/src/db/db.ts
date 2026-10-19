@@ -18,10 +18,15 @@
 
 import {
 	DATABASE_NAME,
-	SYSTEM_COLLECTION_ID,
-} from "@renderer/db/constants/constants";
+	TRACKS_STORES_V1,
+	TRACKS_STORES_V2,
+} from "@renderer/db/constants";
+import { isLegacyPicture } from "@renderer/db/utils/dbUtils";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
+import type { Artwork } from "@shared/types";
 import Dexie, { type EntityTable } from "dexie";
+import { v7 as uuidV7 } from "uuid";
 import type { SettingsForm } from "@/src/shared/schemas/settings.schema";
 import type { CollectionType } from "@/types";
 
@@ -29,13 +34,50 @@ const db = new Dexie(DATABASE_NAME) as Dexie & {
 	tracks: EntityTable<Metadata, "id">;
 	settings: EntityTable<{ id: string; settings: SettingsForm }, "id">;
 	collections: EntityTable<CollectionType, "id">;
+	artworks: EntityTable<Artwork, "id">;
 };
 
-db.version(1).stores({
-	tracks: "id, &filePath, *collectionIds, selected",
-	settings: "id",
-	collections: "id",
-});
+db.version(1).stores(TRACKS_STORES_V1);
+
+db.version(2)
+	.stores(TRACKS_STORES_V2)
+	.upgrade(async (tx) => {
+		const tracks = await tx.table("tracks").toArray();
+		for (const track of tracks) {
+			if (track.common?.picture && Array.isArray(track.common.picture)) {
+				const artworkIds: string[] = [];
+				for (const pic of track.common.picture) {
+					if (isLegacyPicture(pic)) {
+						const base64Data = pic.data;
+						const byteCharacters = atob(base64Data);
+						const byteNumbers = new Array(byteCharacters.length);
+						for (let i = 0; i < byteCharacters.length; i++) {
+							byteNumbers[i] = byteCharacters.charCodeAt(i);
+						}
+						const byteArray = new Uint8Array(byteNumbers);
+						const blob = new Blob([byteArray], { type: pic.format });
+						const id = uuidV7();
+						await tx.table("artworks").add({
+							id,
+							blob,
+							format: pic.format,
+							description: pic.description,
+							name: pic.name,
+						});
+						artworkIds.push(id);
+					} else if (typeof pic === "string") {
+						artworkIds.push(pic);
+					}
+				}
+				await tx.table("tracks").update(track.id, {
+					common: {
+						...track.common,
+						picture: artworkIds,
+					},
+				});
+			}
+		}
+	});
 
 db.on("populate", (tx) => {
 	tx.table("collections").add({

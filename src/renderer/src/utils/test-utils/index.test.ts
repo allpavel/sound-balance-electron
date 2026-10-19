@@ -17,19 +17,19 @@
  */
 
 import { db } from "@renderer/db/db";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { makeCollection, makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 import {
 	type SettingsForm,
 	strictSettingsSchema as settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
-import { SYSTEM_COLLECTION_ID } from "../../db/constants/constants";
 import {
 	configureUuidMock,
 	resetDatabase,
 	resetSequences,
 	resetTestState,
-} from "./testFactories";
+} from ".";
 
 function getValidSettings(): SettingsForm {
 	return settingsSchema.parse({
@@ -121,7 +121,7 @@ describe("testFactories", () => {
 	});
 
 	describe("resetDatabase", () => {
-		it("clears tracks, collections, and settings, then re-seeds the 'all' collection", async () => {
+		it("clears tracks, collections, settings, and artworks, then re-seeds the 'all' collection", async () => {
 			await db.tracks.bulkAdd([
 				makeTrack({ id: "t1" }),
 				makeTrack({ id: "t2" }),
@@ -131,15 +131,22 @@ describe("testFactories", () => {
 				id: "globalSettings",
 				settings: getValidSettings(),
 			});
+			await db.artworks.add({
+				id: "art-1",
+				blob: new Blob(["cover"], { type: "image/png" }),
+				format: "image/png",
+			});
 			expect(await db.tracks.count()).toBe(2);
 			expect(await db.collections.count()).toBe(2);
 			expect(await db.settings.count()).toBe(1);
+			expect(await db.artworks.count()).toBe(1);
 			await resetDatabase();
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.collections.toArray()).toEqual([
 				{ id: SYSTEM_COLLECTION_ID, title: "All" },
 			]);
 			expect(await db.settings.count()).toBe(0);
+			expect(await db.artworks.count()).toBe(0);
 		});
 
 		it("is idempotent on an already-clean database", async () => {

@@ -65,6 +65,7 @@ describe("preload", () => {
 			expect(Object.keys(api).sort()).toEqual([
 				"getOutputDirectoryPath",
 				"openOutputFolder",
+				"platform",
 				"processingResult",
 				"responseOnStart",
 				"responseOnStop",

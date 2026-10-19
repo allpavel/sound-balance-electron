@@ -16,15 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { db } from "@renderer/db/db";
+import { tracksRepository } from "@renderer/db/repositories/trackRepository";
+import { resetDatabase } from "@renderer/utils/test-utils";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { TrackValidationError } from "@shared/errors";
+import {
+	ConflictError,
+	ReferentialIntegrityError,
+	TrackValidationError,
+} from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
 import { makeTrack } from "@tests/factories";
 import type { EntityTable } from "dexie";
 import {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
-	assertTargetCollectionId,
+	assertBatchUniqueness,
 	assertTrackInput,
 	isPlainObject,
 	normalizeCollectionIds,
@@ -71,49 +78,6 @@ describe("trackRepositoryUtils", () => {
 
 		it("returns false for functions", () => {
 			expect(isPlainObject(() => {})).toBe(false);
-		});
-	});
-
-	describe("assertTargetCollectionId", () => {
-		it.each([
-			["custom collection id", "mix-1"],
-			["system collection id", SYSTEM_COLLECTION_ID],
-		])("accepts %s", (_desc, value) => {
-			expect(() => assertTargetCollectionId(value)).not.toThrow();
-		});
-
-		it("rejects an empty string", () => {
-			expect(() => assertTargetCollectionId("")).toThrow(TrackValidationError);
-		});
-
-		it("rejects a whitespace-only string", () => {
-			expect(() => assertTargetCollectionId("   ")).toThrow(
-				TrackValidationError,
-			);
-		});
-
-		it.each([
-			["null", null],
-			["undefined", undefined],
-			["number", 123],
-			["array", []],
-			["object", {}],
-		])("rejects non-string value: %s", (_desc, value) => {
-			expect(() => assertTargetCollectionId(value)).toThrow(
-				TrackValidationError,
-			);
-		});
-
-		it("sets the context to 'targetCollectionId' on failure", () => {
-			try {
-				assertTargetCollectionId("");
-				expect.unreachable("should have thrown");
-			} catch (err) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				expect((err as TrackValidationError).context).toBe(
-					"targetCollectionId",
-				);
-			}
 		});
 	});
 
@@ -281,6 +245,67 @@ describe("trackRepositoryUtils", () => {
 			expect(() =>
 				assertTrackInput(createTrackWithoutField("collectionIds"), 0),
 			).toThrow(TrackValidationError);
+		});
+	});
+
+	describe("assertBatchUniqueness", () => {
+		it("replaces control characters in the duplicate key before interpolation", () => {
+			const keyWithControl = "bad\u0001key";
+			let caught: ConflictError | undefined;
+			try {
+				assertBatchUniqueness(
+					[{ k: keyWithControl }, { k: keyWithControl }],
+					(item: { k: string }) => item.k,
+					(i: number) => `items[${i}].k`,
+					"k",
+				);
+			} catch (e) {
+				if (e instanceof ConflictError) caught = e;
+			}
+			expect(caught).toBeInstanceOf(ConflictError);
+			expect(caught?.message).not.toContain("\u0001");
+			expect(caught?.message).toContain("\uFFFD");
+		});
+	});
+
+	describe("assertReferentialIntegrity", () => {
+		beforeEach(async () => {
+			await resetDatabase();
+		});
+
+		it("sanitizes control characters in missing collection ids", async () => {
+			await db.collections.add({ id: "legit", title: "Legit" });
+			// U+0001 passes nonEmptyStringSchema (only null bytes U+0000 are
+			// rejected), so it reaches the RI check and the error message.
+			const missingWithControl = "bad\u0001id";
+			let caught: ReferentialIntegrityError | undefined;
+			try {
+				await tracksRepository.addMany(
+					[makeTrack({ collectionIds: [missingWithControl] })],
+					{ targetCollectionId: "legit" },
+				);
+			} catch (e) {
+				if (e instanceof ReferentialIntegrityError) caught = e;
+			}
+			expect(caught).toBeInstanceOf(ReferentialIntegrityError);
+			expect(caught?.message).not.toContain("\u0001");
+			expect(caught?.message).toContain("\uFFFD");
+		});
+
+		it("sanitizes control characters in a duplicate update id (updateMany, F-14)", async () => {
+			const idWithControl = "dup\u0001id";
+			let caught: ConflictError | undefined;
+			try {
+				await tracksRepository.updateMany([
+					{ id: idWithControl, changes: { selected: 1 } },
+					{ id: idWithControl, changes: { selected: 0 } },
+				]);
+			} catch (e) {
+				if (e instanceof ConflictError) caught = e;
+			}
+			expect(caught).toBeInstanceOf(ConflictError);
+			expect(caught?.message).not.toContain("\u0001");
+			expect(caught?.message).toContain("\uFFFD");
 		});
 	});
 
