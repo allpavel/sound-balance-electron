@@ -23,6 +23,8 @@ import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import {
 	ConflictError,
 	ReferentialIntegrityError,
+	StorageCapacityError,
+	StorageUnavailableError,
 	TrackValidationError,
 } from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
@@ -34,6 +36,7 @@ import {
 	assertBatchUniqueness,
 	assertTrackInput,
 	isPlainObject,
+	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
 	uniqueTracks,
@@ -44,6 +47,19 @@ function createTrackWithoutField(field: string): Record<string, unknown> {
 	const track = makeTrack() as any;
 	delete track[field];
 	return track as any;
+}
+
+/**
+ * Captures whatever `fn` throws (fn is typed `() => never` — it always throws).
+ * Used so each test can assert the thrown value's type or identity.
+ */
+function captureThrown(fn: () => never): unknown {
+	try {
+		fn();
+	} catch (e: unknown) {
+		return e;
+	}
+	throw new Error("captureThrown: fn should have thrown");
 }
 
 describe("trackRepositoryUtils", () => {
@@ -866,6 +882,134 @@ describe("trackRepositoryUtils", () => {
 			).toEqual({
 				status: "failed",
 				reason: "new boom",
+			});
+		});
+	});
+
+	describe("mapStorageWriteError — precedence rules (T04-A / TST-2 / INV-5)", () => {
+		describe("rule 1 — domain re-throw (identity)", () => {
+			it.each([
+				["TrackValidationError", new TrackValidationError("ctx", [])],
+				["ConflictError", new ConflictError("conflict")],
+				["ReferentialIntegrityError", new ReferentialIntegrityError("ri")],
+			])("re-throws %s by identity", (_label, err) => {
+				expect(captureThrown(() => mapStorageWriteError(err))).toBe(err);
+			});
+		});
+
+		describe("rule 2 — inner unwrap (inner wins)", () => {
+			it("maps inner QuotaExceededError (outer name is ConstraintError) → StorageCapacityError", () => {
+				const input = {
+					name: "ConstraintError",
+					inner: new DOMException("quota", "QuotaExceededError"),
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("maps inner ConstraintError (outer name is QuotaExceededError) → ConflictError", () => {
+				const input = {
+					name: "QuotaExceededError",
+					inner: new DOMException("constraint", "ConstraintError"),
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					ConflictError,
+				);
+			});
+
+			it("recurses two levels deep (innermost wins)", () => {
+				const input = {
+					inner: { inner: new DOMException("abort", "AbortError") },
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageUnavailableError,
+				);
+			});
+		});
+
+		describe("rule 3 — top-level name", () => {
+			it("QuotaExceededError → StorageCapacityError", () => {
+				const err = new DOMException("q", "QuotaExceededError");
+				expect(captureThrown(() => mapStorageWriteError(err))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("ConstraintError → ConflictError", () => {
+				const err = new DOMException("c", "ConstraintError");
+				expect(captureThrown(() => mapStorageWriteError(err))).toBeInstanceOf(
+					ConflictError,
+				);
+			});
+			it.each([
+				"InvalidStateError",
+				"AbortError",
+				"UnknownError",
+				"VersionError",
+				"NotFoundError",
+			])("%s → StorageUnavailableError", (name) => {
+				const err = { name, message: `msg-${name}` };
+				expect(captureThrown(() => mapStorageWriteError(err))).toBeInstanceOf(
+					StorageUnavailableError,
+				);
+			});
+		});
+
+		describe("rule 4 — failures[] scan (first match wins)", () => {
+			it("single QuotaExceededError failure → StorageCapacityError", () => {
+				const input = {
+					name: "BulkError",
+					failures: [new DOMException("q", "QuotaExceededError")],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("pins first-match: Constraint before Quota in failures[] → ConflictError", () => {
+				const input = {
+					name: "BulkError",
+					failures: [
+						new DOMException("c", "ConstraintError"),
+						new DOMException("q", "QuotaExceededError"),
+					],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					ConflictError,
+				);
+			});
+
+			it("pins first-match: Quota before Constraint in failures[] → StorageCapacityError", () => {
+				const input = {
+					name: "BulkError",
+					failures: [
+						new DOMException("q", "QuotaExceededError"),
+						new DOMException("c", "ConstraintError"),
+					],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+		});
+
+		describe("rule 5 — identity re-throw", () => {
+			it("re-throws a TypeError by identity", () => {
+				const err = new TypeError("unexpected");
+				expect(captureThrown(() => mapStorageWriteError(err))).toBe(err);
+			});
+
+			it("re-throws null by identity", () => {
+				expect(captureThrown(() => mapStorageWriteError(null))).toBe(null);
+			});
+
+			it("re-throws a failures[] with no matching names by identity", () => {
+				const input = {
+					name: "BulkError",
+					failures: [{ name: "UnknownName" }],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
 			});
 		});
 	});

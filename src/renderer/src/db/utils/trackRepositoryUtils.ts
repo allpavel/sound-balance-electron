@@ -99,9 +99,25 @@ function isErrorWithName(
 /**
  * Discriminates raw IndexedDB / Dexie errors into typed domain errors.
  *
+ * Precedence (first matching rule wins):
+ * 1. **Domain re-throw** — `TrackValidationError` / `ConflictError` /
+ *    `ReferentialIntegrityError` are re-thrown verbatim (no wrapping).
+ * 2. **`inner` unwrap** — if the error has a non-null `inner` property,
+ *    recurse on it (the inner error wins over the outer error's own `name`).
+ * 3. **Top-level `name`** — `QuotaExceededError` → `StorageCapacityError`;
+ *    `ConstraintError` → `ConflictError`; `InvalidStateError` /
+ *    `AbortError` / `UnknownError` / `VersionError` / `NotFoundError` →
+ *    `StorageUnavailableError`.
+ * 4. **`failures[]` scan** — first matching failure wins (same name mapping
+ *    as rule 3).
+ * 5. **Identity re-throw** — unknown errors are re-thrown by identity.
+ *
  * @param error - The caught unknown error value.
- * @throws {@link TrackValidationError} A domain-specific, user-presentable error.
- * @throws {Error} Re-throws if the error is not a known storage failure.
+ * @throws {StorageCapacityError|ConflictError|StorageUnavailableError} Mapped
+ *         domain errors (rules 2–4).
+ * @throws {TrackValidationError|ConflictError|ReferentialIntegrityError}
+ *         Re-thrown domain errors (rule 1, verbatim).
+ * @throws {unknown} Re-thrown by identity (rule 5, no match).
  */
 function mapStorageWriteError(error: unknown): never {
 	if (
