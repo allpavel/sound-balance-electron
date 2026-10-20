@@ -1,3 +1,4 @@
+export { chunkArray } from "./chunkArray";
 export { normalizeFilePath } from "./filePathNormalizer";
 export { formatValidationIssues } from "./formatValidationIssues";
 export { getAddManySummary } from "./getAddManySummary";

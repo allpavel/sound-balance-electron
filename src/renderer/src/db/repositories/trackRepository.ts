@@ -27,7 +27,6 @@ import {
 	assertReferentialIntegrity,
 	assertTrackInput,
 	calculateBatchPayloadSize,
-	chunkArray,
 	createProgressEmitter,
 	dedupeByFilePath,
 	describeThrownValue,
@@ -48,7 +47,11 @@ import type {
 	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
-import { getAddManySummary, sanitizeControlChars } from "@shared/utils";
+import {
+	chunkArray,
+	getAddManySummary,
+	sanitizeControlChars,
+} from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {

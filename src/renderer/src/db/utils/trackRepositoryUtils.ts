@@ -39,7 +39,11 @@ import type {
 	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyProgressCallback } from "@shared/types";
-import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
+import {
+	chunkArray,
+	isLegalStatusTransition,
+	sanitizeControlChars,
+} from "@shared/utils";
 import {
 	safeParseAddManyOptions,
 	safeParseTrack,
@@ -55,31 +59,6 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Splits an array into consecutive sub-arrays of at most `size` elements.
- *
- * Used to keep IndexedDB `anyOf()` key arrays within engine-safe bounds
- * while preserving transactional atomicity.
- *
- * @typeParam T - Element type; inferred from the input array.
- * @param source - The array to partition. Not mutated.
- * @param size   - Maximum chunk length. Must be ≥ 1.
- * @returns An array of chunks. Empty input yields an empty array.
- *
- * @example
- * chunkArray([1,2,3,4,5], 2) // → [[1,2],[3,4],[5]]
- */
-function chunkArray<T>(source: readonly T[], size: number): T[][] {
-	if (size < 1) {
-		throw new RangeError(`chunkArray: size must be ≥ 1, received ${size}`);
-	}
-	const chunks: T[][] = [];
-	for (let offset = 0; offset < source.length; offset += size) {
-		chunks.push(source.slice(offset, offset + size));
-	}
-	return chunks;
 }
 
 /**
