@@ -888,7 +888,7 @@ describe("trackRepositoryUtils", () => {
 		});
 	});
 
-	describe("mapStorageWriteErro", () => {
+	describe("mapStorageWriteError", () => {
 		describe("rule 1 — domain re-throw (identity)", () => {
 			it.each([
 				["TrackValidationError", new TrackValidationError("ctx", [])],
@@ -928,6 +928,25 @@ describe("trackRepositoryUtils", () => {
 					StorageUnavailableError,
 				);
 			});
+
+			it.each<[string, unknown]>([
+				["undefined", { inner: undefined }],
+				["null", { inner: null }],
+			])(
+				"does not unwrap an `inner` that is %s (identity re-throw)",
+				(_label, input) => {
+					expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+				},
+			);
+
+			it("re-throws a domain error carrying an `inner` by identity (rule 1 precedes rule 2)", () => {
+				const conflict = Object.assign(new ConflictError("conflict"), {
+					inner: new DOMException("q", "QuotaExceededError"),
+				});
+				expect(captureThrown(() => mapStorageWriteError(conflict))).toBe(
+					conflict,
+				);
+			});
 		});
 
 		describe("rule 3 — top-level name", () => {
@@ -944,6 +963,7 @@ describe("trackRepositoryUtils", () => {
 					ConflictError,
 				);
 			});
+
 			it.each([
 				"InvalidStateError",
 				"AbortError",
@@ -955,6 +975,24 @@ describe("trackRepositoryUtils", () => {
 				expect(captureThrown(() => mapStorageWriteError(err))).toBeInstanceOf(
 					StorageUnavailableError,
 				);
+			});
+
+			it.each<[string, unknown]>([
+				["no name property", {}],
+				["non-string name", { name: 42 }],
+				["string input resembling a mapped name", "QuotaExceededError"],
+			])("skips name mapping for %s (identity re-throw)", (_label, input) => {
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("falls back to the error name in the message when message is empty", () => {
+				const thrown = captureThrown(() =>
+					mapStorageWriteError({ name: "AbortError", message: "" }),
+				);
+				expect(thrown).toBeInstanceOf(StorageUnavailableError);
+				if (thrown instanceof StorageUnavailableError) {
+					expect(thrown.message).toBe("Database operation failed: AbortError");
+				}
 			});
 		});
 
@@ -994,6 +1032,46 @@ describe("trackRepositoryUtils", () => {
 					StorageCapacityError,
 				);
 			});
+
+			it("re-throws by identity when `failures` is not an array", () => {
+				const input = { name: "BulkError", failures: "not-an-array" };
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("re-throws by identity when `failures` is empty", () => {
+				const input = { name: "BulkError", failures: [] };
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("skips non-error entries and maps the first matching failure", () => {
+				const input = {
+					name: "BulkError",
+					failures: [
+						null,
+						"x",
+						42,
+						{ message: "no name property" },
+						new DOMException("q", "QuotaExceededError"),
+					],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("falls back to the failure's name in the message when its message is empty", () => {
+				const input = {
+					name: "BulkError",
+					failures: [{ name: "UnknownError", message: "" }],
+				};
+				const thrown = captureThrown(() => mapStorageWriteError(input));
+				expect(thrown).toBeInstanceOf(StorageUnavailableError);
+				if (thrown instanceof StorageUnavailableError) {
+					expect(thrown.message).toBe(
+						"Database batch operation failed: UnknownError",
+					);
+				}
+			});
 		});
 
 		describe("rule 5 — identity re-throw", () => {
@@ -1002,8 +1080,12 @@ describe("trackRepositoryUtils", () => {
 				expect(captureThrown(() => mapStorageWriteError(err))).toBe(err);
 			});
 
-			it("re-throws null by identity", () => {
-				expect(captureThrown(() => mapStorageWriteError(null))).toBe(null);
+			it.each<[string, unknown]>([
+				["a number", 42],
+				["undefined", undefined],
+				["a boolean", false],
+			])("re-throws %s by identity", (_label, input) => {
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
 			});
 
 			it("re-throws a failures[] with no matching names by identity", () => {
@@ -1031,7 +1113,6 @@ describe("trackRepositoryUtils", () => {
 			emitter.emit(snapshot);
 			emitter.flush();
 			expect(warnSpy).not.toHaveBeenCalled();
-			warnSpy.mockRestore();
 		});
 
 		it("delivers the snapshot to a non-throwing callback; flush is a no-op", () => {
@@ -1042,7 +1123,6 @@ describe("trackRepositoryUtils", () => {
 			expect(cb).toHaveBeenCalledWith(snapshot);
 			emitter.flush();
 			expect(warnSpy).not.toHaveBeenCalled();
-			warnSpy.mockRestore();
 		});
 
 		it("logs the first callback failure once; suppresses subsequent; flush summarizes", () => {
@@ -1062,16 +1142,14 @@ describe("trackRepositoryUtils", () => {
 			expect(summary).toEqual(
 				expect.objectContaining({ totalFailures: 3, suppressedAfterFirst: 2 }),
 			);
-			warnSpy.mockRestore();
 		});
 
 		it("emit never propagates a callback throw", () => {
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			vi.spyOn(console, "warn").mockImplementation(() => {});
 			const emitter = createProgressEmitter(() => {
 				throw new Error("boom");
 			});
 			expect(() => emitter.emit(snapshot)).not.toThrow();
-			warnSpy.mockRestore();
 		});
 	});
 });
