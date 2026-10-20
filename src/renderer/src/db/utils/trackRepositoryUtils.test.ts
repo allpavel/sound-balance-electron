@@ -947,6 +947,14 @@ describe("trackRepositoryUtils", () => {
 					conflict,
 				);
 			});
+
+			it("overflows the stack on a cyclic `inner` chain (documented hazard; depth bound pending)", () => {
+				const cyclic: { inner?: unknown } = {};
+				cyclic.inner = cyclic;
+				expect(
+					captureThrown(() => mapStorageWriteError(cyclic)),
+				).toBeInstanceOf(RangeError);
+			});
 		});
 
 		describe("rule 3 — top-level name", () => {
@@ -1081,6 +1089,7 @@ describe("trackRepositoryUtils", () => {
 			});
 
 			it.each<[string, unknown]>([
+				["null", null],
 				["a number", 42],
 				["undefined", undefined],
 				["a boolean", false],
@@ -1142,6 +1151,17 @@ describe("trackRepositoryUtils", () => {
 			expect(summary).toEqual(
 				expect.objectContaining({ totalFailures: 3, suppressedAfterFirst: 2 }),
 			);
+		});
+
+		it("flush after exactly one failure emits no summary (boundary: failureCount > 1)", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const emitter = createProgressEmitter(() => {
+				throw new Error("boom");
+			});
+			emitter.emit(snapshot);
+			expect(warnSpy).toHaveBeenCalledTimes(1); // the log-once warning
+			emitter.flush();
+			expect(warnSpy).toHaveBeenCalledTimes(1); // no summary at exactly one failure
 		});
 
 		it("emit never propagates a callback throw", () => {
