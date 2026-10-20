@@ -447,15 +447,12 @@ function shouldApplyUpdate(
 		status: changes.status,
 	};
 
-	// [FIX #2] Clear stale reason when leaving the failed state.
 	if (changes.status === "failed") {
 		patch.reason = changes.reason;
 	} else {
-		// Assigning undefined triggers Dexie/IndexedDB structured clone to remove the property.
 		patch.reason = undefined;
 	}
 
-	// Apply sequence number if provided.
 	if ("seq" in changes && changes.seq !== undefined) {
 		patch.statusSeq = changes.seq;
 	}
