@@ -50,7 +50,7 @@ import {
 	safeParseTrackChanges,
 	type ValidationResult,
 } from "@shared/validators";
-import type { EntityTable } from "dexie";
+import type { EntityTable, IndexableType } from "dexie";
 import type { CollectionType } from "@/types";
 
 function isNonEmptyString(value: unknown): value is string {
@@ -226,17 +226,13 @@ async function assertReferentialIntegrity(
 
 	const referencedCollectionIds = new Set<string>(collectionIds);
 	const idsToCheck = [...referencedCollectionIds];
-	const chunks = chunkArray(idsToCheck, ANYOF_CHUNK_SIZE);
 	const existingIds = new Set<string>();
 
-	for (const chunk of chunks) {
-		const keys = await collectionsTable.where("id").anyOf(chunk).primaryKeys();
-		for (const key of keys) {
-			if (typeof key === "string") {
-				existingIds.add(key);
-			}
+	await chunkedAnyOf(collectionsTable, "id", idsToCheck, (row) => {
+		if (row.id) {
+			existingIds.add(row.id);
 		}
-	}
+	});
 
 	const missing = idsToCheck.filter((id) => !existingIds.has(id));
 	if (missing.length > 0) {
@@ -641,6 +637,34 @@ function createProgressEmitter(
 	};
 }
 
+/**
+ * Chunks `keys` and iterates matching rows via Dexie's `anyOf().each()`.
+ * Single request per chunk; no `toArray()` materialization — the visitor
+ * receives each row transiently. Use this instead of hand-rolling
+ * `chunkArray` + `anyOf().primaryKeys()/.each()` at each call site.
+ *
+ * @typeParam T - The Dexie table's row type.
+ * @param table - The Dexie `Table` (or `EntityTable`) to query.
+ * @param index - The indexed property name (e.g., `"id"`, `"filePath"`).
+ * @param keys  - The keys to look up (chunked internally at `ANYOF_CHUNK_SIZE`).
+ * @param visit - Visitor called once per matching row.
+ */
+async function chunkedAnyOf<
+	T,
+	KeyProp extends keyof T = Extract<keyof T, string>,
+>(
+	table: EntityTable<T, KeyProp>,
+	index: string,
+	keys: readonly IndexableType[],
+	visit: (row: T) => void,
+): Promise<void> {
+	if (keys.length === 0) return;
+	const chunks = chunkArray(keys, ANYOF_CHUNK_SIZE);
+	for (const chunk of chunks) {
+		await table.where(index).anyOf(chunk).each(visit);
+	}
+}
+
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
@@ -651,7 +675,7 @@ export {
 	assertReferentialIntegrity,
 	assertTrackInput,
 	calculateBatchPayloadSize,
-	chunkArray,
+	chunkedAnyOf,
 	createProgressEmitter,
 	dedupeByFilePath,
 	describeThrownValue,

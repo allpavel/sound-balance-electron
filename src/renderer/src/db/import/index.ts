@@ -20,12 +20,11 @@ import type { ExistingTrackRef, TrackBatchDatabase } from "@renderer/db/types";
 import {
 	areCollectionIdsEqual,
 	assertReferentialIntegrity,
-	chunkArray,
+	chunkedAnyOf,
 	gatherReferencedCollectionIds,
 	isNonEmptyString,
 	normalizeCollectionIds,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import { ANYOF_CHUNK_SIZE } from "@shared/constants";
 import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyResult, Artwork } from "@shared/types";
 import type { EntityTable } from "dexie";
@@ -58,21 +57,14 @@ async function fetchExistingTrackRefs(
 		return result;
 	}
 
-	const chunks = chunkArray(filePaths, ANYOF_CHUNK_SIZE);
-
-	for (const chunk of chunks) {
-		await tracksTable
-			.where("filePath")
-			.anyOf(chunk)
-			.each((row) => {
-				if (isNonEmptyString(row.filePath)) {
-					result.set(row.filePath, {
-						id: row.id,
-						collectionIds: row.collectionIds,
-					});
-				}
+	await chunkedAnyOf(tracksTable, "filePath", filePaths, (row) => {
+		if (isNonEmptyString(row.filePath)) {
+			result.set(row.filePath, {
+				id: row.id,
+				collectionIds: row.collectionIds,
 			});
-	}
+		}
+	});
 
 	return result;
 }
