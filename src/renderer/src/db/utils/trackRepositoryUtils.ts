@@ -34,9 +34,12 @@ import {
 } from "@shared/errors";
 import type {
 	AddManyOptions,
+	addManyOptionsSchema,
+	filePathSchema,
 	IngestionMetadata,
 	Metadata,
 	TrackChanges,
+	trackBaseSchema,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyProgressCallback } from "@shared/types";
 import {
@@ -206,7 +209,7 @@ function assertBatchUniqueness<T>(params: {
 		const key = getKey(item);
 		if (seen.has(key)) {
 			throw new ConflictError(
-				`Batch contains duplicate ${sanitizeControlChars(label)}: "${sanitizeControlChars(key)}" at ${sanitizeControlChars(fieldPath(index))}`,
+				`${sanitizeControlChars(context)} contains duplicate ${sanitizeControlChars(label)}: "${sanitizeControlChars(key)}" at ${sanitizeControlChars(fieldPath(index))}`,
 			);
 		}
 		seen.add(key);
@@ -550,6 +553,10 @@ function gatherReferencedCollectionIds(
  * database, and preserves input order for the surviving tracks. It relies
  * on the schema-enforced precondition that every `track.filePath` is
  * already normalized (see {@link filePathSchema}).
+ *
+ * @see [ADR-0002](../../../../../docs/adr/ADR-0002-asymmetric-duplicate-policy.md)
+ *               for the asymmetric duplicate policy decision (filePath
+ *               first-wins-`skipped` vs id hard-`ConflictError`).
  *
  * @param tracks - Parsed, schema-validated ingestion tracks whose
  *                 `filePath` values are already normalized by

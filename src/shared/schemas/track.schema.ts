@@ -410,7 +410,7 @@ const formatSchema = z
  * Excludes `common` and `status`, which are composed later to prevent
  * type duplication.
  */
-const trackBaseSchema = z
+export const trackBaseSchema = z
 	.object({
 		id: nonEmptyStringSchema,
 		file: nonEmptyStringSchema,
