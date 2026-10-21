@@ -410,7 +410,7 @@ const formatSchema = z
  * Excludes `common` and `status`, which are composed later to prevent
  * type duplication.
  */
-export const trackBaseSchema = z
+const trackBaseSchema = z
 	.object({
 		id: nonEmptyStringSchema,
 		file: nonEmptyStringSchema,
@@ -532,13 +532,8 @@ const progressCallbackSchema = z.custom<AddManyProgressCallback>(
 /**
  * Runtime-validated schema for `tracksRepository.addMany` options.
  *
- * Replaces the type-only `AddManyOptions` contract that let
- * `batchSize: NaN` bypass `chunkArray`'s `size < 1` guard (`NaN < 1` is
- * `false`) and produce a single empty batch — returning empty success for
- * non-empty input (silent, total, success-reported data loss). This schema
- * validates the options at the trust boundary (UI/Redux → data layer; options
- * may later cross IPC where TS types no longer hold) and **rejects** invalid
- * values rather than clamping:
+ * Validates the options at the trust boundary (UI/Redux → data layer) and
+ * **rejects** invalid values rather than clamping:
  *
  * @property targetCollectionId - Reuses `targetCollectionIdSchema`
  *   (non-empty, null-byte-free, length-bounded). Optional; defaults to

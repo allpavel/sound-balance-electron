@@ -18,7 +18,7 @@
 
 import { chunkArray } from "./chunkArray";
 
-describe("chunkArray (T04-C / ORG-2)", () => {
+describe("chunkArray", () => {
 	it("returns [] for empty input", () => {
 		expect(chunkArray([], 5)).toEqual([]);
 	});
@@ -56,6 +56,8 @@ describe("chunkArray (T04-C / ORG-2)", () => {
 		["negative", -5],
 		['string "3"', "3"],
 	])("throws RangeError for size = %s", (_label, size) => {
-		expect(() => chunkArray([1, 2, 3], size as number)).toThrow(RangeError);
+		// @ts-expect-error deliberate: feeding a runtime-hostile value through
+		// the number-typed `size` parameter to verify the runtime guard.
+		expect(() => chunkArray([1, 2, 3], size)).toThrow(RangeError);
 	});
 });
