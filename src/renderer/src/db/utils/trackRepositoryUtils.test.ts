@@ -30,6 +30,7 @@ import {
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { AddManyProgress } from "@shared/types";
 import { makeTrack } from "@tests/factories";
+import { captureRejection } from "@tests/utils";
 import type { EntityTable } from "dexie";
 import {
 	applyGuardedTrackUpdate,
@@ -52,10 +53,10 @@ function createTrackWithoutField(field: string): Record<string, unknown> {
 }
 
 /**
- * Captures whatever `fn` throws (fn is typed `() => never` — it always throws).
+ * Captures whatever `fn` throws (fn is typed `() => unknown` — it always throws).
  * Used so each test can assert the thrown value's type or identity.
  */
-function captureThrown(fn: () => never): unknown {
+function captureThrown(fn: () => unknown): unknown {
 	try {
 		fn();
 	} catch (e: unknown) {
@@ -267,22 +268,21 @@ describe("trackRepositoryUtils", () => {
 	});
 
 	describe("assertBatchUniqueness", () => {
-		it("replaces control characters in the duplicate key before interpolation", () => {
+		it("replaces control characters in the duplicate key before interpolation", async () => {
 			const keyWithControl = "bad\u0001key";
-			let caught: ConflictError | undefined;
-			try {
+			const caught = captureThrown(() =>
 				assertBatchUniqueness({
 					items: [{ k: keyWithControl }, { k: keyWithControl }],
 					getKey: (item: { k: string }) => item.k,
 					fieldPath: (i: number) => `items[${i}].k`,
 					label: "k",
-				});
-			} catch (e) {
-				if (e instanceof ConflictError) caught = e;
-			}
+				}),
+			);
 			expect(caught).toBeInstanceOf(ConflictError);
-			expect(caught?.message).not.toContain("\u0001");
-			expect(caught?.message).toContain("\uFFFD");
+			if (caught instanceof ConflictError) {
+				expect(caught.message).not.toContain("\u0001");
+				expect(caught.message).toContain("\uFFFD");
+			}
 		});
 	});
 
@@ -296,34 +296,32 @@ describe("trackRepositoryUtils", () => {
 			// U+0001 passes nonEmptyStringSchema (only null bytes U+0000 are
 			// rejected), so it reaches the RI check and the error message.
 			const missingWithControl = "bad\u0001id";
-			let caught: ReferentialIntegrityError | undefined;
-			try {
-				await tracksRepository.addMany(
+			const thrown = await captureRejection(
+				tracksRepository.addMany(
 					[makeTrack({ collectionIds: [missingWithControl] })],
 					{ targetCollectionId: "legit" },
-				);
-			} catch (e) {
-				if (e instanceof ReferentialIntegrityError) caught = e;
+				),
+			);
+			expect(thrown).toBeInstanceOf(ReferentialIntegrityError);
+			if (thrown instanceof ReferentialIntegrityError) {
+				expect(thrown.message).not.toContain("\u0001");
+				expect(thrown.message).toContain("\uFFFD");
 			}
-			expect(caught).toBeInstanceOf(ReferentialIntegrityError);
-			expect(caught?.message).not.toContain("\u0001");
-			expect(caught?.message).toContain("\uFFFD");
 		});
 
-		it("sanitizes control characters in a duplicate update id (updateMany, F-14)", async () => {
+		it("sanitizes control characters in a duplicate update id", async () => {
 			const idWithControl = "dup\u0001id";
-			let caught: ConflictError | undefined;
-			try {
-				await tracksRepository.updateMany([
+			const thrown = await captureRejection(
+				tracksRepository.updateMany([
 					{ id: idWithControl, changes: { selected: 1 } },
 					{ id: idWithControl, changes: { selected: 0 } },
-				]);
-			} catch (e) {
-				if (e instanceof ConflictError) caught = e;
+				]),
+			);
+			expect(thrown).toBeInstanceOf(ConflictError);
+			if (thrown instanceof ConflictError) {
+				expect(thrown.message).not.toContain("\u0001");
+				expect(thrown.message).toContain("\uFFFD");
 			}
-			expect(caught).toBeInstanceOf(ConflictError);
-			expect(caught?.message).not.toContain("\u0001");
-			expect(caught?.message).toContain("\uFFFD");
 		});
 	});
 

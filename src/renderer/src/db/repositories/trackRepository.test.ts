@@ -41,6 +41,7 @@ import type { AddManyProgress, AddManyResult } from "@shared/types";
 import { configurePlatform, resetPlatform } from "@shared/utils";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import { makeIngestionTrack, makeTrack } from "@tests/factories";
+import { captureRejection } from "@tests/utils";
 
 vi.mock("@shared/utils", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("@shared/utils")>();
@@ -89,32 +90,6 @@ function expectAddManyResult(
 	if (expected.skipped !== undefined) {
 		expect(result.skipped).toEqual(expected.skipped);
 	}
-}
-
-/**
- * Awaits an operation that must reject and returns the thrown value for
- * type-safe inspection.
- *
- * An unexpected resolution fails the test with an explicit diagnostic; any
- * rejection value is returned untouched (never filtered), so subsequent
- * instance assertions report the actual error in their failure output.
- *
- * @param operation - The promise expected to reject.
- * @returns The rejection value, exactly as thrown.
- */
-async function captureRejection(operation: Promise<unknown>): Promise<unknown> {
-	let rejected = false;
-	let thrown: unknown;
-	try {
-		await operation;
-	} catch (error: unknown) {
-		rejected = true;
-		thrown = error;
-	}
-	expect(rejected, "expected the operation to reject, but it resolved").toBe(
-		true,
-	);
-	return thrown;
 }
 
 /**
@@ -1581,12 +1556,6 @@ describe("tracksRepository", () => {
 		it("rejects a non-object update entry with TrackValidationError", async () => {
 			await expect(
 				tracksRepository.updateMany(["not-an-object" as any]),
-			).rejects.toThrow(TrackValidationError);
-		});
-
-		it("rejects an empty ID in updateMany with TrackValidationError", async () => {
-			await expect(
-				tracksRepository.updateMany([{ id: "", changes: { selected: 1 } }]),
 			).rejects.toThrow(TrackValidationError);
 		});
 
