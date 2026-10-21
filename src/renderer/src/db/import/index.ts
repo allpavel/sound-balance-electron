@@ -17,10 +17,10 @@
  */
 
 import type { ExistingTrackRef, TrackBatchDatabase } from "@renderer/db/types";
+import { chunkedAnyOf } from "@renderer/db/utils/dbUtils";
 import {
 	areCollectionIdsEqual,
 	assertReferentialIntegrity,
-	chunkedAnyOf,
 	gatherReferencedCollectionIds,
 	isNonEmptyString,
 	normalizeCollectionIds,

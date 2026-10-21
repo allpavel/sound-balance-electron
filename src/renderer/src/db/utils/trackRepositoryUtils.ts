@@ -18,8 +18,8 @@
 
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
+import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import {
-	ANYOF_CHUNK_SIZE,
 	MAX_BATCH_PAYLOAD_SIZE,
 	MAX_LOGGED_ERROR_NAME_LENGTH,
 	SYSTEM_COLLECTION_ID,
@@ -34,26 +34,19 @@ import {
 } from "@shared/errors";
 import type {
 	AddManyOptions,
-	addManyOptionsSchema,
-	filePathSchema,
 	IngestionMetadata,
 	Metadata,
 	TrackChanges,
-	trackBaseSchema,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyProgressCallback } from "@shared/types";
-import {
-	chunkArray,
-	isLegalStatusTransition,
-	sanitizeControlChars,
-} from "@shared/utils";
+import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
 import {
 	safeParseAddManyOptions,
 	safeParseTrack,
 	safeParseTrackChanges,
 	type ValidationResult,
 } from "@shared/validators";
-import type { EntityTable, IndexableType } from "dexie";
+import type { EntityTable } from "dexie";
 import type { CollectionType } from "@/types";
 
 function isNonEmptyString(value: unknown): value is string {
@@ -233,13 +226,14 @@ async function assertReferentialIntegrity(
 
 	const referencedCollectionIds = new Set<string>(collectionIds);
 	const idsToCheck = [...referencedCollectionIds];
-	const existingIds = new Set<string>();
 
-	await chunkedAnyOf(collectionsTable, "id", idsToCheck, (row) => {
-		if (row.id) {
-			existingIds.add(row.id);
+	const foundKeys = await chunkedAnyOfKeys(collectionsTable, "id", idsToCheck);
+	const existingIds = new Set<string>();
+	for (const key of foundKeys) {
+		if (typeof key === "string") {
+			existingIds.add(key);
 		}
-	});
+	}
 
 	const missing = idsToCheck.filter((id) => !existingIds.has(id));
 	if (missing.length > 0) {
@@ -295,8 +289,7 @@ function assertTrackInput(track: unknown, index: number): IngestionMetadata {
 }
 
 /**
- * Asserts that the untrusted `addMany` options satisfy
- * {@link addManyOptionsSchema}.
+ * Asserts that the untrusted `addMany` options satisfy `addManyOptionsSchema`.
  *
  * Rejects (does not clamp) invalid `batchSize` / `onProgress`
  * at the trust boundary, throwing {@link TrackValidationError} carrying the
@@ -535,7 +528,7 @@ function gatherReferencedCollectionIds(
 /**
  * First-wins deduplication of ingestion tracks by normalized `filePath`.
  *
- * Once {@link trackBaseSchema} normalizes `filePath` at parse time,
+ * Once `trackBaseSchema` normalizes `filePath` at parse time,
  * case-variant duplicates within a single import payload collapse onto
  * the same canonical key. Rather than aborting the whole import
  * with a `ConflictError` (the previous strict `assertBatchUniqueness` behavior),
@@ -552,15 +545,14 @@ function gatherReferencedCollectionIds(
  * The function is pure and total: it performs no I/O, does not touch the
  * database, and preserves input order for the surviving tracks. It relies
  * on the schema-enforced precondition that every `track.filePath` is
- * already normalized (see {@link filePathSchema}).
+ * already normalized (see `filePathSchema`).
  *
  * @see [ADR-0002](../../../../../docs/adr/ADR-0002-asymmetric-duplicate-policy.md)
  *               for the asymmetric duplicate policy decision (filePath
  *               first-wins-`skipped` vs id hard-`ConflictError`).
  *
  * @param tracks - Parsed, schema-validated ingestion tracks whose
- *                 `filePath` values are already normalized by
- *                 {@link filePathSchema}.
+ *                 `filePath` values are already normalized by `filePathSchema`.
  * @returns The deduped unique tracks and the IDs folded into them.
  */
 function dedupeByFilePath(
@@ -648,34 +640,6 @@ function createProgressEmitter(
 	};
 }
 
-/**
- * Chunks `keys` and iterates matching rows via Dexie's `anyOf().each()`.
- * Single request per chunk; no `toArray()` materialization — the visitor
- * receives each row transiently. Use this instead of hand-rolling
- * `chunkArray` + `anyOf().primaryKeys()/.each()` at each call site.
- *
- * @typeParam T - The Dexie table's row type.
- * @param table - The Dexie `Table` (or `EntityTable`) to query.
- * @param index - The indexed property name (e.g., `"id"`, `"filePath"`).
- * @param keys  - The keys to look up (chunked internally at `ANYOF_CHUNK_SIZE`).
- * @param visit - Visitor called once per matching row.
- */
-async function chunkedAnyOf<
-	T,
-	KeyProp extends keyof T = Extract<keyof T, string>,
->(
-	table: EntityTable<T, KeyProp>,
-	index: string,
-	keys: readonly IndexableType[],
-	visit: (row: T) => void,
-): Promise<void> {
-	if (keys.length === 0) return;
-	const chunks = chunkArray(keys, ANYOF_CHUNK_SIZE);
-	for (const chunk of chunks) {
-		await table.where(index).anyOf(chunk).each(visit);
-	}
-}
-
 export {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
@@ -686,7 +650,6 @@ export {
 	assertReferentialIntegrity,
 	assertTrackInput,
 	calculateBatchPayloadSize,
-	chunkedAnyOf,
 	createProgressEmitter,
 	dedupeByFilePath,
 	describeThrownValue,
