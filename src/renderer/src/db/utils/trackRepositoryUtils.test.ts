@@ -948,12 +948,10 @@ describe("trackRepositoryUtils", () => {
 				);
 			});
 
-			it("overflows the stack on a cyclic `inner` chain (documented hazard; depth bound pending)", () => {
+			it("safely handles a cyclic `inner` chain without stack overflow (depth bound implemented)", () => {
 				const cyclic: { inner?: unknown } = {};
 				cyclic.inner = cyclic;
-				expect(
-					captureThrown(() => mapStorageWriteError(cyclic)),
-				).toBeInstanceOf(RangeError);
+				expect(captureThrown(() => mapStorageWriteError(cyclic))).toBe(cyclic);
 			});
 		});
 

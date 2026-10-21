@@ -87,14 +87,23 @@ function isErrorWithName(
  *    as rule 3).
  * 5. **Identity re-throw** — unknown errors are re-thrown by identity.
  *
- * @param error - The caught unknown error value.
+ * Documented limitations:
+ * - **`failures[]` entries are NOT inner-unwrapped**: only top-level
+ *   `name` is inspected within each failure element.
+ *
+ * @param error   - The caught unknown error value.
+ * @param visited - Internal WeakSet to track visited objects and break cyclic `inner` chains.
+ *
  * @throws {StorageCapacityError|ConflictError|StorageUnavailableError} Mapped
  *         domain errors (rules 2–4).
  * @throws {TrackValidationError|ConflictError|ReferentialIntegrityError}
  *         Re-thrown domain errors (rule 1, verbatim).
  * @throws {unknown} Re-thrown by identity (rule 5, no match).
  */
-function mapStorageWriteError(error: unknown): never {
+function mapStorageWriteError(
+	error: unknown,
+	visited: WeakSet<object> = new WeakSet(),
+): never {
 	if (
 		error instanceof TrackValidationError ||
 		error instanceof ConflictError ||
@@ -110,7 +119,15 @@ function mapStorageWriteError(error: unknown): never {
 		error.inner !== undefined &&
 		error.inner !== null
 	) {
-		mapStorageWriteError(error.inner);
+		const inner = error.inner;
+		if (typeof inner === "object" && inner !== null) {
+			if (!visited.has(inner)) {
+				visited.add(inner);
+				mapStorageWriteError(inner, visited);
+			}
+		} else {
+			mapStorageWriteError(inner, visited);
+		}
 	}
 
 	if (isErrorWithName(error)) {
