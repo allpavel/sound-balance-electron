@@ -271,12 +271,12 @@ describe("trackRepositoryUtils", () => {
 			const keyWithControl = "bad\u0001key";
 			let caught: ConflictError | undefined;
 			try {
-				assertBatchUniqueness(
-					[{ k: keyWithControl }, { k: keyWithControl }],
-					(item: { k: string }) => item.k,
-					(i: number) => `items[${i}].k`,
-					"k",
-				);
+				assertBatchUniqueness({
+					items: [{ k: keyWithControl }, { k: keyWithControl }],
+					getKey: (item: { k: string }) => item.k,
+					fieldPath: (i: number) => `items[${i}].k`,
+					label: "k",
+				});
 			} catch (e) {
 				if (e instanceof ConflictError) caught = e;
 			}

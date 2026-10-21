@@ -184,19 +184,23 @@ function mapStorageWriteError(error: unknown): never {
 /**
  * Asserts that a derived key is unique across a batch of items.
  *
- * @param items     – The batch to inspect.
- * @param getKey    – Pure extractor returning the uniqueness key for an item.
- * @param fieldPath – Template for the error context, e.g. `"tracks[{i}].filePath"`.
- * @param label     – Human-readable noun for the message, e.g. `"filePath"`.
+ * @param params.items     – The batch to inspect.
+ * @param params.getKey    – Pure extractor returning the uniqueness key.
+ * @param params.fieldPath – Template for the error context, e.g. `"tracks[{i}].id"`.
+ * @param params.label     – Human-readable noun for the message, e.g. `"id"`.
+ * @param params.context   – Message prefix, default `"Batch"`. Use `"Updates"`
+ *                           for `updateMany` so the phrasing survives.
  *
  * @throws {ConflictError} On the first duplicate detected.
  */
-function assertBatchUniqueness<T>(
-	items: readonly T[],
-	getKey: (item: T) => string,
-	fieldPath: (index: number) => string,
-	label: string,
-): void {
+function assertBatchUniqueness<T>(params: {
+	items: readonly T[];
+	getKey: (item: T) => string;
+	fieldPath: (index: number) => string;
+	label: string;
+	context?: string;
+}): void {
+	const { items, getKey, fieldPath, label, context = "Batch" } = params;
 	const seen = new Set<string>();
 	for (const [index, item] of items.entries()) {
 		const key = getKey(item);

@@ -138,12 +138,12 @@ export const tracksRepository = {
 		assertBatchPayloadSize(payloadSize);
 		await checkStorageHeadroom(payloadSize);
 
-		assertBatchUniqueness(
-			parsedTracks,
-			(t) => t.id,
-			(i) => `tracks[${i}].id`,
-			"id",
-		);
+		assertBatchUniqueness({
+			items: parsedTracks,
+			getKey: (t) => t.id,
+			fieldPath: (i) => `tracks[${i}].id`,
+			label: "id",
+		});
 
 		const { unique: dedupedTracks, skipped: preSkipped } =
 			dedupeByFilePath(parsedTracks);
