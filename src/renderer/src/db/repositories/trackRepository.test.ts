@@ -1590,6 +1590,12 @@ describe("tracksRepository", () => {
 			).rejects.toThrow(TrackValidationError);
 		});
 
+		it("rejects an empty ID in updateMany with TrackValidationError", async () => {
+			await expect(
+				tracksRepository.updateMany([{ id: "", changes: { selected: 1 } }]),
+			).rejects.toThrow(TrackValidationError);
+		});
+
 		it("rejects duplicate IDs in updateMany with ConflictError", async () => {
 			await expect(
 				tracksRepository.updateMany([
@@ -1599,14 +1605,14 @@ describe("tracksRepository", () => {
 			).rejects.toThrow(ConflictError);
 		});
 
-		it("pins precedence: an earlier duplicate id wins over a later malformed item (ConflictError)", async () => {
+		it("pins precedence: a malformed item at any index wins over an earlier duplicate (TrackValidationError)", async () => {
 			await expect(
 				tracksRepository.updateMany([
 					{ id: "t1", changes: { selected: 1 } },
 					{ id: "t1", changes: { selected: 0 } }, // duplicate at index 1
-					"not-an-object", // malformed at index 2 — never reached
+					"not-an-object", // malformed at index 2 — phase 1 catches this first
 				]),
-			).rejects.toThrow(ConflictError);
+			).rejects.toThrow(TrackValidationError);
 		});
 
 		it("pins precedence: an earlier malformed item wins over a later duplicate id (TrackValidationError)", async () => {
@@ -1624,6 +1630,15 @@ describe("tracksRepository", () => {
 				tracksRepository.updateMany([
 					{ id: "t1", changes: { selected: 1 } },
 					{ id: "t1", changes: {} }, // duplicate AND invalid changes
+				]),
+			).rejects.toThrow(ConflictError);
+		});
+
+		it("pins precedence: duplicate id (ConflictError) before changes validation", async () => {
+			await expect(
+				tracksRepository.updateMany([
+					{ id: "dup", changes: { status: "invalid" } }, // invalid changes (phase 3, never reached)
+					{ id: "dup", changes: { selected: 1 } }, // duplicate id (phase 2)
 				]),
 			).rejects.toThrow(ConflictError);
 		});

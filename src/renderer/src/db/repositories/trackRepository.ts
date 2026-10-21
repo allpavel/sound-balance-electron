@@ -38,20 +38,15 @@ import {
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { ConflictError, TrackValidationError } from "@shared/errors";
+import { TrackValidationError } from "@shared/errors";
 import { ImportAbortedError } from "@shared/errors/domainErrors";
 import type {
 	AddManyOptions,
 	IngestionMetadata,
 	Metadata,
-	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
-import {
-	chunkArray,
-	getAddManySummary,
-	sanitizeControlChars,
-} from "@shared/utils";
+import { chunkArray, getAddManySummary } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
@@ -286,12 +281,11 @@ export const tracksRepository = {
 			return 0;
 		}
 
-		const seenIds = new Set<string>();
-		const normalizedUpdates: {
+		const validated: {
 			id: string;
-			changes: TrackChanges;
+			raw: Record<string, unknown>;
+			context: string;
 		}[] = [];
-
 		for (const [index, update] of updates.entries()) {
 			const context = `updates[${index}]`;
 			if (!isPlainObject(update)) {
@@ -307,17 +301,21 @@ export const tracksRepository = {
 					),
 				]);
 			}
-			if (seenIds.has(update.id)) {
-				throw new ConflictError(
-					`Updates contains duplicate id: ${sanitizeControlChars(update.id)}`,
-				);
-			}
-			seenIds.add(update.id);
-			normalizedUpdates.push({
-				id: update.id,
-				changes: validateTrackChanges(update.changes, `${context}.changes`),
-			});
+			validated.push({ id: update.id, raw: update, context });
 		}
+
+		assertBatchUniqueness({
+			items: validated,
+			getKey: (u) => u.id,
+			fieldPath: (i) => `updates[${i}].id`,
+			label: "id",
+			context: "Updates",
+		});
+
+		const normalizedUpdates = validated.map(({ id, raw, context }) => ({
+			id,
+			changes: validateTrackChanges(raw.changes, `${context}.changes`),
+		}));
 
 		const needsCollectionCheck = normalizedUpdates.some(
 			(u) =>
