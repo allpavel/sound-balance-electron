@@ -198,14 +198,7 @@ describe("BaseProcess", () => {
 				"FFmpeg process was terminated by signal: SIGINT",
 			);
 		});
-		it("should reject when process exits with signal SIGINT", async () => {
-			const { mockProc, proc } = createProcess();
-			const promise = proc.run([]);
-			mockProc.emit("close", null, "SIGINT");
-			await expect(promise).rejects.toThrow(
-				"FFmpeg process was terminated by signal: SIGINT",
-			);
-		});
+
 		it("should prioritize signal over code 0", async () => {
 			const { mockProc, proc } = createProcess();
 			const promise = proc.run([]);

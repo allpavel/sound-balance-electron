@@ -148,7 +148,7 @@ describe("fetchExistingTrackRefs", () => {
 	});
 });
 
-describe("processBatch", async () => {
+describe("processBatch", () => {
 	let artworksBulkAddSpy: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(async () => {

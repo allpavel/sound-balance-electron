@@ -1136,7 +1136,7 @@ describe("tracksRepository", () => {
 		});
 	});
 
-	describe("addMany - artwork extraction lane", async () => {
+	describe("addMany - artwork extraction lane", () => {
 		let artworksBulkAddSpy: ReturnType<typeof vi.spyOn>;
 
 		beforeEach(async () => {
