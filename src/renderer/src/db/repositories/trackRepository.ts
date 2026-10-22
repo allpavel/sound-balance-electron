@@ -17,35 +17,26 @@
  */
 
 import { db } from "@renderer/db/db";
-import { processBatch } from "@renderer/db/import";
-import { checkStorageHeadroom } from "@renderer/db/utils/dbUtils";
+import {
+	executeImportBatches,
+	runPreflightChecks,
+	validateAndParseTracks,
+} from "@renderer/db/import";
 import {
 	applyGuardedTrackUpdate,
 	assertAddManyOptions,
-	assertBatchPayloadSize,
 	assertBatchUniqueness,
 	assertReferentialIntegrity,
-	assertTrackInput,
-	calculateBatchPayloadSize,
 	createProgressEmitter,
-	dedupeByFilePath,
-	describeThrownValue,
-	gatherReferencedCollectionIds,
 	isNonEmptyString,
 	isPlainObject,
-	mapStorageWriteError,
 	uniqueTracks,
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
-import { ImportAbortedError } from "@shared/errors/domainErrors";
-import type {
-	AddManyOptions,
-	IngestionMetadata,
-	Metadata,
-} from "@shared/schemas/track.schema";
-import type { AddManyProgress, AddManyResult } from "@shared/types";
+import type { AddManyOptions, Metadata } from "@shared/schemas/track.schema";
+import type { AddManyResult } from "@shared/types";
 import { chunkArray, getAddManySummary } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
@@ -105,6 +96,7 @@ export const tracksRepository = {
 		tracks: readonly unknown[],
 		options: AddManyOptions = {},
 	): Promise<AddManyResult> {
+		// Step 1: validate options.
 		const validatedOptions = assertAddManyOptions(options);
 		const targetCollectionId =
 			validatedOptions.targetCollectionId ?? SYSTEM_COLLECTION_ID;
@@ -113,132 +105,45 @@ export const tracksRepository = {
 		const signal = validatedOptions.signal;
 		const startedAt = Date.now();
 
-		if (!Array.isArray(tracks)) {
-			throw new TrackValidationError("tracks", [
-				createRootIssue("invalid_type", "Tracks must be an array"),
-			]);
-		}
-		if (tracks.length === 0) {
+		// Step 2: validate + parse tracks.
+		const parsedTracks = validateAndParseTracks(tracks);
+		if (parsedTracks.length === 0) {
 			return { added: [], merged: [], skipped: [] };
 		}
 
-		const parsedTracks: IngestionMetadata[] = [];
-
-		for (const [index, track] of tracks.entries()) {
-			const parsedTrack = assertTrackInput(track, index);
-			parsedTracks.push(parsedTrack);
-		}
-
-		const payloadSize = calculateBatchPayloadSize(parsedTracks);
-		assertBatchPayloadSize(payloadSize);
-		await checkStorageHeadroom(payloadSize);
-
-		assertBatchUniqueness({
-			items: parsedTracks,
-			getKey: (t) => t.id,
-			fieldPath: (i) => `tracks[${i}].id`,
-			label: "id",
-		});
-
-		const { unique: dedupedTracks, skipped: preSkipped } =
-			dedupeByFilePath(parsedTracks);
-
-		const collectionIds = gatherReferencedCollectionIds(
-			dedupedTracks,
+		// Step 3: pre-flight checks (payload, headroom, uniqueness, dedupe, RI).
+		const { dedupedTracks, preSkipped } = await runPreflightChecks(
+			parsedTracks,
 			targetCollectionId,
+			db,
 		);
 
-		await assertReferentialIntegrity(
-			[...collectionIds],
-			db.collections,
-			"tracks.collectionIds",
-		);
-
-		const batches = chunkArray(dedupedTracks, batchSize);
-		const allAdded: string[] = [];
-		const allMerged: string[] = [];
-		const allSkipped: string[] = [...preSkipped];
-		let processed = preSkipped.length;
+		// Step 4: execute batches (loop, signal, progress, abort wrapping).
+		const progressEmitter = createProgressEmitter(onProgress);
 		const total = parsedTracks.length;
 
-		const progressEmitter = createProgressEmitter(onProgress);
-
 		try {
-			for (const batch of batches) {
-				if (signal?.aborted) {
-					throw new ImportAbortedError(
-						`Import cancelled by the caller after ${processed} of ${total} tracks`,
-						{
-							added: allAdded,
-							merged: allMerged,
-							skipped: allSkipped,
-						},
-						{
-							processed,
-							total,
-							added: allAdded.length,
-							merged: allMerged.length,
-							skipped: allSkipped.length,
-						},
-						new DOMException("Import cancelled", "AbortError"),
-					);
-				}
+			const result = await executeImportBatches({
+				dedupedTracks,
+				batchSize,
+				targetCollectionId,
+				signal,
+				progressEmitter,
+				preSkipped,
+				total,
+				db,
+			});
 
-				const batchResult = await processBatch(batch, targetCollectionId, db);
-
-				for (const id of batchResult.added) allAdded.push(id);
-				for (const id of batchResult.merged) allMerged.push(id);
-				for (const id of batchResult.skipped) allSkipped.push(id);
-				processed += batch.length;
-
-				progressEmitter.emit({
-					processed,
-					total,
-					added: allAdded.length,
-					merged: allMerged.length,
-					skipped: allSkipped.length,
-				});
-			}
-
-			const result: AddManyResult = {
-				added: allAdded,
-				merged: allMerged,
-				skipped: allSkipped,
-			};
-
+			// Step 5: completion telemetry.
 			// biome-ignore lint/suspicious/noConsole: Intentional telemetry at import completion.
 			console.info("[tracksRepository.addMany] import complete", {
 				summary: getAddManySummary(result),
 				durationMs: Date.now() - startedAt,
-				batchCount: batches.length,
+				batchCount: chunkArray(dedupedTracks, batchSize).length,
 				total,
 			});
 
 			return result;
-		} catch (error: unknown) {
-			if (error instanceof ImportAbortedError) throw error;
-			const partial: AddManyResult = {
-				added: allAdded,
-				merged: allMerged,
-				skipped: allSkipped,
-			};
-			const progress: AddManyProgress = {
-				processed,
-				total,
-				added: allAdded.length,
-				merged: allMerged.length,
-				skipped: allSkipped.length,
-			};
-			try {
-				mapStorageWriteError(error);
-			} catch (cause: unknown) {
-				throw new ImportAbortedError(
-					`Import aborted after ${processed} of ${total} tracks (cause: ${describeThrownValue(cause)})`,
-					partial,
-					progress,
-					cause,
-				);
-			}
 		} finally {
 			progressEmitter.flush();
 		}

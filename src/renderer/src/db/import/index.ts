@@ -16,19 +16,34 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { ExistingTrackRef, TrackBatchDatabase } from "@renderer/db/types";
-import { chunkedAnyOf } from "@renderer/db/utils/dbUtils";
 import {
-	areCollectionIdsEqual,
+	type ClassificationPlan,
+	classifyTracks,
+} from "@renderer/db/import/classifyTracks";
+import type {
+	ExistingTrackRef,
+	ProgressEmitter,
+	TrackBatchDatabase,
+} from "@renderer/db/types";
+import { checkStorageHeadroom, chunkedAnyOf } from "@renderer/db/utils/dbUtils";
+import {
+	assertBatchPayloadSize,
+	assertBatchUniqueness,
 	assertReferentialIntegrity,
+	assertTrackInput,
+	calculateBatchPayloadSize,
+	dedupeByFilePath,
+	describeThrownValue,
 	gatherReferencedCollectionIds,
 	isNonEmptyString,
-	normalizeCollectionIds,
+	mapStorageWriteError,
 } from "@renderer/db/utils/trackRepositoryUtils";
+import { ImportAbortedError, TrackValidationError } from "@shared/errors";
 import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
-import type { AddManyResult, Artwork } from "@shared/types";
+import type { AddManyProgress, AddManyResult } from "@shared/types";
+import { chunkArray } from "@shared/utils";
+import { createRootIssue } from "@shared/validators";
 import type { EntityTable } from "dexie";
-import { v7 as uuidV7 } from "uuid";
 
 /**
  * Looks up existing tracks by `filePath` and projects each match to an
@@ -70,6 +85,45 @@ async function fetchExistingTrackRefs(
 }
 
 /**
+ * Persists a classification plan within a transaction. Write order is
+ * artworks → tracks bulkAdd → tracks bulkUpdate — artwork-before-track
+ * preserves the abort semantics (if bulkUpdate fails, both artworks and
+ * tracks are rolled back by the transaction).
+ */
+async function persistClassification(
+	plan: ClassificationPlan,
+	db: TrackBatchDatabase,
+): Promise<AddManyResult> {
+	if (plan.artworksToSave.length > 0) {
+		await db.artworks.bulkAdd([...plan.artworksToSave]);
+	}
+
+	const addedIds: string[] = [];
+	if (plan.toAdd.length > 0) {
+		const rawKeys = await db.tracks.bulkAdd([...plan.toAdd], {
+			allKeys: true,
+		});
+		if (Array.isArray(rawKeys)) {
+			for (const key of rawKeys) {
+				if (typeof key === "string") {
+					addedIds.push(key);
+				}
+			}
+		}
+	}
+
+	if (plan.toUpdate.length > 0) {
+		await db.tracks.bulkUpdate([...plan.toUpdate]);
+	}
+
+	return {
+		added: addedIds,
+		merged: plan.mergedIds,
+		skipped: plan.skippedIds,
+	};
+}
+
+/**
  * Processes a single batch of tracks within its own IndexedDB transaction.
  *
  * @param tracks             - Parsed, validated, normalized ingestion tracks.
@@ -89,6 +143,7 @@ async function processBatch(
 		db.artworks,
 		db.collections,
 		async (): Promise<AddManyResult> => {
+			// Step 1: re-assert referential integrity (atomic with the writes).
 			const batchCollectionIds = gatherReferencedCollectionIds(
 				tracks,
 				targetCollectionId,
@@ -99,95 +154,167 @@ async function processBatch(
 				"tracks.batch.collectionIds",
 			);
 
+			// Step 2: look up existing tracks by filePath.
 			const filePaths = tracks.map((t) => t.filePath);
 			const existingByFilePath = await fetchExistingTrackRefs(
 				filePaths,
 				db.tracks,
 			);
 
-			const toAdd: Metadata[] = [];
-			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
-			const mergedIds: string[] = [];
-			const skippedIds: string[] = [];
-			const artworksToSave: Artwork[] = [];
+			// Step 3: classify (pure — no I/O).
+			const plan = classifyTracks(
+				tracks,
+				existingByFilePath,
+				targetCollectionId,
+			);
 
-			for (const track of tracks) {
-				const existingRow = existingByFilePath.get(track.filePath);
-
-				if (existingRow) {
-					const nextCollectionIds = normalizeCollectionIds(
-						existingRow.collectionIds,
-						targetCollectionId,
-					);
-
-					if (
-						areCollectionIdsEqual(existingRow.collectionIds, nextCollectionIds)
-					) {
-						skippedIds.push(existingRow.id);
-					} else {
-						toUpdate.push({
-							key: existingRow.id,
-							changes: { collectionIds: nextCollectionIds },
-						});
-						mergedIds.push(existingRow.id);
-					}
-				} else {
-					const pictureIds: string[] = [];
-					if (track.common?.picture) {
-						for (const pic of track.common.picture) {
-							const blob: Blob =
-								pic.data instanceof Uint8Array
-									? new Blob([pic.data], { type: pic.format })
-									: pic.data;
-							const id = uuidV7();
-							artworksToSave.push({
-								id,
-								blob,
-								format: pic.format,
-								description: pic.description,
-								name: pic.name,
-							});
-							pictureIds.push(id);
-						}
-					}
-
-					toAdd.push({
-						...track,
-						common: {
-							...track.common,
-							picture: pictureIds,
-						},
-						collectionIds: normalizeCollectionIds(
-							track.collectionIds,
-							targetCollectionId,
-						),
-					});
-				}
-			}
-
-			if (artworksToSave.length > 0) {
-				await db.artworks.bulkAdd(artworksToSave);
-			}
-
-			const addedIds: string[] = [];
-			if (toAdd.length > 0) {
-				const rawKeys = await db.tracks.bulkAdd(toAdd, { allKeys: true });
-				if (Array.isArray(rawKeys)) {
-					for (const key of rawKeys) {
-						if (typeof key === "string") {
-							addedIds.push(key);
-						}
-					}
-				}
-			}
-
-			if (toUpdate.length > 0) {
-				await db.tracks.bulkUpdate(toUpdate);
-			}
-
-			return { added: addedIds, merged: mergedIds, skipped: skippedIds };
+			// Step 4: persist (artworks → tracks → bulkUpdate).
+			return persistClassification(plan, db);
 		},
 	);
+}
+
+/**
+ * Validates the tracks array and parses each element.
+ * Throws on non-array; returns [] for empty.
+ */
+export function validateAndParseTracks(
+	tracks: readonly unknown[],
+): IngestionMetadata[] {
+	if (!Array.isArray(tracks)) {
+		throw new TrackValidationError("tracks", [
+			createRootIssue("invalid_type", "Tracks must be an array"),
+		]);
+	}
+	const parsed: IngestionMetadata[] = [];
+	for (const [index, track] of tracks.entries()) {
+		parsed.push(assertTrackInput(track, index));
+	}
+	return parsed;
+}
+
+/**
+ * Pre-flight: payload size, headroom, id-uniqueness, filePath dedupe, RI fast-fail.
+ */
+export async function runPreflightChecks(
+	parsedTracks: readonly IngestionMetadata[],
+	targetCollectionId: string,
+	db: TrackBatchDatabase,
+): Promise<{
+	dedupedTracks: readonly IngestionMetadata[];
+	preSkipped: readonly string[];
+}> {
+	const payloadSize = calculateBatchPayloadSize(parsedTracks);
+	assertBatchPayloadSize(payloadSize);
+	await checkStorageHeadroom(payloadSize);
+
+	assertBatchUniqueness({
+		items: parsedTracks,
+		getKey: (t) => t.id,
+		fieldPath: (i) => `tracks[${i}].id`,
+		label: "id",
+	});
+
+	const { unique: dedupedTracks, skipped: preSkipped } =
+		dedupeByFilePath(parsedTracks);
+
+	const collectionIds = gatherReferencedCollectionIds(
+		dedupedTracks,
+		targetCollectionId,
+	);
+	await assertReferentialIntegrity(
+		[...collectionIds],
+		db.collections,
+		"tracks.collectionIds",
+	);
+
+	return { dedupedTracks, preSkipped };
+}
+
+/**
+ * Batch loop with signal, progress, and error-wrapping into ImportAbortedError.
+ */
+export async function executeImportBatches(params: {
+	dedupedTracks: readonly IngestionMetadata[];
+	batchSize: number;
+	targetCollectionId: string;
+	signal: AbortSignal | undefined;
+	progressEmitter: ProgressEmitter;
+	preSkipped: readonly string[];
+	total: number;
+	db: TrackBatchDatabase;
+}): Promise<AddManyResult> {
+	const {
+		dedupedTracks,
+		batchSize,
+		targetCollectionId,
+		signal,
+		progressEmitter,
+		preSkipped,
+		total,
+		db,
+	} = params;
+	const batches = chunkArray(dedupedTracks, batchSize);
+	const allAdded: string[] = [];
+	const allMerged: string[] = [];
+	const allSkipped: string[] = [...preSkipped];
+	let processed = preSkipped.length;
+
+	try {
+		for (const batch of batches) {
+			if (signal?.aborted) {
+				throw new ImportAbortedError(
+					`Import cancelled by the caller after ${processed} of ${total} tracks`,
+					{ added: allAdded, merged: allMerged, skipped: allSkipped },
+					{
+						processed,
+						total,
+						added: allAdded.length,
+						merged: allMerged.length,
+						skipped: allSkipped.length,
+					},
+					new DOMException("Import cancelled", "AbortError"),
+				);
+			}
+			const batchResult = await processBatch(batch, targetCollectionId, db);
+			for (const id of batchResult.added) allAdded.push(id);
+			for (const id of batchResult.merged) allMerged.push(id);
+			for (const id of batchResult.skipped) allSkipped.push(id);
+			processed += batch.length;
+			progressEmitter.emit({
+				processed,
+				total,
+				added: allAdded.length,
+				merged: allMerged.length,
+				skipped: allSkipped.length,
+			});
+		}
+		return { added: allAdded, merged: allMerged, skipped: allSkipped };
+	} catch (error: unknown) {
+		if (error instanceof ImportAbortedError) throw error;
+		const partial: AddManyResult = {
+			added: allAdded,
+			merged: allMerged,
+			skipped: allSkipped,
+		};
+		const progress: AddManyProgress = {
+			processed,
+			total,
+			added: allAdded.length,
+			merged: allMerged.length,
+			skipped: allSkipped.length,
+		};
+		try {
+			mapStorageWriteError(error);
+		} catch (cause: unknown) {
+			throw new ImportAbortedError(
+				`Import aborted after ${processed} of ${total} tracks (cause: ${describeThrownValue(cause)})`,
+				partial,
+				progress,
+				cause,
+			);
+		}
+	}
 }
 
 export { fetchExistingTrackRefs, processBatch };

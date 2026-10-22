@@ -487,7 +487,9 @@ async function applyGuardedTrackUpdate(
  * @param tracks - The parsed ingestion metadata array.
  * @returns Total size in bytes.
  */
-function calculateBatchPayloadSize(tracks: IngestionMetadata[]): number {
+function calculateBatchPayloadSize(
+	tracks: readonly IngestionMetadata[],
+): number {
 	let size = 0;
 	for (const track of tracks) {
 		if (track.common?.picture) {
