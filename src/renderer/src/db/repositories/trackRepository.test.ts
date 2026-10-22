@@ -71,28 +71,6 @@ function statusChange(to: Status, seq?: number): Record<string, unknown> {
 }
 
 /**
- * Asserts all three lanes of an {@link AddManyResult} in a single call,
- * reducing boilerplate across the addMany test suite.
- *
- * @param result   – The actual result returned by `addMany`.
- * @param expected – Partial expectation; omitted lanes are not checked.
- */
-function expectAddManyResult(
-	result: AddManyResult,
-	expected: Partial<AddManyResult>,
-): void {
-	if (expected.added !== undefined) {
-		expect(result.added).toEqual(expected.added);
-	}
-	if (expected.merged !== undefined) {
-		expect(result.merged).toEqual(expected.merged);
-	}
-	if (expected.skipped !== undefined) {
-		expect(result.skipped).toEqual(expected.skipped);
-	}
-}
-
-/**
  * Awaits an operation that must fail with `ImportAbortedError` and returns
  * the error, so callers can assert on `partial`, `progress`, and `cause`
  * with full type safety.
@@ -162,7 +140,7 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: SYSTEM_COLLECTION_ID },
 			);
-			expectAddManyResult(result, {
+			expect(result).toMatchObject({
 				added: ["a", "b"],
 				merged: [],
 				skipped: [],
@@ -217,7 +195,7 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expectAddManyResult(result, {
+			expect(result).toMatchObject({
 				added: [],
 				merged: ["a"],
 				skipped: [],
@@ -247,7 +225,7 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expectAddManyResult(result, {
+			expect(result).toMatchObject({
 				added: [],
 				merged: [],
 				skipped: ["a"],
@@ -294,7 +272,7 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expectAddManyResult(result, {
+			expect(result).toMatchObject({
 				added: ["new1"],
 				merged: ["exists"],
 				skipped: ["noop"],
@@ -332,7 +310,7 @@ describe("tracksRepository", () => {
 				],
 				{ targetCollectionId: "mix1" },
 			);
-			expectAddManyResult(result, {
+			expect(result).toMatchObject({
 				added: [],
 				merged: ["orig"],
 				skipped: [],
@@ -1376,15 +1354,15 @@ describe("tracksRepository", () => {
 			expect((await db.tracks.get("t1"))?.selected).toBe(0);
 		});
 
-		it("rejects non-object changes with a clear error", async () => {
-			await db.tracks.add(makeTrack({ id: "t1" }));
-			await expect(tracksRepository.update("t1", null as any)).rejects.toThrow(
-				TrackValidationError,
-			);
-			await expect(
-				tracksRepository.update("t1", "invalid" as any),
-			).rejects.toThrow(TrackValidationError);
-		});
+		it.each([null, "invalid", 42, true, []])(
+			"rejects non-object changes (%s) with TrackValidationError",
+			async (changes) => {
+				await db.tracks.add(makeTrack({ id: "t1" }));
+				await expect(tracksRepository.update("t1", changes)).rejects.toThrow(
+					TrackValidationError,
+				);
+			},
+		);
 
 		it("rejects an empty ID with TrackValidationError", async () => {
 			await expect(
@@ -1396,16 +1374,6 @@ describe("tracksRepository", () => {
 			await expect(
 				tracksRepository.update("   ", { selected: 1 }),
 			).rejects.toThrow(TrackValidationError);
-		});
-
-		it("rejects non-object changes with TrackValidationError", async () => {
-			await db.tracks.add(makeTrack({ id: "t1" }));
-			await expect(tracksRepository.update("t1", null)).rejects.toThrow(
-				TrackValidationError,
-			);
-			await expect(tracksRepository.update("t1", "invalid")).rejects.toThrow(
-				TrackValidationError,
-			);
 		});
 	});
 
