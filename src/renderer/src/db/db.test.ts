@@ -17,7 +17,7 @@
  */
 
 import { db } from "@renderer/db/db";
-import { resetDatabase } from "@renderer/utils/test-utils";
+import { recreateDatabase } from "@renderer/utils/test-utils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { makeTrack } from "@tests/factories";
 
@@ -46,7 +46,7 @@ describe("AudioDB", () => {
 
 	describe("schema indexes and constraints", () => {
 		beforeEach(async () => {
-			await resetDatabase();
+			await recreateDatabase();
 		});
 
 		describe("schema indexes", () => {
