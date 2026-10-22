@@ -156,10 +156,6 @@ describe("processBatch", async () => {
 		artworksBulkAddSpy = vi.spyOn(db.artworks, "bulkAdd");
 	});
 
-	afterEach(() => {
-		artworksBulkAddSpy.mockRestore();
-	});
-
 	it("classifies tracks and persists them correctly within a transaction", async () => {
 		await db.collections.add({ id: "mix1", title: "Mix1" });
 		await db.tracks.add(

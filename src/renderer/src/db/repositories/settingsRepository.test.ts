@@ -70,10 +70,6 @@ describe("settingsRepository", () => {
 		await resetDatabase();
 	});
 
-	afterEach(() => {
-		vi.restoreAllMocks();
-	});
-
 	describe("getSettings", () => {
 		it("returns empty status when no settings have been saved", async () => {
 			expect(await settingsRepository.getSettings()).toEqual({

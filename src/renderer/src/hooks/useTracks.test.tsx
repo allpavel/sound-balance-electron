@@ -78,7 +78,6 @@ describe("useTracks", () => {
 
 	afterEach(() => {
 		cleanup();
-		vi.restoreAllMocks();
 	});
 
 	describe("initialization and live queries", () => {
@@ -719,7 +718,6 @@ describe("useTracks", () => {
 				payload.tracks,
 				expect.objectContaining({ onProgress, batchSize: 2 }),
 			);
-			addSpy.mockRestore();
 		});
 	});
 

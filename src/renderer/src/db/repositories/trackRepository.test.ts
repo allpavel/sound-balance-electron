@@ -598,34 +598,30 @@ describe("tracksRepository", () => {
 
 		it("emits a structured completion log with summary, duration, and batch count (F-08)", async () => {
 			const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
-			try {
-				const tracks = [
-					makeTrack({ id: "a", filePath: "/music/a.mp3", collectionIds: [] }),
-					makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
-				];
-				await tracksRepository.addMany(tracks, {
-					batchSize: 1,
-					targetCollectionId: SYSTEM_COLLECTION_ID,
-				});
-				const call = infoSpy.mock.calls.find(
-					(c) => typeof c[0] === "string" && c[0].includes("import complete"),
-				);
-				expect(call).toBeDefined();
-				const payload = call?.[1];
-				expect(payload?.summary).toEqual(
-					expect.objectContaining({
-						total: 2,
-						added: 2,
-						merged: 0,
-						skipped: 0,
-					}),
-				);
-				expect(payload?.batchCount).toBe(2);
-				expect(payload?.total).toBe(2);
-				expect(typeof payload?.durationMs).toBe("number");
-			} finally {
-				infoSpy.mockRestore();
-			}
+			const tracks = [
+				makeTrack({ id: "a", filePath: "/music/a.mp3", collectionIds: [] }),
+				makeTrack({ id: "b", filePath: "/music/b.mp3", collectionIds: [] }),
+			];
+			await tracksRepository.addMany(tracks, {
+				batchSize: 1,
+				targetCollectionId: SYSTEM_COLLECTION_ID,
+			});
+			const call = infoSpy.mock.calls.find(
+				(c) => typeof c[0] === "string" && c[0].includes("import complete"),
+			);
+			expect(call).toBeDefined();
+			const payload = call?.[1];
+			expect(payload?.summary).toEqual(
+				expect.objectContaining({
+					total: 2,
+					added: 2,
+					merged: 0,
+					skipped: 0,
+				}),
+			);
+			expect(payload?.batchCount).toBe(2);
+			expect(payload?.total).toBe(2);
+			expect(typeof payload?.durationMs).toBe("number");
 		});
 
 		it("invokes onProgress callback with cumulative counts after each batch", async () => {
@@ -859,7 +855,6 @@ describe("tracksRepository", () => {
 			expect(warnSpy).toHaveBeenCalledTimes(2);
 			const warnArg = warnSpy.mock.calls[0]?.[1];
 			expect(warnArg).not.toHaveProperty("message");
-			warnSpy.mockRestore();
 		});
 
 		it("still accepts a valid custom batchSize and emits progress (regression)", async () => {
@@ -1147,10 +1142,6 @@ describe("tracksRepository", () => {
 		beforeEach(async () => {
 			await resetTestState();
 			artworksBulkAddSpy = vi.spyOn(db.artworks, "bulkAdd");
-		});
-
-		afterEach(() => {
-			artworksBulkAddSpy.mockRestore();
 		});
 
 		it("extracts artwork into the artworks table and replaces common.picture with UUID refs", async () => {
