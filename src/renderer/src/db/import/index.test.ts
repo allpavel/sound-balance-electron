@@ -112,6 +112,40 @@ describe("fetchExistingTrackRefs", () => {
 		const result = await fetchExistingTrackRefs(filePaths, db.tracks);
 		expect(result.size).toBe(count);
 	});
+
+	it("resolves exactly ANYOF_CHUNK_SIZE filePaths (single chunk, no off-by-one)", async () => {
+		await resetDatabase();
+		const tracks = Array.from({ length: ANYOF_CHUNK_SIZE }, (_, i) =>
+			makeTrack({
+				id: `t${i}`,
+				filePath: `/music/t${i}.mp3`,
+				collectionIds: [SYSTEM_COLLECTION_ID],
+			}),
+		);
+		await db.tracks.bulkAdd(tracks);
+		const result = await fetchExistingTrackRefs(
+			tracks.map((t) => t.filePath),
+			db.tracks,
+		);
+		expect(result.size).toBe(ANYOF_CHUNK_SIZE);
+	});
+
+	it("resolves ANYOF_CHUNK_SIZE + 1 filePaths (two chunks, no off-by-one)", async () => {
+		await resetDatabase();
+		const tracks = Array.from({ length: ANYOF_CHUNK_SIZE + 1 }, (_, i) =>
+			makeTrack({
+				id: `t${i}`,
+				filePath: `/music/t${i}.mp3`,
+				collectionIds: [SYSTEM_COLLECTION_ID],
+			}),
+		);
+		await db.tracks.bulkAdd(tracks);
+		const result = await fetchExistingTrackRefs(
+			tracks.map((t) => t.filePath),
+			db.tracks,
+		);
+		expect(result.size).toBe(ANYOF_CHUNK_SIZE + 1);
+	});
 });
 
 describe("processBatch", async () => {

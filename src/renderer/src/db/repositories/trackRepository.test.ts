@@ -656,6 +656,30 @@ describe("tracksRepository", () => {
 				skipped: 0,
 			});
 		});
+
+		it("emits exactly 1 progress emission for IMPORT_BATCH_SIZE tracks", async () => {
+			await resetDatabase();
+			const tracks = Array.from({ length: IMPORT_BATCH_SIZE }, (_, i) =>
+				makeTrack({ id: `t${i}`, filePath: `/music/t${i}.mp3` }),
+			);
+			const calls: AddManyProgress[] = [];
+			await tracksRepository.addMany(tracks, {
+				onProgress: (p) => calls.push(p),
+			});
+			expect(calls).toHaveLength(1);
+		});
+
+		it("emits exactly 2 progress emissions for IMPORT_BATCH_SIZE + 1 tracks", async () => {
+			await resetDatabase();
+			const tracks = Array.from({ length: IMPORT_BATCH_SIZE + 1 }, (_, i) =>
+				makeTrack({ id: `t${i}`, filePath: `/music/t${i}.mp3` }),
+			);
+			const calls: AddManyProgress[] = [];
+			await tracksRepository.addMany(tracks, {
+				onProgress: (p) => calls.push(p),
+			});
+			expect(calls).toHaveLength(2);
+		});
 	});
 
 	describe("addMany — case-variant filePath dedupe", () => {
