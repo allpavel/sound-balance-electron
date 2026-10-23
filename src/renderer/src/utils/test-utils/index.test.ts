@@ -26,6 +26,7 @@ import {
 } from "@/src/shared/schemas/settings.schema";
 import {
 	configureUuidMock,
+	recreateDatabase,
 	resetDatabase,
 	resetSequences,
 	resetTestState,
@@ -171,6 +172,26 @@ describe("testFactories", () => {
 				new Error("seed failed"),
 			);
 			await expect(resetDatabase()).rejects.toThrow("seed failed");
+		});
+	});
+
+	describe("recreateDatabase", () => {
+		it("re-fires the populate hook and destroys rows resetDatabase would keep", async () => {
+			await db.tracks.add(makeTrack({ id: "t1" }));
+			await db.collections.add(makeCollection({ id: "extra", title: "Extra" }));
+			await recreateDatabase();
+			expect(await db.collections.toArray()).toEqual([
+				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+			]);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("leaves the database usable for reads and writes afterwards", async () => {
+			await recreateDatabase();
+			await db.tracks.add(makeTrack({ id: "after-recreate" }));
+			expect((await db.tracks.get("after-recreate"))?.id).toBe(
+				"after-recreate",
+			);
 		});
 	});
 

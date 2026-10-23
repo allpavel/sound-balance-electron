@@ -17,17 +17,16 @@
  */
 
 import { db } from "@renderer/db/db";
-import { resetDatabase } from "@renderer/utils/test-utils";
+import { recreateDatabase } from "@renderer/utils/test-utils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { makeTrack } from "@tests/factories";
 
 describe("AudioDB", () => {
-	describe("database initialization and populate hook", () => {
-		beforeEach(async () => {
-			await db.delete();
-			await db.open();
-		});
+	beforeEach(async () => {
+		await recreateDatabase();
+	});
 
+	describe("database initialization and populate hook", () => {
 		it("seeds the system 'all' collection on fresh database initialization", async () => {
 			const collections = await db.collections.toArray();
 			expect(collections).toEqual([{ id: SYSTEM_COLLECTION_ID, title: "All" }]);
@@ -45,10 +44,6 @@ describe("AudioDB", () => {
 	});
 
 	describe("schema indexes and constraints", () => {
-		beforeEach(async () => {
-			await resetDatabase();
-		});
-
 		describe("schema indexes", () => {
 			it("allows querying tracks by filePath", async () => {
 				await db.tracks.add(
@@ -57,7 +52,6 @@ describe("AudioDB", () => {
 				await db.tracks.add(
 					makeTrack({ id: "t2", filePath: "/music/track-2.mp3" }),
 				);
-
 				const result = await db.tracks
 					.where("filePath")
 					.equals("/music/track-1.mp3")

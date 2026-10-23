@@ -18,8 +18,8 @@
 
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
+import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import {
-	ANYOF_CHUNK_SIZE,
 	MAX_BATCH_PAYLOAD_SIZE,
 	MAX_LOGGED_ERROR_NAME_LENGTH,
 	SYSTEM_COLLECTION_ID,
@@ -58,31 +58,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Splits an array into consecutive sub-arrays of at most `size` elements.
- *
- * Used to keep IndexedDB `anyOf()` key arrays within engine-safe bounds
- * while preserving transactional atomicity.
- *
- * @typeParam T - Element type; inferred from the input array.
- * @param source - The array to partition. Not mutated.
- * @param size   - Maximum chunk length. Must be ≥ 1.
- * @returns An array of chunks. Empty input yields an empty array.
- *
- * @example
- * chunkArray([1,2,3,4,5], 2) // → [[1,2],[3,4],[5]]
- */
-function chunkArray<T>(source: readonly T[], size: number): T[][] {
-	if (size < 1) {
-		throw new RangeError(`chunkArray: size must be ≥ 1, received ${size}`);
-	}
-	const chunks: T[][] = [];
-	for (let offset = 0; offset < source.length; offset += size) {
-		chunks.push(source.slice(offset, offset + size));
-	}
-	return chunks;
-}
-
-/**
  * Type guard to safely extract `name` and `message` from unknown error shapes.
  */
 function isErrorWithName(
@@ -99,11 +74,36 @@ function isErrorWithName(
 /**
  * Discriminates raw IndexedDB / Dexie errors into typed domain errors.
  *
- * @param error - The caught unknown error value.
- * @throws {@link TrackValidationError} A domain-specific, user-presentable error.
- * @throws {Error} Re-throws if the error is not a known storage failure.
+ * Precedence (first matching rule wins):
+ * 1. **Domain re-throw** — `TrackValidationError` / `ConflictError` /
+ *    `ReferentialIntegrityError` are re-thrown verbatim (no wrapping).
+ * 2. **`inner` unwrap** — if the error has a non-null `inner` property,
+ *    recurse on it (the inner error wins over the outer error's own `name`).
+ * 3. **Top-level `name`** — `QuotaExceededError` → `StorageCapacityError`;
+ *    `ConstraintError` → `ConflictError`; `InvalidStateError` /
+ *    `AbortError` / `UnknownError` / `VersionError` / `NotFoundError` →
+ *    `StorageUnavailableError`.
+ * 4. **`failures[]` scan** — first matching failure wins (same name mapping
+ *    as rule 3).
+ * 5. **Identity re-throw** — unknown errors are re-thrown by identity.
+ *
+ * Documented limitations:
+ * - **`failures[]` entries are NOT inner-unwrapped**: only top-level
+ *   `name` is inspected within each failure element.
+ *
+ * @param error   - The caught unknown error value.
+ * @param visited - Internal WeakSet to track visited objects and break cyclic `inner` chains.
+ *
+ * @throws {StorageCapacityError|ConflictError|StorageUnavailableError} Mapped
+ *         domain errors (rules 2–4).
+ * @throws {TrackValidationError|ConflictError|ReferentialIntegrityError}
+ *         Re-thrown domain errors (rule 1, verbatim).
+ * @throws {unknown} Re-thrown by identity (rule 5, no match).
  */
-function mapStorageWriteError(error: unknown): never {
+function mapStorageWriteError(
+	error: unknown,
+	visited: WeakSet<object> = new WeakSet(),
+): never {
 	if (
 		error instanceof TrackValidationError ||
 		error instanceof ConflictError ||
@@ -119,7 +119,15 @@ function mapStorageWriteError(error: unknown): never {
 		error.inner !== undefined &&
 		error.inner !== null
 	) {
-		mapStorageWriteError(error.inner);
+		const inner = error.inner;
+		if (typeof inner === "object" && inner !== null) {
+			if (!visited.has(inner)) {
+				visited.add(inner);
+				mapStorageWriteError(inner, visited);
+			}
+		} else {
+			mapStorageWriteError(inner, visited);
+		}
 	}
 
 	if (isErrorWithName(error)) {
@@ -189,25 +197,29 @@ function mapStorageWriteError(error: unknown): never {
 /**
  * Asserts that a derived key is unique across a batch of items.
  *
- * @param items     – The batch to inspect.
- * @param getKey    – Pure extractor returning the uniqueness key for an item.
- * @param fieldPath – Template for the error context, e.g. `"tracks[{i}].filePath"`.
- * @param label     – Human-readable noun for the message, e.g. `"filePath"`.
+ * @param params.items     – The batch to inspect.
+ * @param params.getKey    – Pure extractor returning the uniqueness key.
+ * @param params.fieldPath – Template for the error context, e.g. `"tracks[{i}].id"`.
+ * @param params.label     – Human-readable noun for the message, e.g. `"id"`.
+ * @param params.context   – Message prefix, default `"Batch"`. Use `"Updates"`
+ *                           for `updateMany` so the phrasing survives.
  *
  * @throws {ConflictError} On the first duplicate detected.
  */
-function assertBatchUniqueness<T>(
-	items: readonly T[],
-	getKey: (item: T) => string,
-	fieldPath: (index: number) => string,
-	label: string,
-): void {
+function assertBatchUniqueness<T>(params: {
+	items: readonly T[];
+	getKey: (item: T) => string;
+	fieldPath: (index: number) => string;
+	label: string;
+	context?: string;
+}): void {
+	const { items, getKey, fieldPath, label, context = "Batch" } = params;
 	const seen = new Set<string>();
 	for (const [index, item] of items.entries()) {
 		const key = getKey(item);
 		if (seen.has(key)) {
 			throw new ConflictError(
-				`Batch contains duplicate ${sanitizeControlChars(label)}: "${sanitizeControlChars(key)}" at ${sanitizeControlChars(fieldPath(index))}`,
+				`${sanitizeControlChars(context)} contains duplicate ${sanitizeControlChars(label)}: "${sanitizeControlChars(key)}" at ${sanitizeControlChars(fieldPath(index))}`,
 			);
 		}
 		seen.add(key);
@@ -231,15 +243,12 @@ async function assertReferentialIntegrity(
 
 	const referencedCollectionIds = new Set<string>(collectionIds);
 	const idsToCheck = [...referencedCollectionIds];
-	const chunks = chunkArray(idsToCheck, ANYOF_CHUNK_SIZE);
-	const existingIds = new Set<string>();
 
-	for (const chunk of chunks) {
-		const keys = await collectionsTable.where("id").anyOf(chunk).primaryKeys();
-		for (const key of keys) {
-			if (typeof key === "string") {
-				existingIds.add(key);
-			}
+	const foundKeys = await chunkedAnyOfKeys(collectionsTable, "id", idsToCheck);
+	const existingIds = new Set<string>();
+	for (const key of foundKeys) {
+		if (typeof key === "string") {
+			existingIds.add(key);
 		}
 	}
 
@@ -297,8 +306,7 @@ function assertTrackInput(track: unknown, index: number): IngestionMetadata {
 }
 
 /**
- * Asserts that the untrusted `addMany` options satisfy
- * {@link addManyOptionsSchema}.
+ * Asserts that the untrusted `addMany` options satisfy `addManyOptionsSchema`.
  *
  * Rejects (does not clamp) invalid `batchSize` / `onProgress`
  * at the trust boundary, throwing {@link TrackValidationError} carrying the
@@ -431,15 +439,12 @@ function shouldApplyUpdate(
 		status: changes.status,
 	};
 
-	// [FIX #2] Clear stale reason when leaving the failed state.
 	if (changes.status === "failed") {
 		patch.reason = changes.reason;
 	} else {
-		// Assigning undefined triggers Dexie/IndexedDB structured clone to remove the property.
 		patch.reason = undefined;
 	}
 
-	// Apply sequence number if provided.
 	if ("seq" in changes && changes.seq !== undefined) {
 		patch.statusSeq = changes.seq;
 	}
@@ -482,7 +487,9 @@ async function applyGuardedTrackUpdate(
  * @param tracks - The parsed ingestion metadata array.
  * @returns Total size in bytes.
  */
-function calculateBatchPayloadSize(tracks: IngestionMetadata[]): number {
+function calculateBatchPayloadSize(
+	tracks: readonly IngestionMetadata[],
+): number {
 	let size = 0;
 	for (const track of tracks) {
 		if (track.common?.picture) {
@@ -540,7 +547,7 @@ function gatherReferencedCollectionIds(
 /**
  * First-wins deduplication of ingestion tracks by normalized `filePath`.
  *
- * Once {@link trackBaseSchema} normalizes `filePath` at parse time,
+ * Once `trackBaseSchema` normalizes `filePath` at parse time,
  * case-variant duplicates within a single import payload collapse onto
  * the same canonical key. Rather than aborting the whole import
  * with a `ConflictError` (the previous strict `assertBatchUniqueness` behavior),
@@ -557,11 +564,14 @@ function gatherReferencedCollectionIds(
  * The function is pure and total: it performs no I/O, does not touch the
  * database, and preserves input order for the surviving tracks. It relies
  * on the schema-enforced precondition that every `track.filePath` is
- * already normalized (see {@link filePathSchema}).
+ * already normalized (see `filePathSchema`).
+ *
+ * @see [ADR-0002](../../../../../docs/adr/ADR-0002-asymmetric-duplicate-policy.md)
+ *               for the asymmetric duplicate policy decision (filePath
+ *               first-wins-`skipped` vs id hard-`ConflictError`).
  *
  * @param tracks - Parsed, schema-validated ingestion tracks whose
- *                 `filePath` values are already normalized by
- *                 {@link filePathSchema}.
+ *                 `filePath` values are already normalized by `filePathSchema`.
  * @returns The deduped unique tracks and the IDs folded into them.
  */
 function dedupeByFilePath(
@@ -659,7 +669,6 @@ export {
 	assertReferentialIntegrity,
 	assertTrackInput,
 	calculateBatchPayloadSize,
-	chunkArray,
 	createProgressEmitter,
 	dedupeByFilePath,
 	describeThrownValue,

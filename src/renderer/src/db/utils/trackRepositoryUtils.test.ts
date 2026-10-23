@@ -23,17 +23,23 @@ import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import {
 	ConflictError,
 	ReferentialIntegrityError,
+	StorageCapacityError,
+	StorageUnavailableError,
 	TrackValidationError,
 } from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
+import type { AddManyProgress } from "@shared/types";
 import { makeTrack } from "@tests/factories";
+import { captureRejection } from "@tests/utils";
 import type { EntityTable } from "dexie";
 import {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
 	assertTrackInput,
+	createProgressEmitter,
 	isPlainObject,
+	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
 	uniqueTracks,
@@ -44,6 +50,19 @@ function createTrackWithoutField(field: string): Record<string, unknown> {
 	const track = makeTrack() as any;
 	delete track[field];
 	return track as any;
+}
+
+/**
+ * Captures whatever `fn` throws (fn is typed `() => unknown` — it always throws).
+ * Used so each test can assert the thrown value's type or identity.
+ */
+function captureThrown(fn: () => unknown): unknown {
+	try {
+		fn();
+	} catch (e: unknown) {
+		return e;
+	}
+	throw new Error("captureThrown: fn should have thrown");
 }
 
 describe("trackRepositoryUtils", () => {
@@ -249,22 +268,21 @@ describe("trackRepositoryUtils", () => {
 	});
 
 	describe("assertBatchUniqueness", () => {
-		it("replaces control characters in the duplicate key before interpolation", () => {
+		it("replaces control characters in the duplicate key before interpolation", async () => {
 			const keyWithControl = "bad\u0001key";
-			let caught: ConflictError | undefined;
-			try {
-				assertBatchUniqueness(
-					[{ k: keyWithControl }, { k: keyWithControl }],
-					(item: { k: string }) => item.k,
-					(i: number) => `items[${i}].k`,
-					"k",
-				);
-			} catch (e) {
-				if (e instanceof ConflictError) caught = e;
-			}
+			const caught = captureThrown(() =>
+				assertBatchUniqueness({
+					items: [{ k: keyWithControl }, { k: keyWithControl }],
+					getKey: (item: { k: string }) => item.k,
+					fieldPath: (i: number) => `items[${i}].k`,
+					label: "k",
+				}),
+			);
 			expect(caught).toBeInstanceOf(ConflictError);
-			expect(caught?.message).not.toContain("\u0001");
-			expect(caught?.message).toContain("\uFFFD");
+			if (caught instanceof ConflictError) {
+				expect(caught.message).not.toContain("\u0001");
+				expect(caught.message).toContain("\uFFFD");
+			}
 		});
 	});
 
@@ -278,34 +296,32 @@ describe("trackRepositoryUtils", () => {
 			// U+0001 passes nonEmptyStringSchema (only null bytes U+0000 are
 			// rejected), so it reaches the RI check and the error message.
 			const missingWithControl = "bad\u0001id";
-			let caught: ReferentialIntegrityError | undefined;
-			try {
-				await tracksRepository.addMany(
+			const thrown = await captureRejection(
+				tracksRepository.addMany(
 					[makeTrack({ collectionIds: [missingWithControl] })],
 					{ targetCollectionId: "legit" },
-				);
-			} catch (e) {
-				if (e instanceof ReferentialIntegrityError) caught = e;
+				),
+			);
+			expect(thrown).toBeInstanceOf(ReferentialIntegrityError);
+			if (thrown instanceof ReferentialIntegrityError) {
+				expect(thrown.message).not.toContain("\u0001");
+				expect(thrown.message).toContain("\uFFFD");
 			}
-			expect(caught).toBeInstanceOf(ReferentialIntegrityError);
-			expect(caught?.message).not.toContain("\u0001");
-			expect(caught?.message).toContain("\uFFFD");
 		});
 
-		it("sanitizes control characters in a duplicate update id (updateMany, F-14)", async () => {
+		it("sanitizes control characters in a duplicate update id", async () => {
 			const idWithControl = "dup\u0001id";
-			let caught: ConflictError | undefined;
-			try {
-				await tracksRepository.updateMany([
+			const thrown = await captureRejection(
+				tracksRepository.updateMany([
 					{ id: idWithControl, changes: { selected: 1 } },
 					{ id: idWithControl, changes: { selected: 0 } },
-				]);
-			} catch (e) {
-				if (e instanceof ConflictError) caught = e;
+				]),
+			);
+			expect(thrown).toBeInstanceOf(ConflictError);
+			if (thrown instanceof ConflictError) {
+				expect(thrown.message).not.toContain("\u0001");
+				expect(thrown.message).toContain("\uFFFD");
 			}
-			expect(caught).toBeInstanceOf(ConflictError);
-			expect(caught?.message).not.toContain("\u0001");
-			expect(caught?.message).toContain("\uFFFD");
 		});
 	});
 
@@ -867,6 +883,289 @@ describe("trackRepositoryUtils", () => {
 				status: "failed",
 				reason: "new boom",
 			});
+		});
+	});
+
+	describe("mapStorageWriteError", () => {
+		describe("rule 1 — domain re-throw (identity)", () => {
+			it.each([
+				["TrackValidationError", new TrackValidationError("ctx", [])],
+				["ConflictError", new ConflictError("conflict")],
+				["ReferentialIntegrityError", new ReferentialIntegrityError("ri")],
+			])("re-throws %s by identity", (_label, err) => {
+				expect(captureThrown(() => mapStorageWriteError(err))).toBe(err);
+			});
+		});
+
+		describe("rule 2 — inner unwrap (inner wins)", () => {
+			it("maps inner QuotaExceededError (outer name is ConstraintError) → StorageCapacityError", () => {
+				const input = {
+					name: "ConstraintError",
+					inner: new DOMException("quota", "QuotaExceededError"),
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("maps inner ConstraintError (outer name is QuotaExceededError) → ConflictError", () => {
+				const input = {
+					name: "QuotaExceededError",
+					inner: new DOMException("constraint", "ConstraintError"),
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					ConflictError,
+				);
+			});
+
+			it("recurses two levels deep (innermost wins)", () => {
+				const input = {
+					inner: { inner: new DOMException("abort", "AbortError") },
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageUnavailableError,
+				);
+			});
+
+			it.each<[string, unknown]>([
+				["undefined", { inner: undefined }],
+				["null", { inner: null }],
+			])(
+				"does not unwrap an `inner` that is %s (identity re-throw)",
+				(_label, input) => {
+					expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+				},
+			);
+
+			it("re-throws a domain error carrying an `inner` by identity (rule 1 precedes rule 2)", () => {
+				const conflict = Object.assign(new ConflictError("conflict"), {
+					inner: new DOMException("q", "QuotaExceededError"),
+				});
+				expect(captureThrown(() => mapStorageWriteError(conflict))).toBe(
+					conflict,
+				);
+			});
+
+			it("safely handles a cyclic `inner` chain without stack overflow (depth bound implemented)", () => {
+				const cyclic: { inner?: unknown } = {};
+				cyclic.inner = cyclic;
+				expect(captureThrown(() => mapStorageWriteError(cyclic))).toBe(cyclic);
+			});
+		});
+
+		describe("rule 3 — top-level name", () => {
+			it("QuotaExceededError → StorageCapacityError", () => {
+				const err = new DOMException("q", "QuotaExceededError");
+				expect(captureThrown(() => mapStorageWriteError(err))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("ConstraintError → ConflictError", () => {
+				const err = new DOMException("c", "ConstraintError");
+				expect(captureThrown(() => mapStorageWriteError(err))).toBeInstanceOf(
+					ConflictError,
+				);
+			});
+
+			it.each([
+				"InvalidStateError",
+				"AbortError",
+				"UnknownError",
+				"VersionError",
+				"NotFoundError",
+			])("%s → StorageUnavailableError", (name) => {
+				const err = { name, message: `msg-${name}` };
+				expect(captureThrown(() => mapStorageWriteError(err))).toBeInstanceOf(
+					StorageUnavailableError,
+				);
+			});
+
+			it.each<[string, unknown]>([
+				["no name property", {}],
+				["non-string name", { name: 42 }],
+				["string input resembling a mapped name", "QuotaExceededError"],
+			])("skips name mapping for %s (identity re-throw)", (_label, input) => {
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("falls back to the error name in the message when message is empty", () => {
+				const thrown = captureThrown(() =>
+					mapStorageWriteError({ name: "AbortError", message: "" }),
+				);
+				expect(thrown).toBeInstanceOf(StorageUnavailableError);
+				if (thrown instanceof StorageUnavailableError) {
+					expect(thrown.message).toBe("Database operation failed: AbortError");
+				}
+			});
+		});
+
+		describe("rule 4 — failures[] scan (first match wins)", () => {
+			it("single QuotaExceededError failure → StorageCapacityError", () => {
+				const input = {
+					name: "BulkError",
+					failures: [new DOMException("q", "QuotaExceededError")],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("pins first-match: Constraint before Quota in failures[] → ConflictError", () => {
+				const input = {
+					name: "BulkError",
+					failures: [
+						new DOMException("c", "ConstraintError"),
+						new DOMException("q", "QuotaExceededError"),
+					],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					ConflictError,
+				);
+			});
+
+			it("pins first-match: Quota before Constraint in failures[] → StorageCapacityError", () => {
+				const input = {
+					name: "BulkError",
+					failures: [
+						new DOMException("q", "QuotaExceededError"),
+						new DOMException("c", "ConstraintError"),
+					],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("re-throws by identity when `failures` is not an array", () => {
+				const input = { name: "BulkError", failures: "not-an-array" };
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("re-throws by identity when `failures` is empty", () => {
+				const input = { name: "BulkError", failures: [] };
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("skips non-error entries and maps the first matching failure", () => {
+				const input = {
+					name: "BulkError",
+					failures: [
+						null,
+						"x",
+						42,
+						{ message: "no name property" },
+						new DOMException("q", "QuotaExceededError"),
+					],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
+			});
+
+			it("falls back to the failure's name in the message when its message is empty", () => {
+				const input = {
+					name: "BulkError",
+					failures: [{ name: "UnknownError", message: "" }],
+				};
+				const thrown = captureThrown(() => mapStorageWriteError(input));
+				expect(thrown).toBeInstanceOf(StorageUnavailableError);
+				if (thrown instanceof StorageUnavailableError) {
+					expect(thrown.message).toBe(
+						"Database batch operation failed: UnknownError",
+					);
+				}
+			});
+		});
+
+		describe("rule 5 — identity re-throw", () => {
+			it("re-throws a TypeError by identity", () => {
+				const err = new TypeError("unexpected");
+				expect(captureThrown(() => mapStorageWriteError(err))).toBe(err);
+			});
+
+			it.each<[string, unknown]>([
+				["null", null],
+				["a number", 42],
+				["undefined", undefined],
+				["a boolean", false],
+			])("re-throws %s by identity", (_label, input) => {
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("re-throws a failures[] with no matching names by identity", () => {
+				const input = {
+					name: "BulkError",
+					failures: [{ name: "UnknownName" }],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+		});
+	});
+
+	describe("createProgressEmitter", () => {
+		const snapshot: AddManyProgress = {
+			processed: 1,
+			total: 3,
+			added: 1,
+			merged: 0,
+			skipped: 0,
+		};
+
+		it("returns no-op emit/flush when onProgress is undefined", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const emitter = createProgressEmitter(undefined);
+			emitter.emit(snapshot);
+			emitter.flush();
+			expect(warnSpy).not.toHaveBeenCalled();
+		});
+
+		it("delivers the snapshot to a non-throwing callback; flush is a no-op", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const cb = vi.fn();
+			const emitter = createProgressEmitter(cb);
+			emitter.emit(snapshot);
+			expect(cb).toHaveBeenCalledWith(snapshot);
+			emitter.flush();
+			expect(warnSpy).not.toHaveBeenCalled();
+		});
+
+		it("logs the first callback failure once; suppresses subsequent; flush summarizes", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const throwing = vi.fn(() => {
+				throw new Error("boom");
+			});
+			const emitter = createProgressEmitter(throwing);
+			emitter.emit(snapshot);
+			emitter.emit(snapshot);
+			emitter.emit(snapshot);
+			expect(throwing).toHaveBeenCalledTimes(3);
+			expect(warnSpy).toHaveBeenCalledTimes(1);
+			emitter.flush();
+			expect(warnSpy).toHaveBeenCalledTimes(2);
+			const summary = warnSpy.mock.calls[1]?.[1];
+			expect(summary).toEqual(
+				expect.objectContaining({ totalFailures: 3, suppressedAfterFirst: 2 }),
+			);
+		});
+
+		it("flush after exactly one failure emits no summary (boundary: failureCount > 1)", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const emitter = createProgressEmitter(() => {
+				throw new Error("boom");
+			});
+			emitter.emit(snapshot);
+			expect(warnSpy).toHaveBeenCalledTimes(1); // the log-once warning
+			emitter.flush();
+			expect(warnSpy).toHaveBeenCalledTimes(1); // no summary at exactly one failure
+		});
+
+		it("emit never propagates a callback throw", () => {
+			vi.spyOn(console, "warn").mockImplementation(() => {});
+			const emitter = createProgressEmitter(() => {
+				throw new Error("boom");
+			});
+			expect(() => emitter.emit(snapshot)).not.toThrow();
 		});
 	});
 });

@@ -23,10 +23,13 @@ import {
 	seedCollection,
 } from "@renderer/utils/test-utils";
 import { ANYOF_CHUNK_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { ImportAbortedError } from "@shared/errors";
 import type { IngestionMetadata } from "@shared/schemas/track.schema";
-import type { AddManyResult } from "@shared/types";
+import type { AddManyProgress, AddManyResult } from "@shared/types";
 import { makeIngestionTrack, makeTrack } from "@tests/factories";
-import { fetchExistingTrackRefs, processBatch } from ".";
+import { captureRejection } from "@tests/utils";
+import { createProgressEmitter } from "../utils/trackRepositoryUtils";
+import { executeImportBatches, fetchExistingTrackRefs, processBatch } from ".";
 
 describe("fetchExistingTrackRefs", () => {
 	beforeEach(async () => {
@@ -112,18 +115,46 @@ describe("fetchExistingTrackRefs", () => {
 		const result = await fetchExistingTrackRefs(filePaths, db.tracks);
 		expect(result.size).toBe(count);
 	});
+
+	it("resolves exactly ANYOF_CHUNK_SIZE filePaths (single chunk, no off-by-one)", async () => {
+		const tracks = Array.from({ length: ANYOF_CHUNK_SIZE }, (_, i) =>
+			makeTrack({
+				id: `t${i}`,
+				filePath: `/music/t${i}.mp3`,
+				collectionIds: [SYSTEM_COLLECTION_ID],
+			}),
+		);
+		await db.tracks.bulkAdd(tracks);
+		const result = await fetchExistingTrackRefs(
+			tracks.map((t) => t.filePath),
+			db.tracks,
+		);
+		expect(result.size).toBe(ANYOF_CHUNK_SIZE);
+	});
+
+	it("resolves ANYOF_CHUNK_SIZE + 1 filePaths (two chunks, no off-by-one)", async () => {
+		const tracks = Array.from({ length: ANYOF_CHUNK_SIZE + 1 }, (_, i) =>
+			makeTrack({
+				id: `t${i}`,
+				filePath: `/music/t${i}.mp3`,
+				collectionIds: [SYSTEM_COLLECTION_ID],
+			}),
+		);
+		await db.tracks.bulkAdd(tracks);
+		const result = await fetchExistingTrackRefs(
+			tracks.map((t) => t.filePath),
+			db.tracks,
+		);
+		expect(result.size).toBe(ANYOF_CHUNK_SIZE + 1);
+	});
 });
 
-describe("processBatch", async () => {
+describe("processBatch", () => {
 	let artworksBulkAddSpy: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(async () => {
 		await resetTestState();
 		artworksBulkAddSpy = vi.spyOn(db.artworks, "bulkAdd");
-	});
-
-	afterEach(() => {
-		artworksBulkAddSpy.mockRestore();
 	});
 
 	it("classifies tracks and persists them correctly within a transaction", async () => {
@@ -234,5 +265,113 @@ describe("processBatch", async () => {
 		expect(result.merged).toEqual(["existing-merge"]);
 		expect(artworksBulkAddSpy).not.toHaveBeenCalled();
 		expect(await db.artworks.count()).toBe(0);
+	});
+});
+
+describe("executeImportBatches", () => {
+	beforeEach(async () => {
+		await resetTestState();
+	});
+
+	it("derives total from deduped tracks plus pre-skipped ids", async () => {
+		const tracks = [
+			makeIngestionTrack({
+				id: "a",
+				filePath: "/music/a.mp3",
+				collectionIds: [],
+			}),
+			makeIngestionTrack({
+				id: "b",
+				filePath: "/music/b.mp3",
+				collectionIds: [],
+			}),
+		];
+		const emissions: AddManyProgress[] = [];
+		const { result, batchCount } = await executeImportBatches({
+			dedupedTracks: tracks,
+			batchSize: 2,
+			targetCollectionId: SYSTEM_COLLECTION_ID,
+			signal: undefined,
+			progressEmitter: createProgressEmitter((p) => emissions.push(p)),
+			preSkipped: ["dup-1"],
+			db,
+		});
+		expect(batchCount).toBe(1);
+		expect(result.added).toEqual(["a", "b"]);
+		expect(result.skipped).toEqual(["dup-1"]);
+		// total = 2 deduped + 1 pre-skipped, derived inside the runner.
+		expect(emissions).toEqual([
+			{ processed: 3, total: 3, added: 2, merged: 0, skipped: 1 },
+		]);
+	});
+
+	it("reports batchCount equal to the number of transactions executed", async () => {
+		const tracks = [
+			makeIngestionTrack({
+				id: "a",
+				filePath: "/music/a.mp3",
+				collectionIds: [],
+			}),
+			makeIngestionTrack({
+				id: "b",
+				filePath: "/music/b.mp3",
+				collectionIds: [],
+			}),
+			makeIngestionTrack({
+				id: "c",
+				filePath: "/music/c.mp3",
+				collectionIds: [],
+			}),
+		];
+		const { result, batchCount } = await executeImportBatches({
+			dedupedTracks: tracks,
+			batchSize: 2,
+			targetCollectionId: SYSTEM_COLLECTION_ID,
+			signal: undefined,
+			progressEmitter: createProgressEmitter(undefined),
+			preSkipped: [],
+			db,
+		});
+		expect(batchCount).toBe(2);
+		expect(result.added).toEqual(["a", "b", "c"]);
+		expect(await db.tracks.count()).toBe(3);
+	});
+
+	it("seeds pre-skipped ids into the abort partial when cancelled before the first batch", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const tracks = [
+			makeIngestionTrack({
+				id: "a",
+				filePath: "/music/a.mp3",
+				collectionIds: [],
+			}),
+		];
+		const thrown = await captureRejection(
+			executeImportBatches({
+				dedupedTracks: tracks,
+				batchSize: 1,
+				targetCollectionId: SYSTEM_COLLECTION_ID,
+				signal: controller.signal,
+				progressEmitter: createProgressEmitter(undefined),
+				preSkipped: ["dup-1"],
+				db,
+			}),
+		);
+		// instanceof narrowing of the unknown rejection value — no assertions.
+		expect(thrown).toBeInstanceOf(ImportAbortedError);
+		if (!(thrown instanceof ImportAbortedError)) {
+			throw thrown;
+		}
+		expect(thrown.progress).toEqual({
+			processed: 1,
+			total: 2,
+			added: 0,
+			merged: 0,
+			skipped: 1,
+		});
+		expect(thrown.partial.skipped).toEqual(["dup-1"]);
+		expect(thrown.partial.added).toEqual([]);
+		expect(await db.tracks.count()).toBe(0);
 	});
 });

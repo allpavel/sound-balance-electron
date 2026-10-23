@@ -41,6 +41,19 @@ export async function resetDatabase(): Promise<void> {
 	await db.collections.add({ id: "all", title: "All" });
 }
 
+/**
+ * Deletes and re-opens the database, triggering Dexie's `populate` hook.
+ *
+ * Required for tests that verify populate/migration behavior —
+ * {@link resetDatabase} (clear + re-seed) cannot re-trigger `populate`
+ * because it never destroys the database, only clears its stores.
+ */
+export async function recreateDatabase(): Promise<void> {
+	db.close();
+	await db.delete();
+	await db.open();
+}
+
 export function resetSequences() {
 	uuidSeq = 0;
 	resetFactorySequences();
