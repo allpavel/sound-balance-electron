@@ -624,6 +624,33 @@ describe("tracksRepository", () => {
 			expect(typeof payload?.durationMs).toBe("number");
 		});
 
+		it("propagates a raw telemetry failure after a committed import", async () => {
+			vi.spyOn(console, "info").mockImplementationOnce(() => {
+				throw new Error("telemetry boom");
+			});
+			const onProgress = vi.fn();
+			const thrown = await captureRejection(
+				tracksRepository.addMany(
+					[
+						makeIngestionTrack({
+							id: "a",
+							filePath: "/music/a.mp3",
+							collectionIds: [],
+						}),
+					],
+					{ targetCollectionId: SYSTEM_COLLECTION_ID, onProgress },
+				),
+			);
+			// instanceof narrowing of the unknown rejection value — no assertions.
+			expect(thrown).not.toBeInstanceOf(ImportAbortedError);
+			expect(thrown).toBeInstanceOf(Error);
+			expect(thrown instanceof Error ? thrown.message : "").toBe(
+				"telemetry boom",
+			);
+			expect(await db.tracks.count()).toBe(1);
+			expect(onProgress).toHaveBeenCalledTimes(1);
+		});
+
 		it("invokes onProgress callback with cumulative counts after each batch", async () => {
 			const TRACK_COUNT = 1200;
 			const bigBatch: Metadata[] = Array.from({ length: TRACK_COUNT }, (_, i) =>
@@ -654,7 +681,6 @@ describe("tracksRepository", () => {
 		});
 
 		it("emits exactly 1 progress emission for IMPORT_BATCH_SIZE tracks", async () => {
-			await resetDatabase();
 			const tracks = Array.from({ length: IMPORT_BATCH_SIZE }, (_, i) =>
 				makeTrack({ id: `t${i}`, filePath: `/music/t${i}.mp3` }),
 			);
@@ -666,7 +692,6 @@ describe("tracksRepository", () => {
 		});
 
 		it("emits exactly 2 progress emissions for IMPORT_BATCH_SIZE + 1 tracks", async () => {
-			await resetDatabase();
 			const tracks = Array.from({ length: IMPORT_BATCH_SIZE + 1 }, (_, i) =>
 				makeTrack({ id: `t${i}`, filePath: `/music/t${i}.mp3` }),
 			);

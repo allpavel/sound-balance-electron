@@ -37,7 +37,7 @@ import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import type { AddManyOptions, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
-import { chunkArray, getAddManySummary } from "@shared/utils";
+import { getAddManySummary } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
@@ -123,14 +123,13 @@ export const tracksRepository = {
 		const total = parsedTracks.length;
 
 		try {
-			const result = await executeImportBatches({
+			const { result, batchCount } = await executeImportBatches({
 				dedupedTracks,
 				batchSize,
 				targetCollectionId,
 				signal,
 				progressEmitter,
 				preSkipped,
-				total,
 				db,
 			});
 
@@ -139,7 +138,7 @@ export const tracksRepository = {
 			console.info("[tracksRepository.addMany] import complete", {
 				summary: getAddManySummary(result),
 				durationMs: Date.now() - startedAt,
-				batchCount: chunkArray(dedupedTracks, batchSize).length,
+				batchCount,
 				total,
 			});
 
