@@ -161,6 +161,54 @@ describe("classifyTracks", () => {
 		expect(plan.artworksToSave).toEqual([]);
 	});
 
+	it("passes a Blob picture through unchanged and preserves its description", () => {
+		const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" });
+		const track = makeIngestionTrack(
+			{
+				id: "blob-art",
+				filePath: "/music/blob.mp3",
+				collectionIds: [],
+			},
+			[{ format: "image/png", data: blob, description: "front cover" }],
+		);
+		const plan = classifyTracks([track], new Map(), "all");
+		expect(plan.toAdd).toHaveLength(1);
+		expect(plan.artworksToSave).toHaveLength(1);
+		expect(plan.artworksToSave[0]?.blob).toBe(blob);
+		expect(plan.artworksToSave[0]?.format).toBe("image/png");
+		expect(plan.artworksToSave[0]?.description).toBe("front cover");
+		expect(plan.toAdd[0]?.common?.picture?.[0]).toBe(
+			plan.artworksToSave[0]?.id,
+		);
+	});
+
+	it("extracts every picture of a multi-picture track in input order", () => {
+		const track = makeIngestionTrack(
+			{
+				id: "multi-art",
+				filePath: "/music/multi.mp3",
+				collectionIds: [],
+			},
+			[
+				{ format: "image/jpeg", data: new Uint8Array([1]) },
+				{ format: "image/png", data: new Uint8Array([2]), name: "back.png" },
+			],
+		);
+		const plan = classifyTracks([track], new Map(), "all");
+		expect(plan.artworksToSave).toHaveLength(2);
+		const refs = plan.toAdd[0]?.common?.picture;
+		expect(refs).toHaveLength(2);
+		expect(refs?.[0]).toBe(plan.artworksToSave[0]?.id);
+		expect(refs?.[1]).toBe(plan.artworksToSave[1]?.id);
+		expect(plan.artworksToSave[0]?.format).toBe("image/jpeg");
+		expect(plan.artworksToSave[1]?.format).toBe("image/png");
+		expect(plan.artworksToSave[1]?.name).toBe("back.png");
+		// binary payloads never leak into the track row
+		expect(
+			plan.toAdd[0]?.common?.picture?.every((r) => typeof r === "string"),
+		).toBe(true);
+	});
+
 	it("returns an empty plan for empty input", () => {
 		const plan = classifyTracks([], new Map(), "all");
 		expect(plan.toAdd).toEqual([]);
