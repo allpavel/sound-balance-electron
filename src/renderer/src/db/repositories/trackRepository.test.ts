@@ -514,6 +514,69 @@ describe("tracksRepository", () => {
 			expect(result.merged).toEqual(["existing"]);
 			expect(await db.tracks.count()).toBe(1);
 		});
+
+		it("unions incoming collectionIds with existing row on merge", async () => {
+			await seedCollection("mix1");
+			await seedCollection("rock");
+			await db.tracks.add(
+				makeTrack({
+					id: "orig",
+					filePath: "/music/same.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "different-id",
+						filePath: "/music/same.mp3",
+						collectionIds: [SYSTEM_COLLECTION_ID, "rock"],
+					}),
+				],
+				{ targetCollectionId: "mix1" },
+			);
+			expect(result).toMatchObject({
+				added: [],
+				merged: ["orig"],
+				skipped: [],
+			});
+			const stored = await db.tracks.get("orig");
+			// Union: existing ["all"] + incoming ["all","rock"] → ["all","rock"]
+			// + target "mix1" → ["all", "rock", "mix1"]
+			expect(stored?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"rock",
+				"mix1",
+			]);
+		});
+
+		it("skips merge when incoming collectionIds add nothing new", async () => {
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "orig",
+					filePath: "/music/same.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+			);
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "different-id",
+						filePath: "/music/same.mp3",
+						collectionIds: [SYSTEM_COLLECTION_ID],
+					}),
+				],
+				{ targetCollectionId: "mix1" },
+			);
+			expect(result).toMatchObject({
+				added: [],
+				merged: [],
+				skipped: ["orig"],
+			});
+			const stored = await db.tracks.get("orig");
+			expect(stored?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
+		});
 	});
 
 	describe("addMany - batch processing and progress", () => {

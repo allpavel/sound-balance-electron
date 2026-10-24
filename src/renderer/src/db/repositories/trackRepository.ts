@@ -60,6 +60,13 @@ export const tracksRepository = {
 	 * Batch-inserts tracks, merging duplicates by `filePath` into the target
 	 * collection.
 	 *
+	 * Merge-lane collection semantics: when an existing row is found by `filePath`,
+	 * the incoming track's `collectionIds` are **unioned** with
+	 * the existing row's memberships. Existing IDs are preserved in their
+	 * original order; new incoming IDs are appended; duplicates are folded.
+	 * The system collection (`SYSTEM_COLLECTION_ID`) and the target collection
+	 * are always ensured present via `normalizeCollectionIds`.
+	 *
 	 * Batches are atomic; the import is idempotent. On a mid-import failure
 	 * (quota, a collection deleted mid-import, or `signal` abort) this throws
 	 * {@link ImportAbortedError} carrying `partial` (committed counts from
