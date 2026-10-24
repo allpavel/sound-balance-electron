@@ -67,6 +67,12 @@ export const tracksRepository = {
 	 * The system collection (`SYSTEM_COLLECTION_ID`) and the target collection
 	 * are always ensured present via `normalizeCollectionIds`.
 	 *
+	 * The merge lane mutates `collectionIds` only — incoming metadata changes
+	 * (title, duration, artwork, etc.) are ignored by design; the existing
+	 * row's metadata remains authoritative. Collection-membership semantics
+	 * are ratified by
+	 * [ADR-0004](../../../../../docs/adr/ADR-0004-merge-lane-collection-union.md).
+	 *
 	 * Batches are atomic; the import is idempotent. On a mid-import failure
 	 * (quota, a collection deleted mid-import, or `signal` abort) this throws
 	 * {@link ImportAbortedError} carrying `partial` (committed counts from
