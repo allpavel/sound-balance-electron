@@ -391,13 +391,13 @@ describe("trackRepositoryUtils", () => {
 			).toEqual([SYSTEM_COLLECTION_ID, "mix-1"]);
 		});
 
-		it("ignores non-string collection ids", () => {
-			expect(
+		it("throws StorageUnavailableError on non-string collection ids (fail-loud)", () => {
+			expect(() =>
 				normalizeCollectionIds(
 					[SYSTEM_COLLECTION_ID, 123, null, undefined, "mix-1"],
 					"mix-1",
 				),
-			).toEqual([SYSTEM_COLLECTION_ID, "mix-1"]);
+			).toThrow(StorageUnavailableError);
 		});
 
 		it.each([

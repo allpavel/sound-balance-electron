@@ -374,6 +374,12 @@ function normalizeCollectionIds(
 	const seen = new Set<string>();
 
 	const addId = (id: unknown): void => {
+		if (typeof id !== "string") {
+			throw new StorageUnavailableError(
+				`collectionIds contained a non-string id (received ${sanitizeControlChars(typeof id)}); ` +
+					"stored rows and schema-validated payloads guarantee string ids",
+			);
+		}
 		if (!isNonEmptyString(id)) {
 			return;
 		}
