@@ -23,7 +23,7 @@ import {
 	seedCollection,
 } from "@renderer/utils/test-utils";
 import { ANYOF_CHUNK_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { ImportAbortedError } from "@shared/errors";
+import { ImportAbortedError, StorageUnavailableError } from "@shared/errors";
 import type { IngestionMetadata } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
 import { makeIngestionTrack, makeTrack } from "@tests/factories";
@@ -265,6 +265,34 @@ describe("processBatch", () => {
 		expect(result.merged).toEqual(["existing-merge"]);
 		expect(artworksBulkAddSpy).not.toHaveBeenCalled();
 		expect(await db.artworks.count()).toBe(0);
+	});
+
+	it("throws StorageUnavailableError when bulkAdd returns a non-string key", async () => {
+		// Mock bulkAdd to return a numeric key (engine fault simulation).
+		// The schema guarantees string keys; this verifies the fail-loud guard.
+		vi.spyOn(db.tracks, "bulkAdd").mockResolvedValueOnce([123] as any);
+		const track = makeIngestionTrack({
+			id: "a",
+			filePath: "/music/a.mp3",
+			collectionIds: [],
+		});
+		await expect(
+			processBatch([track], SYSTEM_COLLECTION_ID, db),
+		).rejects.toThrow(StorageUnavailableError);
+	});
+
+	it("throws StorageUnavailableError when bulkAdd returns a non-array value", async () => {
+		vi.spyOn(db.tracks, "bulkAdd").mockResolvedValueOnce(
+			JSON.parse('"corrupt"'),
+		);
+		const track = makeIngestionTrack({
+			id: "a",
+			filePath: "/music/a.mp3",
+			collectionIds: [],
+		});
+		await expect(
+			processBatch([track], SYSTEM_COLLECTION_ID, db),
+		).rejects.toThrow(StorageUnavailableError);
 	});
 });
 

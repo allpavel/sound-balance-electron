@@ -38,10 +38,14 @@ import {
 	isNonEmptyString,
 	mapStorageWriteError,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import { ImportAbortedError, TrackValidationError } from "@shared/errors";
+import {
+	ImportAbortedError,
+	StorageUnavailableError,
+	TrackValidationError,
+} from "@shared/errors";
 import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
-import { chunkArray } from "@shared/utils";
+import { chunkArray, sanitizeControlChars } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 import type { EntityTable } from "dexie";
 
@@ -143,6 +147,10 @@ export async function fetchExistingTrackRefs(
  * artworks → tracks bulkAdd → tracks bulkUpdate — artwork-before-track
  * preserves the abort semantics (if bulkUpdate fails, both artworks and
  * tracks are rolled back by the transaction).
+ *
+ * @throws {StorageUnavailableError} When `bulkAdd` returns a non-string key
+ *         or a non-array key list (engine fault; the track schema
+ *         guarantees string keys).
  */
 export async function persistClassification(
 	plan: ClassificationPlan,
@@ -159,10 +167,19 @@ export async function persistClassification(
 		});
 		if (Array.isArray(rawKeys)) {
 			for (const key of rawKeys) {
-				if (typeof key === "string") {
-					addedIds.push(key);
+				if (typeof key !== "string") {
+					throw new StorageUnavailableError(
+						`bulkAdd returned a non-string primary key (received ${typeof key}); ` +
+							"the track schema guarantees string keys",
+					);
 				}
+				addedIds.push(key);
 			}
+		} else {
+			throw new StorageUnavailableError(
+				`bulkAdd returned a non-array key list (received ${sanitizeControlChars(typeof rawKeys)}); ` +
+					"expected an array of string keys when allKeys: true",
+			);
 		}
 	}
 
