@@ -16,16 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import {
-	ENGINE_ERROR_NAME_MAP,
-	MAX_DISPLAY_MISSING,
-} from "@renderer/db/constants";
-import type {
-	EngineErrorKind,
-	FilePathDedupeResult,
-	ProgressEmitter,
-} from "@renderer/db/types";
+import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
+import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
 import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
+import { ENGINE_ERROR_MAP } from "@renderer/db/utils/engineErrors";
 import {
 	MAX_BATCH_PAYLOAD_SIZE,
 	MAX_LOGGED_ERROR_NAME_LENGTH,
@@ -105,19 +99,6 @@ function isBulkError(
 }
 
 /**
- * Resolves an engine error name to its domain-error kind, or `undefined`
- * when the name is not recognized (caller falls through to the next rule).
- *
- * [AR-11 / F6-5] See {@link ENGINE_ERROR_NAME_MAP}.
- *
- * @param name - The engine error's `name` property.
- * @returns The domain-error kind, or `undefined` for unknown names.
- */
-function classifyEngineErrorName(name: string): EngineErrorKind | undefined {
-	return ENGINE_ERROR_NAME_MAP[name];
-}
-
-/**
  * Discriminates raw IndexedDB / Dexie errors into typed domain errors.
  *
  * Precedence (first matching rule wins):
@@ -194,43 +175,15 @@ function mapStorageWriteError(
 
 	// Rule 3: top-level name
 	if (isErrorWithName(error)) {
-		const kind = classifyEngineErrorName(error.name);
-		if (kind === "quota") {
-			throw new StorageCapacityError(
-				"Storage quota exceeded. Free disk space or reduce embedded artwork size, then retry.",
-			);
-		}
-		if (kind === "conflict") {
-			throw new ConflictError(
-				"A track with the same primary key or unique filePath already exists in the database.",
-			);
-		}
-		if (kind === "unavailable") {
-			throw new StorageUnavailableError(
-				`Database operation failed: ${error.message || error.name}`,
-			);
-		}
+		const factory = ENGINE_ERROR_MAP[error.name];
+		if (factory) throw factory(error, "single");
 	}
 	// Rule 4: failures[] scan
 	if (isBulkError(error)) {
 		for (const f of error.failures) {
 			if (!isErrorWithName(f)) continue;
-			const kind = classifyEngineErrorName(f.name);
-			if (kind === "quota") {
-				throw new StorageCapacityError(
-					"Storage quota exceeded during batch operation.",
-				);
-			}
-			if (kind === "conflict") {
-				throw new ConflictError(
-					"One or more tracks collide with existing primary keys or unique filePaths.",
-				);
-			}
-			if (kind === "unavailable") {
-				throw new StorageUnavailableError(
-					`Database batch operation failed: ${f.message || f.name}`,
-				);
-			}
+			const factory = ENGINE_ERROR_MAP[f.name];
+			if (factory) throw factory(f, "batch");
 		}
 	}
 
