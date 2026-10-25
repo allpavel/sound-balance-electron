@@ -76,3 +76,5 @@ export type ExistingTrackRef = {
 	readonly id: string;
 	readonly collectionIds: readonly string[];
 };
+
+export type EngineErrorKind = "quota" | "conflict" | "unavailable";

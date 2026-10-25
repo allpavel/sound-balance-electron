@@ -16,8 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
-import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
+import {
+	ENGINE_ERROR_NAME_MAP,
+	MAX_DISPLAY_MISSING,
+} from "@renderer/db/constants";
+import type {
+	EngineErrorKind,
+	FilePathDedupeResult,
+	ProgressEmitter,
+} from "@renderer/db/types";
 import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import {
 	MAX_BATCH_PAYLOAD_SIZE,
@@ -58,25 +65,67 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Type guard to safely extract `name` and `message` from unknown error shapes.
+ * Type guard to safely extract `name` and `message` from unknown error
+ * shapes.
+ *
+ * Behavior deltas (both intentional, both covered by existing pins):
+ * - objects with a string `name` but a missing/non-string `message` no
+ *   longer match; callers fall through to the next rule (Rule 3 → Rule 5
+ *   identity re-throw in the mapper), which preserves outcomes — no
+ *   existing pin asserts the old over-claim;
+ * - arrays are rejected up front instead of at the `"name" in` check
+ *   (same net outcome for every array input, since arrays never carried a
+ *   matching `name`).
  */
 function isErrorWithName(
 	error: unknown,
 ): error is { name: string; message: string } {
-	return (
-		typeof error === "object" &&
-		error !== null &&
-		"name" in error &&
-		typeof (error as Record<string, unknown>).name === "string"
-	);
+	if (!isPlainObject(error)) {
+		return false;
+	}
+	return typeof error.name === "string" && typeof error.message === "string";
+}
+
+/**
+ * Narrows an unknown error to the Dexie `BulkError` shape (name + failures
+ * array) without coupling this module to the Dexie runtime via `instanceof`.
+ *
+ * @param error - The caught unknown error value.
+ * @returns `true` when the value structurally matches a BulkError.
+ */
+function isBulkError(
+	error: unknown,
+): error is { name: string; message: string; failures: unknown[] } {
+	if (!isErrorWithName(error)) return false;
+	if (error.name !== "BulkError") return false;
+	if (!("failures" in error)) return false;
+	// Widening assignment: { name, message } → Record<string, unknown>.
+	const record: Record<string, unknown> = error;
+	return Array.isArray(record.failures);
+}
+
+/**
+ * Resolves an engine error name to its domain-error kind, or `undefined`
+ * when the name is not recognized (caller falls through to the next rule).
+ *
+ * [AR-11 / F6-5] See {@link ENGINE_ERROR_NAME_MAP}.
+ *
+ * @param name - The engine error's `name` property.
+ * @returns The domain-error kind, or `undefined` for unknown names.
+ */
+function classifyEngineErrorName(name: string): EngineErrorKind | undefined {
+	return ENGINE_ERROR_NAME_MAP[name];
 }
 
 /**
  * Discriminates raw IndexedDB / Dexie errors into typed domain errors.
  *
  * Precedence (first matching rule wins):
- * 1. **Domain re-throw** — `TrackValidationError` / `ConflictError` /
- *    `ReferentialIntegrityError` are re-thrown verbatim (no wrapping).
+ * 1. **Domain re-throw** — any write-path domain error except
+ *    `ImportAbortedError` (`TrackValidationError` / `ConflictError` /
+ *    `ReferentialIntegrityError` / `StorageCapacityError` /
+ *    `StorageUnavailableError` / `PayloadLimitExceededError`) is re-thrown
+ *    verbatim (no wrapping).
  * 2. **`inner` unwrap** — if the error has a non-null `inner` property,
  *    recurse on it (the inner error wins over the outer error's own `name`).
  * 3. **Top-level `name`** — `QuotaExceededError` → `StorageCapacityError`;
@@ -90,28 +139,41 @@ function isErrorWithName(
  * Documented limitations:
  * - **`failures[]` entries are NOT inner-unwrapped**: only top-level
  *   `name` is inspected within each failure element.
+ * - **Aggregate-error allowlist: the `failures[]` scan
+ *   accepts the Dexie `BulkError` shape only (name === "BulkError").
+ *   Dexie's `ModifyError` — bulkUpdate's aggregate — also carries a
+ *   `failures` array but is intentionally NOT scanned: `bulkUpdate`
+ *   failures are re-throw-by-identity today (rule 5). If a future write
+ *   path surfaces `ModifyError`, extend {@link isBulkError} deliberately,
+ *   with boundary pins — do not widen silently.
  *
  * @param error   - The caught unknown error value.
  * @param visited - Internal WeakSet to track visited objects and break cyclic `inner` chains.
  *
+ * @throws {TrackValidationError|ConflictError|ReferentialIntegrityError|
+ *          StorageCapacityError|StorageUnavailableError|PayloadLimitExceededError}
+ *         Re-thrown domain errors (rule 1, verbatim).
  * @throws {StorageCapacityError|ConflictError|StorageUnavailableError} Mapped
  *         domain errors (rules 2–4).
- * @throws {TrackValidationError|ConflictError|ReferentialIntegrityError}
- *         Re-thrown domain errors (rule 1, verbatim).
  * @throws {unknown} Re-thrown by identity (rule 5, no match).
  */
 function mapStorageWriteError(
 	error: unknown,
 	visited: WeakSet<object> = new WeakSet(),
 ): never {
+	// Rule 1: domain re-throw
 	if (
 		error instanceof TrackValidationError ||
 		error instanceof ConflictError ||
-		error instanceof ReferentialIntegrityError
+		error instanceof ReferentialIntegrityError ||
+		error instanceof StorageCapacityError ||
+		error instanceof StorageUnavailableError ||
+		error instanceof PayloadLimitExceededError
 	) {
 		throw error;
 	}
 
+	// Rule 2: inner unwrap
 	if (
 		typeof error === "object" &&
 		error !== null &&
@@ -130,67 +192,49 @@ function mapStorageWriteError(
 		}
 	}
 
+	// Rule 3: top-level name
 	if (isErrorWithName(error)) {
-		if (error.name === "QuotaExceededError") {
+		const kind = classifyEngineErrorName(error.name);
+		if (kind === "quota") {
 			throw new StorageCapacityError(
 				"Storage quota exceeded. Free disk space or reduce embedded artwork size, then retry.",
 			);
 		}
-		if (error.name === "ConstraintError") {
+		if (kind === "conflict") {
 			throw new ConflictError(
 				"A track with the same primary key or unique filePath already exists in the database.",
 			);
 		}
-		if (
-			[
-				"InvalidStateError",
-				"AbortError",
-				"UnknownError",
-				"VersionError",
-				"NotFoundError",
-			].includes(error.name)
-		) {
+		if (kind === "unavailable") {
 			throw new StorageUnavailableError(
 				`Database operation failed: ${error.message || error.name}`,
 			);
 		}
 	}
-
-	if (
-		typeof error === "object" &&
-		error !== null &&
-		"failures" in error &&
-		Array.isArray((error as Record<string, unknown>).failures)
-	) {
-		const failures: unknown[] = (error as { failures: unknown[] }).failures;
-		for (const f of failures) {
-			if (isErrorWithName(f)) {
-				if (f.name === "QuotaExceededError") {
-					throw new StorageCapacityError(
-						"Storage quota exceeded during batch operation.",
-					);
-				}
-				if (f.name === "ConstraintError") {
-					throw new ConflictError(
-						"One or more tracks collide with existing primary keys or unique filePaths.",
-					);
-				}
-				if (
-					[
-						"InvalidStateError",
-						"AbortError",
-						"UnknownError",
-						"VersionError",
-						"NotFoundError",
-					].includes(f.name)
-				) {
-					throw new StorageUnavailableError(
-						`Database batch operation failed: ${f.message || f.name}`,
-					);
-				}
+	// Rule 4: failures[] scan
+	if (isBulkError(error)) {
+		for (const f of error.failures) {
+			if (!isErrorWithName(f)) continue;
+			const kind = classifyEngineErrorName(f.name);
+			if (kind === "quota") {
+				throw new StorageCapacityError(
+					"Storage quota exceeded during batch operation.",
+				);
+			}
+			if (kind === "conflict") {
+				throw new ConflictError(
+					"One or more tracks collide with existing primary keys or unique filePaths.",
+				);
+			}
+			if (kind === "unavailable") {
+				throw new StorageUnavailableError(
+					`Database batch operation failed: ${f.message || f.name}`,
+				);
 			}
 		}
 	}
+
+	// Rule 5: identity re-throw
 	throw error;
 }
 

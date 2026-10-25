@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import type { EngineErrorKind } from "../types";
+
 export const DATABASE_NAME = "AudioDB";
 
 /**
@@ -36,3 +38,14 @@ export const TRACKS_STORES_V2 = {
 	...TRACKS_STORES_V1,
 	artworks: "id",
 } as const;
+
+export const ENGINE_ERROR_NAME_MAP: Readonly<Record<string, EngineErrorKind>> =
+	{
+		QuotaExceededError: "quota",
+		ConstraintError: "conflict",
+		InvalidStateError: "unavailable",
+		AbortError: "unavailable",
+		UnknownError: "unavailable",
+		VersionError: "unavailable",
+		NotFoundError: "unavailable",
+	};
