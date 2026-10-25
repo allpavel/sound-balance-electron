@@ -73,6 +73,15 @@ export const tracksRepository = {
 	 * are ratified by
 	 * [ADR-0004](../../../../../docs/adr/ADR-0004-merge-lane-collection-union.md).
 	 *
+	 * **Error precedence:** Schema validation (step 2) runs to
+	 * completion before cross-item integrity checks (step 3). A batch
+	 * containing both a schema-invalid track and a duplicate `id` will
+	 * always surface the `TrackValidationError` first, regardless of index
+	 * ordering. This is intentional: structural validity is a prerequisite
+	 * for meaningful cross-item analysis. See
+	 * [ADR-0003](../../../../../docs/adr/ADR-0003-updatemany-error-precedence.md)
+	 * for the analogous `updateMany` phased-validation contract.
+	 *
 	 * Batches are atomic; the import is idempotent. On a mid-import failure
 	 * (quota, a collection deleted mid-import, or `signal` abort) this throws
 	 * {@link ImportAbortedError} carrying `partial` (committed counts from

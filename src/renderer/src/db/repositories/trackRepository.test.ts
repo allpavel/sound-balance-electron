@@ -714,6 +714,46 @@ describe("tracksRepository", () => {
 				SYSTEM_COLLECTION_ID,
 			]);
 		});
+
+		it("pins error precedence: schema-invalid track at index 2 wins over duplicate id at index 1", async () => {
+			const err = await captureRejection(
+				tracksRepository.addMany([
+					makeIngestionTrack({ id: "dup", filePath: "/music/1.mp3" }),
+					makeIngestionTrack({ id: "dup", filePath: "/music/2.mp3" }),
+					// Raw object missing required fields → TrackValidationError at index 2.
+					{ id: "incomplete-track" },
+				]),
+			);
+			expect(err).toBeInstanceOf(TrackValidationError);
+			if (err instanceof TrackValidationError) {
+				expect(err.context).toBe("tracks[2]");
+			}
+		});
+
+		it("pins error precedence: schema-invalid track at index 0 wins over duplicate id at index 2", async () => {
+			const err = await captureRejection(
+				tracksRepository.addMany([
+					// Raw object missing required fields → TrackValidationError at index 0.
+					{ id: "incomplete-track" },
+					makeIngestionTrack({ id: "dup", filePath: "/music/1.mp3" }),
+					makeIngestionTrack({ id: "dup", filePath: "/music/2.mp3" }),
+				]),
+			);
+			expect(err).toBeInstanceOf(TrackValidationError);
+			if (err instanceof TrackValidationError) {
+				expect(err.context).toBe("tracks[0]");
+			}
+		});
+
+		it("pins error precedence: duplicate id surfaces as ConflictError when all tracks are schema-valid", async () => {
+			// Control: no schema-invalid tracks → ConflictError from assertBatchUniqueness.
+			await expect(
+				tracksRepository.addMany([
+					makeIngestionTrack({ id: "dup", filePath: "/music/1.mp3" }),
+					makeIngestionTrack({ id: "dup", filePath: "/music/2.mp3" }),
+				]),
+			).rejects.toThrow(ConflictError);
+		});
 	});
 
 	describe("addMany - batch processing and progress", () => {
