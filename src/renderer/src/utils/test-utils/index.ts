@@ -17,6 +17,10 @@
  */
 
 import { db } from "@renderer/db/db";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 import { resetFactorySequences } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 
@@ -38,7 +42,10 @@ export async function resetDatabase(): Promise<void> {
 	await db.collections.clear();
 	await db.settings.clear();
 	await db.artworks.clear();
-	await db.collections.add({ id: "all", title: "All" });
+	await db.collections.add({
+		id: SYSTEM_COLLECTION_ID,
+		title: SYSTEM_COLLECTION_TITLE,
+	});
 }
 
 /**

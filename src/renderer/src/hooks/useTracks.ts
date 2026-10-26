@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type {
 	AddManyOptions,
 	Metadata,
@@ -62,7 +63,15 @@ function createMutationState(mutation: {
 	};
 }
 
-export function useTracks(activeCollection = "all") {
+/**
+ * Live track list for the active collection plus every track mutation the
+ * table UI exposes. Queries re-run automatically when the underlying
+ * IndexedDB tables change.
+ *
+ * @param activeCollection - Collection id to display; defaults to the
+ *                           system collection (`SYSTEM_COLLECTION_ID`).
+ */
+export function useTracks(activeCollection = SYSTEM_COLLECTION_ID) {
 	const tracks = useLiveQuery(
 		() => tracksRepository.getAll(activeCollection),
 		[activeCollection],
