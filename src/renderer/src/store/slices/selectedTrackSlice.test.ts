@@ -18,6 +18,8 @@
 
 import { configureStore, type Middleware } from "@reduxjs/toolkit";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { makeTrack } from "@tests/factories";
 import selectedTracksReducer, {
 	loadSelectedTracks,
 	setAllSelectedTracks,
@@ -106,7 +108,9 @@ describe("selectedTracksSlice - reducers", () => {
 			const store = createTestStore();
 			await store.dispatch(loadSelectedTracks());
 			expect(tracksRepository.getAll).toHaveBeenCalledTimes(1);
-			expect(tracksRepository.getAll).toHaveBeenCalledWith("all");
+			expect(tracksRepository.getAll).toHaveBeenCalledWith(
+				SYSTEM_COLLECTION_ID,
+			);
 			expect(tracksRepository.update).not.toHaveBeenCalled();
 			expect(tracksRepository.updateMany).not.toHaveBeenCalled();
 			expect(tracksRepository.removeMany).not.toHaveBeenCalled();
@@ -136,19 +140,24 @@ describe("selectedTracksSlice - reducers", () => {
 
 		it("dispatches the correct sequence of actions", async () => {
 			vi.mocked(tracksRepository.getAll).mockResolvedValue([
-				{ id: "a", selected: 1 } as any,
+				makeTrack({ id: "a", selected: 1 }),
 			]);
-			const actionLog: any[] = [];
+			const actionTypes: string[] = [];
 			const logMiddleware: Middleware = () => (next) => (action) => {
-				actionLog.push(action);
+				if (
+					typeof action === "object" &&
+					action !== null &&
+					"type" in action &&
+					typeof action.type === "string"
+				) {
+					actionTypes.push(action.type);
+				}
 				return next(action);
 			};
 			const store = createTestStore(undefined, [logMiddleware]);
 			await store.dispatch(loadSelectedTracks());
-			const actionTypes = actionLog.map((a) => a.type);
 			expect(actionTypes).toEqual([
 				"selectedTracks/load/pending",
-				"selectedTracks/setAllSelectedTracks",
 				"selectedTracks/load/fulfilled",
 			]);
 		});
@@ -162,7 +171,7 @@ describe("selectedTracksSlice - reducers", () => {
 
 		it("overwrites the previous state, does not merge", async () => {
 			vi.mocked(tracksRepository.getAll).mockResolvedValue([
-				{ id: "1", selected: 1 } as any,
+				makeTrack({ id: "1", selected: 1 }),
 			]);
 			const store = createTestStore({ selectedTracks: { stale: true } });
 			await store.dispatch(loadSelectedTracks());
@@ -171,8 +180,8 @@ describe("selectedTracksSlice - reducers", () => {
 
 		it("handles duplicate track IDs by keeping the last occurrence", async () => {
 			vi.mocked(tracksRepository.getAll).mockResolvedValue([
-				{ id: "1", selected: 1 },
-				{ id: "1", selected: 0 },
+				makeTrack({ id: "1", selected: 1 }),
+				makeTrack({ id: "1", selected: 0 }),
 			] as any);
 			const store = createTestStore();
 			await store.dispatch(loadSelectedTracks());
