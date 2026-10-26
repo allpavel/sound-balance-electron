@@ -24,6 +24,7 @@ export const STATUS_VALUES = [
 ] as const;
 
 export const SYSTEM_COLLECTION_ID = "all";
+export const SYSTEM_COLLECTION_TITLE = "All";
 
 export const CORRUPTION_SETTINGS_TOAST =
 	"Stored settings are corrupted and were reset to defaults.";
