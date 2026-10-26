@@ -15,23 +15,35 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import {
+	createAsyncThunk,
+	createSlice,
+	type PayloadAction,
+} from "@reduxjs/toolkit";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 
 type SelectedTracksState = Record<string, boolean>;
 
 const initialState: SelectedTracksState = {};
 
+/**
+ * Loads every track in the system collection and derives the selection map
+ * (`trackId → selected`).
+ *
+ * The state transition is applied by the slice's `extraReducers` on
+ * fulfillment; the thunk performs data access and projection only.
+ *
+ * @returns The complete selection map; replaces prior state wholesale.
+ */
 export const loadSelectedTracks = createAsyncThunk(
 	"selectedTracks/load",
-	async (_, { dispatch }) => {
-		const tracks = await tracksRepository.getAll("all");
-		const res = tracks.reduce((acc: SelectedTracksState, item) => {
+	async (): Promise<SelectedTracksState> => {
+		const tracks = await tracksRepository.getAll(SYSTEM_COLLECTION_ID);
+		return tracks.reduce((acc: SelectedTracksState, item) => {
 			acc[item.id] = item.selected === 1;
 			return acc;
 		}, {});
-		dispatch(setAllSelectedTracks(res));
-		return res;
 	},
 );
 
@@ -39,18 +51,29 @@ const selectedTracksSlice = createSlice({
 	name: "selectedTracks",
 	initialState,
 	reducers: {
-		setAllSelectedTracks(
-			_,
-			action: { payload: SelectedTracksState; type: string },
-		) {
+		/**
+		 * Replaces the entire selection map wholesale.
+		 *
+		 * Retained public slice API (R-1 fallback): a live consumer was identified
+		 * at removal time. `loadSelectedTracks.fulfilled` remains the canonical
+		 * bulk write for the load flow; this reducer serves imperative bulk
+		 * selection only — do not use it for load results.
+		 */
+		setAllSelectedTracks(_, action: PayloadAction<SelectedTracksState>) {
 			return action.payload;
 		},
 		setSelectedTrack(
 			state,
-			action: { payload: { id: string; selected: boolean }; type: string },
+			action: PayloadAction<{ id: string; selected: boolean }>,
 		) {
 			state[action.payload.id] = action.payload.selected;
 		},
+	},
+	extraReducers: (builder) => {
+		builder.addCase(
+			loadSelectedTracks.fulfilled,
+			(_, action) => action.payload,
+		);
 	},
 });
 
