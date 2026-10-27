@@ -60,26 +60,6 @@ function withoutField(field: string): Record<string, unknown> {
 
 describe("track.schema", () => {
 	describe("track.schema - security constraints", () => {
-		it("rejects filePath containing null bytes", () => {
-			const issues = expectFailure(
-				trackInputSchema.safeParse(
-					makeTrack({ filePath: "/music/\0track.mp3" }),
-				),
-			);
-			expect(hasIssueWithPath(issues, ["filePath"])).toBe(true);
-		});
-
-		it("rejects filePath exceeding MAX_PATH_LENGTH", () => {
-			const issues = expectFailure(
-				trackInputSchema.safeParse(
-					makeTrack({
-						filePath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}.mp3`,
-					}),
-				),
-			);
-			expect(hasIssueWithPath(issues, ["filePath"])).toBe(true);
-		});
-
 		it("rejects id containing null bytes", () => {
 			const result = trackInputSchema.safeParse(makeTrack({ id: "track\0id" }));
 			expect(result.success).toBe(false);
@@ -865,16 +845,41 @@ describe("track.schema", () => {
 	describe("filePathSchema", () => {
 		afterEach(() => resetPlatform());
 
-		it("accepts a valid file path", () => {
+		it("accepts a valid filePath", () => {
 			expectSuccess(filePathSchema.safeParse("/music/track.mp3"));
 		});
 
-		it("rejects an empty file path", () => {
+		it("rejects an empty filePath", () => {
 			expectFailure(filePathSchema.safeParse(""));
 		});
 
-		it("rejects file paths containing null bytes", () => {
-			expectFailure(filePathSchema.safeParse("/music/\0track.mp3"));
+		it("rejects filePath containing null bytes", () => {
+			const issues = expectFailure(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "/music/\0track.mp3" }),
+				),
+			);
+			expect(hasIssueWithPath(issues, ["filePath"])).toBe(true);
+		});
+
+		it("rejects filePath exceeding MAX_PATH_LENGTH", () => {
+			const issues = expectFailure(
+				trackInputSchema.safeParse(
+					makeTrack({
+						filePath: `/music/${"a".repeat(MAX_PATH_LENGTH + 4)}.mp3`,
+					}),
+				),
+			);
+			expect(hasIssueWithPath(issues, ["filePath"])).toBe(true);
+		});
+
+		it("rejects filePath containing traversal sequences", () => {
+			const issues = expectFailure(
+				trackInputSchema.safeParse(
+					makeTrack({ filePath: "/music/../../../etc/passwd" }),
+				),
+			);
+			expect(hasIssueWithPath(issues, ["filePath"])).toBe(true);
 		});
 
 		it("lowercases filePath on win32", () => {

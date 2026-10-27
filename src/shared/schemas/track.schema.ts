@@ -71,9 +71,11 @@ export const reasonSchema = z
  *
  * @see {@link normalizeFilePath} for the full policy documentation.
  */
-export const filePathSchema = nonEmptyStringSchema.transform((path) =>
-	normalizeFilePath(path, getPlatform()),
-);
+export const filePathSchema = nonEmptyStringSchema
+	.refine((val) => !PATH_TRAVERSAL_PATTERN.test(val), {
+		error: "File path contains traversal sequences (..)",
+	})
+	.transform((path) => normalizeFilePath(path, getPlatform()));
 
 export const collectionIdsSchema = z.array(nonEmptyStringSchema);
 
