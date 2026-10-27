@@ -379,7 +379,7 @@ describe("testFactories", () => {
 				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
 				status: "failed",
-				collectionIds: [SYSTEM_COLLECTION_TITLE],
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
 				common: {},
 				format: {},
