@@ -52,6 +52,19 @@ export const NULL_BYTE_PATTERN = /\0/;
 
 export const PATH_TRAVERSAL_PATTERN = /(^|[/\\])\.\.([/\\]|$)/;
 
+/**
+ * Pattern matching path separator characters (forward and backslash).
+ * Used to enforce that a field is a bare filename, not a path fragment.
+ */
+export const PATH_SEPARATOR_PATTERN = /[/\\]/;
+
+/**
+ * Upper bound on the number of collection IDs a single track may reference.
+ * Bounds Dexie multi-entry index fan-out and prevents adversarial payloads
+ * from inflating write amplification.
+ */
+export const MAX_COLLECTION_IDS_PER_TRACK = 100;
+
 export const MIN_CONCURRENCY = 1;
 export const MAX_CONCURRENCY = 10;
 
