@@ -17,7 +17,10 @@
  */
 
 import { db } from "@renderer/db/db";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 import { makeCollection, makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 import {
@@ -144,7 +147,7 @@ describe("testFactories", () => {
 			await resetDatabase();
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.collections.toArray()).toEqual([
-				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
 			]);
 			expect(await db.settings.count()).toBe(0);
 			expect(await db.artworks.count()).toBe(0);
@@ -154,7 +157,7 @@ describe("testFactories", () => {
 			await resetDatabase();
 			await expect(resetDatabase()).resolves.toBeUndefined();
 			expect(await db.collections.toArray()).toEqual([
-				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
 			]);
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.settings.count()).toBe(0);
@@ -181,7 +184,7 @@ describe("testFactories", () => {
 			await db.collections.add(makeCollection({ id: "extra", title: "Extra" }));
 			await recreateDatabase();
 			expect(await db.collections.toArray()).toEqual([
-				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
 			]);
 			expect(await db.tracks.count()).toBe(0);
 		});
@@ -223,7 +226,7 @@ describe("testFactories", () => {
 				format: {},
 			});
 			expect(await db.collections.toArray()).toEqual([
-				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
 			]);
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.settings.count()).toBe(0);
@@ -376,7 +379,7 @@ describe("testFactories", () => {
 				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
 				status: "failed",
-				collectionIds: ["all"],
+				collectionIds: [SYSTEM_COLLECTION_TITLE],
 				selected: 0,
 				common: {},
 				format: {},

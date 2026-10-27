@@ -49,8 +49,38 @@ The four `pins precedence…` / `pins intra-item precedence…` tests in the `up
 - No data migration and no UI change required (error ordering is not persisted; no type-based consumers).
 - If a future consumer needs deterministic multi-fault reporting, revisit Alternative 2 (aggregate validation) rather than reintroducing interleaving.
 
+## Amendment 1 — the phased contract extends to `addMany` (2026-10-25)
+
+- **Status:** Accepted
+- **Resolves:** Task 2 completion-audit residual P3 (INV-5 codification; AR-11): the
+  `addMany` precedence ruling previously lived only in the `addMany` JSDoc.
+`addMany` shares the phase-ordered validation model:
+
+1. **Phase 1 — structural:** every entry passes `validateAndParseTracks`
+   (`trackInputSchema`) → `TrackValidationError` (`tracks[i]` context). This phase
+   runs **batch-wide to completion** before any database work, so it wins regardless
+   of index ordering.
+2. **Phase 2 — cross-item integrity:** `runPreflightChecks` — payload cap, storage
+   headroom, `id` uniqueness (`ConflictError`), `filePath` first-wins dedupe
+   (ADR-0002), referential integrity (`ReferentialIntegrityError`).
+Precedence = phase order; within a phase, the first offending item (ascending
+index) wins. A batch containing both a schema-invalid track and a duplicate `id`
+therefore always surfaces `TrackValidationError` first — structurally guaranteed
+by the pipeline order (validate → preflight → execute), not merely observed.
+Blast radius is message text only: no consumer branches on the affected error
+types for `addMany` outcomes (same consumer-audit reasoning as the `updateMany`
+ruling above). The executable contract is the two permutation pins plus the
+all-valid control test in `describe("tracksRepository") → addMany`
+(`trackRepository.test.ts`); any future refactor must keep them green unmodified.
+This amendment records an existing, already-pinned property; it changes no
+behavior and does not touch the ADR-0004 merge-lane semantics that sit downstream
+of phase 2.
+
 ## See also
 
 - ADR-0002 (asymmetric duplicate policy — `filePath` first-wins vs `id` hard-reject; this ADR keeps the `id` hard-reject semantics, only reordering when it fires)
 - `T04-C-code-review.md` — C-01 (finding + ratification path), C-09 (message format), §11 (Revision 1)
 - `trackRepository.test.ts` — the four precedence pins in `describe("updateMany")`
+- ADR-0004 (merge-lane collection union — downstream of phase 2; the merge lane's
+  skip/merge decision presupposes this ADR's phase-ordered error surface)
+  

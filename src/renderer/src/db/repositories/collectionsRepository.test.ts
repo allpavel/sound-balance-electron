@@ -19,7 +19,10 @@
 import { db } from "@renderer/db/db";
 import { collectionsRepository } from "@renderer/db/repositories/collectionsRepository";
 import { configureUuidMock, resetTestState } from "@renderer/utils/test-utils";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 import { makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 
@@ -37,7 +40,7 @@ describe("collectionsRepository", () => {
 			expect(collections).toHaveLength(1);
 			expect(collections[0]).toEqual({
 				id: SYSTEM_COLLECTION_ID,
-				title: "All",
+				title: SYSTEM_COLLECTION_TITLE,
 			});
 		});
 
@@ -47,7 +50,11 @@ describe("collectionsRepository", () => {
 			const titles = (await collectionsRepository.getAllCollections())
 				.map((collection) => collection.title)
 				.sort();
-			expect(titles).toEqual(["All", "Collection 1", "Collection 2"]);
+			expect(titles).toEqual([
+				SYSTEM_COLLECTION_TITLE,
+				"Collection 1",
+				"Collection 2",
+			]);
 		});
 
 		it("returns remaining collections after a deletion", async () => {
@@ -58,7 +65,7 @@ describe("collectionsRepository", () => {
 			expect(await collectionsRepository.getAllCollections()).toEqual([
 				{
 					id: SYSTEM_COLLECTION_ID,
-					title: "All",
+					title: SYSTEM_COLLECTION_TITLE,
 				},
 			]);
 		});
@@ -167,7 +174,11 @@ describe("collectionsRepository", () => {
 			const titles = (await collectionsRepository.getAllCollections())
 				.map((collection) => collection.title)
 				.sort();
-			expect(titles).toEqual(["All", "Duplicate", "Duplicate"]);
+			expect(titles).toEqual([
+				SYSTEM_COLLECTION_TITLE,
+				"Duplicate",
+				"Duplicate",
+			]);
 		});
 	});
 
@@ -239,7 +250,7 @@ describe("collectionsRepository", () => {
 			).rejects.toThrow("protected");
 			expect(await db.collections.get(SYSTEM_COLLECTION_ID)).toEqual({
 				id: SYSTEM_COLLECTION_ID,
-				title: "All",
+				title: SYSTEM_COLLECTION_TITLE,
 			});
 			expect(await db.tracks.get("t1")).toBeDefined();
 		});
@@ -289,9 +300,15 @@ describe("collectionsRepository", () => {
 					title: "Mix",
 				});
 				await db.tracks.bulkAdd([
-					makeTrack({ id: "t1", collectionIds: ["all", collectionId] }),
-					makeTrack({ id: "t2", collectionIds: ["all", collectionId] }),
-					makeTrack({ id: "t3", collectionIds: ["all"] }),
+					makeTrack({
+						id: "t1",
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId],
+					}),
+					makeTrack({
+						id: "t2",
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId],
+					}),
+					makeTrack({ id: "t3", collectionIds: [SYSTEM_COLLECTION_ID] }),
 				]);
 				await collectionsRepository.deleteCollection({
 					id: collectionId,
@@ -300,12 +317,18 @@ describe("collectionsRepository", () => {
 				expect(await collectionsRepository.getAllCollections()).toEqual([
 					{
 						id: SYSTEM_COLLECTION_ID,
-						title: "All",
+						title: SYSTEM_COLLECTION_TITLE,
 					},
 				]);
-				expect((await db.tracks.get("t1"))?.collectionIds).toEqual(["all"]);
-				expect((await db.tracks.get("t2"))?.collectionIds).toEqual(["all"]);
-				expect((await db.tracks.get("t3"))?.collectionIds).toEqual(["all"]);
+				expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
+					SYSTEM_COLLECTION_ID,
+				]);
+				expect((await db.tracks.get("t2"))?.collectionIds).toEqual([
+					SYSTEM_COLLECTION_ID,
+				]);
+				expect((await db.tracks.get("t3"))?.collectionIds).toEqual([
+					SYSTEM_COLLECTION_ID,
+				]);
 			});
 
 			it("is a no-op when the collection does not exist", async () => {
@@ -352,15 +375,15 @@ describe("collectionsRepository", () => {
 				await db.tracks.bulkAdd([
 					makeTrack({
 						id: "t1",
-						collectionIds: ["all", collectionId],
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId],
 					}),
 					makeTrack({
 						id: "t2",
-						collectionIds: ["all", collectionId, "other"],
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId, "other"],
 					}),
 					makeTrack({
 						id: "t3",
-						collectionIds: ["all"],
+						collectionIds: [SYSTEM_COLLECTION_ID],
 					}),
 				]);
 				await collectionsRepository.deleteCollection({
@@ -370,7 +393,9 @@ describe("collectionsRepository", () => {
 				expect(await db.collections.get(collectionId)).toBeUndefined();
 				expect(await db.tracks.get("t1")).toBeUndefined();
 				expect(await db.tracks.get("t2")).toBeUndefined();
-				expect((await db.tracks.get("t3"))?.collectionIds).toEqual(["all"]);
+				expect((await db.tracks.get("t3"))?.collectionIds).toEqual([
+					SYSTEM_COLLECTION_ID,
+				]);
 			});
 
 			it("is a no-op when the collection does not exist, even if tracks reference it", async () => {

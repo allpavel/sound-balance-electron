@@ -18,7 +18,10 @@
 
 import { db } from "@renderer/db/db";
 import { recreateDatabase } from "@renderer/utils/test-utils";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 import { makeTrack } from "@tests/factories";
 
 describe("AudioDB", () => {
@@ -29,7 +32,9 @@ describe("AudioDB", () => {
 	describe("database initialization and populate hook", () => {
 		it("seeds the system 'all' collection on fresh database initialization", async () => {
 			const collections = await db.collections.toArray();
-			expect(collections).toEqual([{ id: SYSTEM_COLLECTION_ID, title: "All" }]);
+			expect(collections).toEqual([
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
+			]);
 		});
 
 		it("does not duplicate the system collection on subsequent opens", async () => {

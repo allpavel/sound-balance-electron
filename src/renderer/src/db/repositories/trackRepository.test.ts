@@ -514,6 +514,246 @@ describe("tracksRepository", () => {
 			expect(result.merged).toEqual(["existing"]);
 			expect(await db.tracks.count()).toBe(1);
 		});
+
+		it("unions incoming collectionIds with existing row on merge", async () => {
+			await seedCollection("mix1");
+			await seedCollection("rock");
+			await db.tracks.add(
+				makeTrack({
+					id: "orig",
+					filePath: "/music/same.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "different-id",
+						filePath: "/music/same.mp3",
+						collectionIds: [SYSTEM_COLLECTION_ID, "rock"],
+					}),
+				],
+				{ targetCollectionId: "mix1" },
+			);
+			expect(result).toMatchObject({
+				added: [],
+				merged: ["orig"],
+				skipped: [],
+			});
+			const stored = await db.tracks.get("orig");
+			// Union: existing ["all"] + incoming ["all","rock"] → ["all","rock"]
+			// + target "mix1" → ["all", "rock", "mix1"]
+			expect(stored?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"rock",
+				"mix1",
+			]);
+		});
+
+		it("skips merge when incoming collectionIds add nothing new", async () => {
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "orig",
+					filePath: "/music/same.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+			);
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "different-id",
+						filePath: "/music/same.mp3",
+						collectionIds: [SYSTEM_COLLECTION_ID],
+					}),
+				],
+				{ targetCollectionId: "mix1" },
+			);
+			expect(result).toMatchObject({
+				added: [],
+				merged: [],
+				skipped: ["orig"],
+			});
+			const stored = await db.tracks.get("orig");
+			expect(stored?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
+		});
+
+		it("merges (not skips) end-to-end when the row is already in the target and incoming brings new IDs", async () => {
+			await seedCollection("mix1");
+			await seedCollection("rock");
+			await db.tracks.add(
+				makeTrack({
+					id: "orig",
+					filePath: "/music/flip.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "mix1"],
+				}),
+			);
+			const result = await tracksRepository.addMany(
+				[
+					makeTrack({
+						id: "different-id",
+						filePath: "/music/flip.mp3",
+						collectionIds: [SYSTEM_COLLECTION_ID, "rock"],
+					}),
+				],
+				{ targetCollectionId: "mix1" },
+			);
+			expect(result).toMatchObject({
+				added: [],
+				merged: ["orig"],
+				skipped: [],
+			});
+			const stored = await db.tracks.get("orig");
+			// Union: ["all","mix1"] + ["all","rock"] → ["all","mix1","rock"]
+			expect(stored?.collectionIds).toEqual([
+				SYSTEM_COLLECTION_ID,
+				"mix1",
+				"rock",
+			]);
+		});
+
+		it("rejects a merge whose incoming collectionIds reference a missing collection (RI negative path)", async () => {
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "orig",
+					filePath: "/music/ghost.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			);
+			const err = await captureRejection(
+				tracksRepository.addMany(
+					[
+						makeTrack({
+							id: "different-id",
+							filePath: "/music/ghost.mp3",
+							collectionIds: [SYSTEM_COLLECTION_ID, "ghost-collection"],
+						}),
+					],
+					{ targetCollectionId: "mix1" },
+				),
+			);
+			expect(err).toBeInstanceOf(ReferentialIntegrityError);
+			if (err instanceof ReferentialIntegrityError) {
+				expect(err.message).toContain("ghost-collection");
+			}
+			// Nothing persisted: the existing row is unmutated, the ghost
+			// collection was never created, and the track count is unchanged.
+			const stored = await db.tracks.get("orig");
+			expect(stored?.collectionIds).toEqual([SYSTEM_COLLECTION_ID]);
+			expect(await db.collections.get("ghost-collection")).toBeUndefined();
+			expect(await db.tracks.count()).toBe(1);
+		});
+
+		it("converges to all-skipped when the identical import is re-run (double-import idempotency)", async () => {
+			await seedCollection("mix1");
+			await seedCollection("rock");
+			const payload = [
+				makeTrack({
+					id: "t1",
+					filePath: "/music/t1.mp3",
+					collectionIds: [SYSTEM_COLLECTION_ID, "rock"],
+				}),
+				makeTrack({ id: "t2", filePath: "/music/t2.mp3" }),
+			];
+			const first = await tracksRepository.addMany(payload, {
+				targetCollectionId: "mix1",
+			});
+			expect(first).toEqual({
+				added: ["t1", "t2"],
+				merged: [],
+				skipped: [],
+			});
+			const second = await tracksRepository.addMany(payload, {
+				targetCollectionId: "mix1",
+			});
+			// Both unions add nothing → areCollectionIdsEqual → skip.
+			expect(second).toEqual({
+				added: [],
+				merged: [],
+				skipped: ["t1", "t2"],
+			});
+			expect(await db.tracks.count()).toBe(2);
+			const t1 = await db.tracks.get("t1");
+			expect(t1?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "rock", "mix1"]);
+			const t2 = await db.tracks.get("t2");
+			expect(t2?.collectionIds).toEqual([SYSTEM_COLLECTION_ID, "mix1"]);
+		});
+
+		it("self-heals a legacy row missing the system collection on first re-import, then skips", async () => {
+			await seedCollection("mix1");
+			await db.tracks.add(
+				makeTrack({
+					id: "legacy",
+					filePath: "/music/legacy.mp3",
+					collectionIds: ["mix1"],
+				}),
+			);
+			const first = await tracksRepository.addMany(
+				[makeTrack({ id: "new-arr", filePath: "/music/legacy.mp3" })],
+				{ targetCollectionId: "mix1" },
+			);
+			expect(first).toMatchObject({
+				added: [],
+				merged: ["legacy"],
+				skipped: [],
+			});
+			const healed = await db.tracks.get("legacy");
+			expect(healed?.collectionIds).toEqual(["mix1", SYSTEM_COLLECTION_ID]);
+			const second = await tracksRepository.addMany(
+				[makeTrack({ id: "new-arr", filePath: "/music/legacy.mp3" })],
+				{ targetCollectionId: "mix1" },
+			);
+			expect(second).toMatchObject({
+				added: [],
+				merged: [],
+				skipped: ["legacy"],
+			});
+			expect((await db.tracks.get("legacy"))?.collectionIds).toEqual([
+				"mix1",
+				SYSTEM_COLLECTION_ID,
+			]);
+		});
+
+		it("pins error precedence: schema-invalid track at index 2 wins over duplicate id at index 1", async () => {
+			const err = await captureRejection(
+				tracksRepository.addMany([
+					makeIngestionTrack({ id: "dup", filePath: "/music/1.mp3" }),
+					makeIngestionTrack({ id: "dup", filePath: "/music/2.mp3" }),
+					// Raw object missing required fields → TrackValidationError at index 2.
+					{ id: "incomplete-track" },
+				]),
+			);
+			expect(err).toBeInstanceOf(TrackValidationError);
+			if (err instanceof TrackValidationError) {
+				expect(err.context).toBe("tracks[2]");
+			}
+		});
+
+		it("pins error precedence: schema-invalid track at index 0 wins over duplicate id at index 2", async () => {
+			const err = await captureRejection(
+				tracksRepository.addMany([
+					// Raw object missing required fields → TrackValidationError at index 0.
+					{ id: "incomplete-track" },
+					makeIngestionTrack({ id: "dup", filePath: "/music/1.mp3" }),
+					makeIngestionTrack({ id: "dup", filePath: "/music/2.mp3" }),
+				]),
+			);
+			expect(err).toBeInstanceOf(TrackValidationError);
+			if (err instanceof TrackValidationError) {
+				expect(err.context).toBe("tracks[0]");
+			}
+		});
+
+		it("pins error precedence: duplicate id surfaces as ConflictError when all tracks are schema-valid", async () => {
+			// Control: no schema-invalid tracks → ConflictError from assertBatchUniqueness.
+			await expect(
+				tracksRepository.addMany([
+					makeIngestionTrack({ id: "dup", filePath: "/music/1.mp3" }),
+					makeIngestionTrack({ id: "dup", filePath: "/music/2.mp3" }),
+				]),
+			).rejects.toThrow(ConflictError);
+		});
 	});
 
 	describe("addMany - batch processing and progress", () => {

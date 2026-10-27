@@ -18,6 +18,11 @@
 
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
+import { makeTrack } from "@tests/factories";
 import type { ProcessingResult } from "@/types";
 import { setActiveCollection } from "./slices/collectionSlice";
 import { setResults } from "./slices/resultsSlice";
@@ -65,7 +70,6 @@ type GetSettingsResult = Awaited<
 type SaveSettingsResult = Awaited<
 	ReturnType<typeof settingsRepository.saveSettings>
 >;
-type GetAllTracksResult = Awaited<ReturnType<typeof tracksRepository.getAll>>;
 
 const customSettings: SettingsState = {
 	data: {
@@ -178,8 +182,8 @@ describe("Store shape and initialization", () => {
 		]);
 		expect(state.selectedTracks).toEqual({});
 		expect(state.activeCollection).toEqual({
-			id: "all",
-			title: "All",
+			id: SYSTEM_COLLECTION_ID,
+			title: SYSTEM_COLLECTION_TITLE,
 		});
 		expect(state.results).toEqual({
 			successful: 0,
@@ -407,9 +411,9 @@ describe("Thunk integration smoke tests", () => {
 
 	it("updates only the selected tracks slice when the loadSelectedTracks thunk is dispatched", async () => {
 		const tracks = [
-			{ id: "a", selected: 1 },
-			{ id: "b", selected: 0 },
-		] as unknown as GetAllTracksResult;
+			makeTrack({ id: "a", selected: 1 }),
+			makeTrack({ id: "b", selected: 0 }),
+		];
 		vi.mocked(tracksRepository.getAll).mockResolvedValue(tracks);
 		const store = createAppStore(getPreloadedState());
 		const dispatch: AppDispatch = store.dispatch;
@@ -427,7 +431,7 @@ describe("Thunk integration smoke tests", () => {
 		expect(after.results).toBe(before.results);
 		expect(after.activeCollection).toBe(before.activeCollection);
 		expect(tracksRepository.getAll).toHaveBeenCalledTimes(1);
-		expect(tracksRepository.getAll).toHaveBeenCalledWith("all");
+		expect(tracksRepository.getAll).toHaveBeenCalledWith(SYSTEM_COLLECTION_ID);
 		expect(tracksRepository.update).not.toHaveBeenCalled();
 		expect(tracksRepository.updateMany).not.toHaveBeenCalled();
 		expect(tracksRepository.removeMany).not.toHaveBeenCalled();

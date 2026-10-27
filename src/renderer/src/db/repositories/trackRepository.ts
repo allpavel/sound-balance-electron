@@ -60,6 +60,28 @@ export const tracksRepository = {
 	 * Batch-inserts tracks, merging duplicates by `filePath` into the target
 	 * collection.
 	 *
+	 * Merge-lane collection semantics: when an existing row is found by `filePath`,
+	 * the incoming track's `collectionIds` are **unioned** with
+	 * the existing row's memberships. Existing IDs are preserved in their
+	 * original order; new incoming IDs are appended; duplicates are folded.
+	 * The system collection (`SYSTEM_COLLECTION_ID`) and the target collection
+	 * are always ensured present via `normalizeCollectionIds`.
+	 *
+	 * The merge lane mutates `collectionIds` only — incoming metadata changes
+	 * (title, duration, artwork, etc.) are ignored by design; the existing
+	 * row's metadata remains authoritative. Collection-membership semantics
+	 * are ratified by
+	 * [ADR-0004](../../../../../docs/adr/ADR-0004-merge-lane-collection-union.md).
+	 *
+	 * **Error precedence:** Schema validation (step 2) runs to
+	 * completion before cross-item integrity checks (step 3). A batch
+	 * containing both a schema-invalid track and a duplicate `id` will
+	 * always surface the `TrackValidationError` first, regardless of index
+	 * ordering. This is intentional: structural validity is a prerequisite
+	 * for meaningful cross-item analysis. See
+	 * [ADR-0003](../../../../../docs/adr/ADR-0003-updatemany-error-precedence.md)
+	 * for the analogous `updateMany` phased-validation contract.
+	 *
 	 * Batches are atomic; the import is idempotent. On a mid-import failure
 	 * (quota, a collection deleted mid-import, or `signal` abort) this throws
 	 * {@link ImportAbortedError} carrying `partial` (committed counts from

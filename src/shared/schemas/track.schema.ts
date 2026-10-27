@@ -24,6 +24,7 @@ import {
 	MAX_YEAR,
 	MIN_YEAR,
 	NULL_BYTE_PATTERN,
+	PATH_TRAVERSAL_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
 import type { AddManyProgressCallback } from "@shared/types";
@@ -405,6 +406,15 @@ const formatSchema = z
 	.strict();
 
 /**
+ * Per-track output file name. The main process joins this onto the output
+ * directory via `path.join(dirPath, track.file)`.
+ */
+export const outputFileNameSchema = nonEmptyStringSchema.refine(
+	(val) => !PATH_TRAVERSAL_PATTERN.test(val),
+	{ error: "File name contains traversal sequences (..)" },
+);
+
+/**
  * Base schema containing track fields that are identical across both
  * ingestion (IPC) and storage (IndexedDB) boundaries.
  * Excludes `common` and `status`, which are composed later to prevent
@@ -413,7 +423,7 @@ const formatSchema = z
 const trackBaseSchema = z
 	.object({
 		id: nonEmptyStringSchema,
-		file: nonEmptyStringSchema,
+		file: outputFileNameSchema,
 		filePath: filePathSchema,
 		selected: selectedSchema,
 		collectionIds: collectionIdsSchema,

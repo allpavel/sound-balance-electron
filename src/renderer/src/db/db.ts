@@ -22,7 +22,10 @@ import {
 	TRACKS_STORES_V2,
 } from "@renderer/db/constants";
 import { isLegacyPicture } from "@renderer/db/utils/dbUtils";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { Artwork } from "@shared/types";
 import Dexie, { type EntityTable } from "dexie";
@@ -82,7 +85,7 @@ db.version(2)
 db.on("populate", (tx) => {
 	tx.table("collections").add({
 		id: SYSTEM_COLLECTION_ID,
-		title: "All",
+		title: SYSTEM_COLLECTION_TITLE,
 	});
 });
 

@@ -217,4 +217,156 @@ describe("classifyTracks", () => {
 		expect(plan.skippedIds).toEqual([]);
 		expect(plan.artworksToSave).toEqual([]);
 	});
+
+	it("unions incoming collectionIds with existing row on merge", () => {
+		const track = makeIngestionTrack({
+			id: "merge-me",
+			filePath: "/music/merge.mp3",
+			collectionIds: [SYSTEM_COLLECTION_ID, "rock"],
+		});
+		const existing = new Map<string, ExistingTrackRef>([
+			[
+				"/music/merge.mp3",
+				{ id: "merge-me", collectionIds: [SYSTEM_COLLECTION_ID] },
+			],
+		]);
+		const plan = classifyTracks([track], existing, "mix1");
+		expect(plan.toUpdate).toHaveLength(1);
+		expect(plan.toUpdate[0]?.key).toBe("merge-me");
+		// Union: existing ["all"] + incoming ["all","rock"] → deduped ["all","rock"]
+		// + target "mix1" appended → ["all", "rock", "mix1"]
+		expect(plan.toUpdate[0]?.changes.collectionIds).toEqual([
+			SYSTEM_COLLECTION_ID,
+			"rock",
+			"mix1",
+		]);
+		expect(plan.mergedIds).toEqual(["merge-me"]);
+		expect(plan.skippedIds).toEqual([]);
+	});
+
+	it("skips merge when incoming collectionIds are a subset of existing", () => {
+		const track = makeIngestionTrack({
+			id: "skip-me",
+			filePath: "/music/skip.mp3",
+			collectionIds: [SYSTEM_COLLECTION_ID],
+		});
+		const existing = new Map<string, ExistingTrackRef>([
+			[
+				"/music/skip.mp3",
+				{ id: "skip-me", collectionIds: [SYSTEM_COLLECTION_ID, "mix1"] },
+			],
+		]);
+		const plan = classifyTracks([track], existing, "mix1");
+		// Union adds nothing new → areCollectionIdsEqual → skip
+		expect(plan.skippedIds).toEqual(["skip-me"]);
+		expect(plan.toUpdate).toEqual([]);
+		expect(plan.mergedIds).toEqual([]);
+	});
+
+	it("preserves existing order and appends new incoming IDs", () => {
+		const track = makeIngestionTrack({
+			id: "merge-order",
+			filePath: "/music/order.mp3",
+			collectionIds: ["jazz", SYSTEM_COLLECTION_ID],
+		});
+		const existing = new Map<string, ExistingTrackRef>([
+			[
+				"/music/order.mp3",
+				{ id: "merge-order", collectionIds: ["rock", SYSTEM_COLLECTION_ID] },
+			],
+		]);
+		const plan = classifyTracks([track], existing, "mix1");
+
+		expect(plan.toUpdate).toHaveLength(1);
+		// Existing ["rock","all"] + incoming ["jazz","all"]
+		// → deduped insertion order: ["rock","all","jazz"]
+		// → system "all" already present → ["rock","all","jazz"]
+		// → target "mix1" appended → ["rock","all","jazz","mix1"]
+		expect(plan.toUpdate[0]?.changes.collectionIds).toEqual([
+			"rock",
+			SYSTEM_COLLECTION_ID,
+			"jazz",
+			"mix1",
+		]);
+	});
+
+	it("flips skip to merge when the target is already present and incoming brings new IDs", () => {
+		const track = makeIngestionTrack({
+			id: "flip-me",
+			filePath: "/music/flip.mp3",
+			collectionIds: [SYSTEM_COLLECTION_ID, "rock"],
+		});
+		const existing = new Map<string, ExistingTrackRef>([
+			[
+				"/music/flip.mp3",
+				// Target "mix1" already on the row: the pre-fix code
+				// short-circuited to skip at exactly this shape.
+				{ id: "flip-me", collectionIds: [SYSTEM_COLLECTION_ID, "mix1"] },
+			],
+		]);
+		const plan = classifyTracks([track], existing, "mix1");
+		expect(plan.toUpdate).toHaveLength(1);
+		expect(plan.toUpdate[0]?.key).toBe("flip-me");
+		// Union: ["all","mix1"] + ["all","rock"] → deduped ["all","mix1","rock"]
+		expect(plan.toUpdate[0]?.changes.collectionIds).toEqual([
+			SYSTEM_COLLECTION_ID,
+			"mix1",
+			"rock",
+		]);
+		expect(plan.mergedIds).toEqual(["flip-me"]);
+		expect(plan.skippedIds).toEqual([]);
+	});
+
+	it("folds the target ID when the incoming payload already contains it (no duplicate)", () => {
+		const track = makeIngestionTrack({
+			id: "pre-target",
+			filePath: "/music/pre-target.mp3",
+			collectionIds: ["mix1", "rock"], // target first; system ID absent
+		});
+		const existing = new Map<string, ExistingTrackRef>([
+			[
+				"/music/pre-target.mp3",
+				{ id: "pre-target", collectionIds: [SYSTEM_COLLECTION_ID] },
+			],
+		]);
+		const plan = classifyTracks([track], existing, "mix1");
+		expect(plan.toUpdate).toHaveLength(1);
+		// Union: ["all"] + ["mix1","rock"] → ["all","mix1","rock"];
+		// the trailing addId("mix1") is a no-op (already seen).
+		// toEqual pins both membership and order — a duplicated or re-sorted
+		// "mix1" fails this expectation.
+		expect(plan.toUpdate[0]?.changes.collectionIds).toEqual([
+			SYSTEM_COLLECTION_ID,
+			"mix1",
+			"rock",
+		]);
+		expect(plan.mergedIds).toEqual(["pre-target"]);
+		expect(plan.skippedIds).toEqual([]);
+	});
+
+	it("folds duplicates internal to the incoming collectionIds without reordering", () => {
+		const track = makeIngestionTrack({
+			id: "dup-incoming",
+			filePath: "/music/dup-incoming.mp3",
+			collectionIds: ["rock", "rock", "jazz"],
+		});
+		const existing = new Map<string, ExistingTrackRef>([
+			[
+				"/music/dup-incoming.mp3",
+				{ id: "dup-incoming", collectionIds: [SYSTEM_COLLECTION_ID] },
+			],
+		]);
+		const plan = classifyTracks([track], existing, "mix1");
+		expect(plan.toUpdate).toHaveLength(1);
+		// Union: ["all"] + ["rock","rock","jazz"] → ["all","rock","jazz"]
+		// → target appended → ["all","rock","jazz","mix1"]
+		expect(plan.toUpdate[0]?.changes.collectionIds).toEqual([
+			SYSTEM_COLLECTION_ID,
+			"rock",
+			"jazz",
+			"mix1",
+		]);
+		expect(plan.mergedIds).toEqual(["dup-incoming"]);
+		expect(plan.skippedIds).toEqual([]);
+	});
 });

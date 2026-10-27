@@ -51,6 +51,9 @@ export interface ClassificationPlan {
  * Decision table:
  * - Existing row, `collectionIds` already match → **skip** (no mutation).
  * - Existing row, `collectionIds` differ → **merge** (update collectionIds).
+ *   The merged collection set is the **union** of the existing row's
+ *   memberships and the incoming track's memberships, with the system
+ *   collection and target collection always ensured present.
  * - No existing row → **add** (new track with normalized collectionIds +
  *   artwork extracted into `Artwork` entries with UUID refs).
  *
@@ -77,8 +80,12 @@ export function classifyTracks(
 		const existingRow = existingByFilePath.get(track.filePath);
 
 		if (existingRow) {
+			const combinedCollectionIds = [
+				...existingRow.collectionIds,
+				...track.collectionIds,
+			];
 			const nextCollectionIds = normalizeCollectionIds(
-				existingRow.collectionIds,
+				combinedCollectionIds,
 				targetCollectionId,
 			);
 

@@ -32,6 +32,10 @@ import { useCollections } from "@renderer/components/Collections/hooks/useCollec
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 import { Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,7 +60,12 @@ export default function DeleteCollection() {
 				id: activeCollection.id,
 				deleteFromAllCollections: values.check,
 			});
-			dispatch(setActiveCollection({ id: "all", title: "All" }));
+			dispatch(
+				setActiveCollection({
+					id: SYSTEM_COLLECTION_ID,
+					title: SYSTEM_COLLECTION_TITLE,
+				}),
+			);
 			toast.success(`${activeCollection.title} was successfully removed.`);
 			form.reset();
 			close();

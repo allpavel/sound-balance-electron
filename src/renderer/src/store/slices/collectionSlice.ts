@@ -15,7 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 
 type ActiveCollection = {
 	id: string;
@@ -23,15 +27,15 @@ type ActiveCollection = {
 };
 
 const initialState: ActiveCollection = {
-	id: "all",
-	title: "All",
+	id: SYSTEM_COLLECTION_ID,
+	title: SYSTEM_COLLECTION_TITLE,
 };
 
 const activeCollectionSlice = createSlice({
 	name: "activeCollection",
 	initialState,
 	reducers: {
-		setActiveCollection: (_, action) => {
+		setActiveCollection: (_, action: PayloadAction<ActiveCollection>) => {
 			return action.payload;
 		},
 	},

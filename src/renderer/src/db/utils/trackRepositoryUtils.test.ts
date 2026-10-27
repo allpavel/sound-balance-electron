@@ -22,6 +22,7 @@ import { resetDatabase } from "@renderer/utils/test-utils";
 import { STATUS_VALUES, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import {
 	ConflictError,
+	PayloadLimitExceededError,
 	ReferentialIntegrityError,
 	StorageCapacityError,
 	StorageUnavailableError,
@@ -177,6 +178,24 @@ describe("trackRepositoryUtils", () => {
 			expect(() =>
 				assertTrackInput(createTrackWithoutField("file"), 0),
 			).toThrow(TrackValidationError);
+		});
+
+		it("rejects a file field containing traversal sequences", () => {
+			expect(() =>
+				assertTrackInput(makeTrack({ file: "../escape.mp3" }), 0),
+			).toThrow(TrackValidationError);
+		});
+
+		it("rejects traversal segments embedded mid-path in the file field", () => {
+			expect(() =>
+				assertTrackInput(makeTrack({ file: "a/../../escape.mp3" }), 0),
+			).toThrow(TrackValidationError);
+		});
+
+		it("still accepts a plain file name after the refinement (no false positives)", () => {
+			expect(() =>
+				assertTrackInput(makeTrack({ file: "track-1.mp3" }), 0),
+			).not.toThrow();
 		});
 
 		it("rejects an empty filePath", () => {
@@ -372,13 +391,13 @@ describe("trackRepositoryUtils", () => {
 			).toEqual([SYSTEM_COLLECTION_ID, "mix-1"]);
 		});
 
-		it("ignores non-string collection ids", () => {
-			expect(
+		it("throws StorageUnavailableError on non-string collection ids (fail-loud)", () => {
+			expect(() =>
 				normalizeCollectionIds(
 					[SYSTEM_COLLECTION_ID, 123, null, undefined, "mix-1"],
 					"mix-1",
 				),
-			).toEqual([SYSTEM_COLLECTION_ID, "mix-1"]);
+			).toThrow(StorageUnavailableError);
 		});
 
 		it.each([
@@ -892,6 +911,20 @@ describe("trackRepositoryUtils", () => {
 				["TrackValidationError", new TrackValidationError("ctx", [])],
 				["ConflictError", new ConflictError("conflict")],
 				["ReferentialIntegrityError", new ReferentialIntegrityError("ri")],
+				[
+					"StorageUnavailableError",
+					new StorageUnavailableError(
+						"bulkAdd returned a non-string primary key (received number); the track schema guarantees string keys",
+					),
+				],
+				[
+					"StorageCapacityError",
+					new StorageCapacityError("Storage quota exceeded."),
+				],
+				[
+					"PayloadLimitExceededError",
+					new PayloadLimitExceededError("payload too large"),
+				],
 			])("re-throws %s by identity", (_label, err) => {
 				expect(captureThrown(() => mapStorageWriteError(err))).toBe(err);
 			});
@@ -998,12 +1031,18 @@ describe("trackRepositoryUtils", () => {
 					expect(thrown.message).toBe("Database operation failed: AbortError");
 				}
 			});
+
+			it("declines objects whose message is not a string", () => {
+				const input = { name: "UnknownError", message: 42 };
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
 		});
 
 		describe("rule 4 — failures[] scan (first match wins)", () => {
 			it("single QuotaExceededError failure → StorageCapacityError", () => {
 				const input = {
 					name: "BulkError",
+					message: "Batch operation failed",
 					failures: [new DOMException("q", "QuotaExceededError")],
 				};
 				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
@@ -1014,6 +1053,7 @@ describe("trackRepositoryUtils", () => {
 			it("pins first-match: Constraint before Quota in failures[] → ConflictError", () => {
 				const input = {
 					name: "BulkError",
+					message: "Batch operation failed",
 					failures: [
 						new DOMException("c", "ConstraintError"),
 						new DOMException("q", "QuotaExceededError"),
@@ -1027,6 +1067,7 @@ describe("trackRepositoryUtils", () => {
 			it("pins first-match: Quota before Constraint in failures[] → StorageCapacityError", () => {
 				const input = {
 					name: "BulkError",
+					message: "Batch operation failed",
 					failures: [
 						new DOMException("q", "QuotaExceededError"),
 						new DOMException("c", "ConstraintError"),
@@ -1038,18 +1079,27 @@ describe("trackRepositoryUtils", () => {
 			});
 
 			it("re-throws by identity when `failures` is not an array", () => {
-				const input = { name: "BulkError", failures: "not-an-array" };
+				const input = {
+					name: "BulkError",
+					message: "Batch operation failed",
+					failures: "not-an-array",
+				};
 				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
 			});
 
 			it("re-throws by identity when `failures` is empty", () => {
-				const input = { name: "BulkError", failures: [] };
+				const input = {
+					name: "BulkError",
+					message: "Batch operation failed",
+					failures: [],
+				};
 				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
 			});
 
 			it("skips non-error entries and maps the first matching failure", () => {
 				const input = {
 					name: "BulkError",
+					message: "Batch operation failed",
 					failures: [
 						null,
 						"x",
@@ -1066,6 +1116,7 @@ describe("trackRepositoryUtils", () => {
 			it("falls back to the failure's name in the message when its message is empty", () => {
 				const input = {
 					name: "BulkError",
+					message: "Batch operation failed",
 					failures: [{ name: "UnknownError", message: "" }],
 				};
 				const thrown = captureThrown(() => mapStorageWriteError(input));
@@ -1075,6 +1126,32 @@ describe("trackRepositoryUtils", () => {
 						"Database batch operation failed: UnknownError",
 					);
 				}
+			});
+
+			it("re-throws by identity when failures exists but name is not BulkError", () => {
+				const input = {
+					name: "SomeOtherError",
+					failures: [new DOMException("q", "QuotaExceededError")],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("re-throws by identity when failures exists but name is missing", () => {
+				const input = {
+					failures: [new DOMException("q", "QuotaExceededError")],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
+			});
+
+			it("still maps a genuine BulkError with a QuotaExceededError failure", () => {
+				const input = {
+					name: "BulkError",
+					message: "batch failed",
+					failures: [new DOMException("q", "QuotaExceededError")],
+				};
+				expect(captureThrown(() => mapStorageWriteError(input))).toBeInstanceOf(
+					StorageCapacityError,
+				);
 			});
 		});
 
@@ -1096,7 +1173,8 @@ describe("trackRepositoryUtils", () => {
 			it("re-throws a failures[] with no matching names by identity", () => {
 				const input = {
 					name: "BulkError",
-					failures: [{ name: "UnknownName" }],
+					message: "Batch operation failed",
+					failures: [{ name: "UnknownName", message: "error" }],
 				};
 				expect(captureThrown(() => mapStorageWriteError(input))).toBe(input);
 			});
