@@ -60,6 +60,11 @@ function withoutField(field: string): Record<string, unknown> {
 
 describe("track.schema", () => {
 	describe("track.schema - security constraints", () => {
+		it("rejects id containing null bytes", () => {
+			const result = trackInputSchema.safeParse(makeTrack({ id: "track\0id" }));
+			expect(result.success).toBe(false);
+		});
+
 		it("strips unknown top-level properties instead of preserving them", () => {
 			const input = { ...makeTrack(), unknownField: "should be stripped" };
 			expect(
