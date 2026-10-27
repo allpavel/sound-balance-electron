@@ -17,6 +17,7 @@
  */
 import {
 	MAX_BLOB_IMAGE_SIZE,
+	MAX_COLLECTION_IDS_PER_TRACK,
 	MAX_IMPORT_BATCH_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
@@ -78,7 +79,11 @@ export const filePathSchema = nonEmptyStringSchema
 	})
 	.transform((path) => normalizeFilePath(path, getPlatform()));
 
-export const collectionIdsSchema = z.array(nonEmptyStringSchema);
+export const collectionIdsSchema = z
+	.array(nonEmptyStringSchema)
+	.max(MAX_COLLECTION_IDS_PER_TRACK, {
+		error: `Must not exceed ${MAX_COLLECTION_IDS_PER_TRACK} collection IDs`,
+	});
 
 /**
  * Collection identifier accepted as `addMany`'s `targetCollectionId` and as

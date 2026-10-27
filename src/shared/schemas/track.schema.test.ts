@@ -19,6 +19,7 @@
 import {
 	IMPORT_BATCH_SIZE,
 	MAX_BLOB_IMAGE_SIZE,
+	MAX_COLLECTION_IDS_PER_TRACK,
 	MAX_IMPORT_BATCH_SIZE,
 	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
@@ -109,6 +110,17 @@ describe("track.schema", () => {
 				makeIngestionTrack({}, pictures),
 			);
 			expect(result.success).toBe(false);
+		});
+
+		it(`rejects a track with more than ${MAX_COLLECTION_IDS_PER_TRACK} collectionIds`, () => {
+			const ids = Array.from(
+				{ length: MAX_COLLECTION_IDS_PER_TRACK + 1 },
+				(_, i) => `col-${i}`,
+			);
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ collectionIds: ids })),
+			);
+			expect(hasIssueWithPath(issues, ["collectionIds"])).toBe(true);
 		});
 	});
 
@@ -359,10 +371,44 @@ describe("track.schema", () => {
 		});
 
 		it("rejects non-string collection ids and reports the invalid index", () => {
-			const issues = expectFailure(
-				collectionIdsSchema.safeParse(["all", "   "]),
-			);
+			const issues = expectFailure(collectionIdsSchema.safeParse(["all", 42]));
 			expect(hasIssueWithPath(issues, [1])).toBe(true);
+		});
+
+		it(`accepts exactly ${MAX_COLLECTION_IDS_PER_TRACK} collection IDs`, () => {
+			const ids = Array.from(
+				{ length: MAX_COLLECTION_IDS_PER_TRACK },
+				(_, i) => `col-${i}`,
+			);
+			expectSuccess(collectionIdsSchema.safeParse(ids));
+		});
+
+		it(`rejects ${MAX_COLLECTION_IDS_PER_TRACK + 1} collection IDs`, () => {
+			const ids = Array.from(
+				{ length: MAX_COLLECTION_IDS_PER_TRACK + 1 },
+				(_, i) => `col-${i}`,
+			);
+			expectFailure(collectionIdsSchema.safeParse(ids));
+		});
+
+		it("reports the constraint message with the configured limit", () => {
+			const ids = Array.from(
+				{ length: MAX_COLLECTION_IDS_PER_TRACK + 1 },
+				(_, i) => `col-${i}`,
+			);
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ collectionIds: ids })),
+			);
+			const collectionIssue = issues.find(
+				(i) =>
+					Array.isArray(i.path) &&
+					i.path.length === 1 &&
+					i.path[0] === "collectionIds",
+			);
+			expect(collectionIssue).toBeDefined();
+			expect(collectionIssue?.message).toContain(
+				String(MAX_COLLECTION_IDS_PER_TRACK),
+			);
 		});
 	});
 

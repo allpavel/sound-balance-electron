@@ -58,6 +58,13 @@ export const PATH_TRAVERSAL_PATTERN = /(^|[/\\])\.\.([/\\]|$)/;
  */
 export const PATH_SEPARATOR_PATTERN = /[/\\]/;
 
+/**
+ * Upper bound on the number of collection IDs a single track may reference.
+ * Bounds Dexie multi-entry index fan-out and prevents adversarial payloads
+ * from inflating write amplification.
+ */
+export const MAX_COLLECTION_IDS_PER_TRACK = 100;
+
 export const MIN_CONCURRENCY = 1;
 export const MAX_CONCURRENCY = 10;
 
