@@ -24,6 +24,7 @@ import {
 	MAX_YEAR,
 	MIN_YEAR,
 	NULL_BYTE_PATTERN,
+	PATH_SEPARATOR_PATTERN,
 	PATH_TRAVERSAL_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
@@ -411,10 +412,13 @@ const formatSchema = z
  * Per-track output file name. The main process joins this onto the output
  * directory via `path.join(dirPath, track.file)`.
  */
-export const outputFileNameSchema = nonEmptyStringSchema.refine(
-	(val) => !PATH_TRAVERSAL_PATTERN.test(val),
-	{ error: "File name contains traversal sequences (..)" },
-);
+export const outputFileNameSchema = nonEmptyStringSchema
+	.refine((val) => !PATH_TRAVERSAL_PATTERN.test(val), {
+		error: "File name contains traversal sequences (..)",
+	})
+	.refine((val) => !PATH_SEPARATOR_PATTERN.test(val), {
+		error: "File name must not contain path separators (/ or \\)",
+	});
 
 /**
  * Base schema containing track fields that are identical across both

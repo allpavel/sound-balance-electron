@@ -52,6 +52,12 @@ export const NULL_BYTE_PATTERN = /\0/;
 
 export const PATH_TRAVERSAL_PATTERN = /(^|[/\\])\.\.([/\\]|$)/;
 
+/**
+ * Pattern matching path separator characters (forward and backslash).
+ * Used to enforce that a field is a bare filename, not a path fragment.
+ */
+export const PATH_SEPARATOR_PATTERN = /[/\\]/;
+
 export const MIN_CONCURRENCY = 1;
 export const MAX_CONCURRENCY = 10;
 

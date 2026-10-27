@@ -980,4 +980,46 @@ describe("track.schema", () => {
 			expectFailure(addManyOptionsSchema.safeParse(input));
 		});
 	});
+
+	describe("outputFileNameSchema — filename enforcement", () => {
+		it("accepts a valid bare filename", () => {
+			expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ file: "track-1.mp3" })),
+			);
+		});
+
+		it("rejects a filename containing a forward slash", () => {
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ file: "subdir/track.mp3" })),
+			);
+			expect(hasIssueWithPath(issues, ["file"])).toBe(true);
+		});
+
+		it("rejects a filename containing a backslash", () => {
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ file: "subdir\\track.mp3" })),
+			);
+			expect(hasIssueWithPath(issues, ["file"])).toBe(true);
+		});
+
+		it("rejects a filename that is purely a traversal sequence", () => {
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ file: "../escape.mp3" })),
+			);
+			expect(hasIssueWithPath(issues, ["file"])).toBe(true);
+		});
+
+		it("rejects a filename with embedded traversal mid-path", () => {
+			const issues = expectFailure(
+				trackInputSchema.safeParse(makeTrack({ file: "a/../../escape.mp3" })),
+			);
+			expect(hasIssueWithPath(issues, ["file"])).toBe(true);
+		});
+
+		it("still accepts filenames with dots that are not traversal", () => {
+			expectSuccess(
+				trackInputSchema.safeParse(makeTrack({ file: "track.v2.final.mp3" })),
+			);
+		});
+	});
 });
