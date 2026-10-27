@@ -302,13 +302,13 @@ describe("collectionsRepository", () => {
 				await db.tracks.bulkAdd([
 					makeTrack({
 						id: "t1",
-						collectionIds: [SYSTEM_COLLECTION_TITLE, collectionId],
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId],
 					}),
 					makeTrack({
 						id: "t2",
-						collectionIds: [SYSTEM_COLLECTION_TITLE, collectionId],
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId],
 					}),
-					makeTrack({ id: "t3", collectionIds: [SYSTEM_COLLECTION_TITLE] }),
+					makeTrack({ id: "t3", collectionIds: [SYSTEM_COLLECTION_ID] }),
 				]);
 				await collectionsRepository.deleteCollection({
 					id: collectionId,
@@ -321,13 +321,13 @@ describe("collectionsRepository", () => {
 					},
 				]);
 				expect((await db.tracks.get("t1"))?.collectionIds).toEqual([
-					SYSTEM_COLLECTION_TITLE,
+					SYSTEM_COLLECTION_ID,
 				]);
 				expect((await db.tracks.get("t2"))?.collectionIds).toEqual([
-					SYSTEM_COLLECTION_TITLE,
+					SYSTEM_COLLECTION_ID,
 				]);
 				expect((await db.tracks.get("t3"))?.collectionIds).toEqual([
-					SYSTEM_COLLECTION_TITLE,
+					SYSTEM_COLLECTION_ID,
 				]);
 			});
 
@@ -375,15 +375,15 @@ describe("collectionsRepository", () => {
 				await db.tracks.bulkAdd([
 					makeTrack({
 						id: "t1",
-						collectionIds: [SYSTEM_COLLECTION_TITLE, collectionId],
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId],
 					}),
 					makeTrack({
 						id: "t2",
-						collectionIds: [SYSTEM_COLLECTION_TITLE, collectionId, "other"],
+						collectionIds: [SYSTEM_COLLECTION_ID, collectionId, "other"],
 					}),
 					makeTrack({
 						id: "t3",
-						collectionIds: [SYSTEM_COLLECTION_TITLE],
+						collectionIds: [SYSTEM_COLLECTION_ID],
 					}),
 				]);
 				await collectionsRepository.deleteCollection({
@@ -394,7 +394,7 @@ describe("collectionsRepository", () => {
 				expect(await db.tracks.get("t1")).toBeUndefined();
 				expect(await db.tracks.get("t2")).toBeUndefined();
 				expect((await db.tracks.get("t3"))?.collectionIds).toEqual([
-					SYSTEM_COLLECTION_TITLE,
+					SYSTEM_COLLECTION_ID,
 				]);
 			});
 
