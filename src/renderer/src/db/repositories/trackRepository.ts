@@ -18,22 +18,27 @@
 
 import { db } from "@renderer/db/db";
 import {
-	areCollectionIdsEqual,
-	assertTargetCollectionId,
-	assertTrackInput,
+	executeImportBatches,
+	runPreflightChecks,
+	validateAndParseTracks,
+} from "@renderer/db/import";
+import {
+	applyGuardedTrackUpdate,
+	assertAddManyOptions,
+	assertBatchUniqueness,
+	assertReferentialIntegrity,
+	createProgressEmitter,
 	isNonEmptyString,
 	isPlainObject,
-	normalizeCollectionIds,
-	normalizeTrackChanges,
 	uniqueTracks,
+	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
-
-type TrackUpdate = {
-	id: string;
-	changes: TrackChanges;
-};
+import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { TrackValidationError } from "@shared/errors";
+import type { AddManyOptions, Metadata } from "@shared/schemas/track.schema";
+import type { AddManyResult } from "@shared/types";
+import { getAddManySummary } from "@shared/utils";
+import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
 	async getAll(id: string): Promise<Metadata[]> {
@@ -51,156 +56,224 @@ export const tracksRepository = {
 		return await db.tracks.get(id);
 	},
 
+	/**
+	 * Batch-inserts tracks, merging duplicates by `filePath` into the target
+	 * collection.
+	 *
+	 * Merge-lane collection semantics: when an existing row is found by `filePath`,
+	 * the incoming track's `collectionIds` are **unioned** with
+	 * the existing row's memberships. Existing IDs are preserved in their
+	 * original order; new incoming IDs are appended; duplicates are folded.
+	 * The system collection (`SYSTEM_COLLECTION_ID`) and the target collection
+	 * are always ensured present via `normalizeCollectionIds`.
+	 *
+	 * The merge lane mutates `collectionIds` only — incoming metadata changes
+	 * (title, duration, artwork, etc.) are ignored by design; the existing
+	 * row's metadata remains authoritative. Collection-membership semantics
+	 * are ratified by
+	 * [ADR-0004](../../../../../docs/adr/ADR-0004-merge-lane-collection-union.md).
+	 *
+	 * **Error precedence:** Schema validation (step 2) runs to
+	 * completion before cross-item integrity checks (step 3). A batch
+	 * containing both a schema-invalid track and a duplicate `id` will
+	 * always surface the `TrackValidationError` first, regardless of index
+	 * ordering. This is intentional: structural validity is a prerequisite
+	 * for meaningful cross-item analysis. See
+	 * [ADR-0003](../../../../../docs/adr/ADR-0003-updatemany-error-precedence.md)
+	 * for the analogous `updateMany` phased-validation contract.
+	 *
+	 * Batches are atomic; the import is idempotent. On a mid-import failure
+	 * (quota, a collection deleted mid-import, or `signal` abort) this throws
+	 * {@link ImportAbortedError} carrying `partial` (committed counts from
+	 * batches 1..k−1), `progress` (processed/total), and `cause`. Recovery
+	 * is to re-run the import — prior `added` rows become `merged`/`skipped`
+	 * by `filePath`. Pre-flight failures throw their native domain error
+	 * directly (no partials — caller bug).
+	 *
+	 * Referential integrity is re-asserted inside each batch's transaction,
+	 * atomically with the writes (the pre-flight check is a non-authoritative
+	 * fast-fail).
+	 *
+	 * @param tracks – Untrusted array; each element is validated into
+	 *   {@link IngestionMetadata} before any write.
+	 * @param options – Untrusted, runtime-validated import options.
+	 * @param options.targetCollectionId – Collection to assign (default `"all"`).
+	 * @param options.batchSize – Max tracks per transaction (default
+	 *   `IMPORT_BATCH_SIZE`, capped at `MAX_IMPORT_BATCH_SIZE`).
+	 * @param options.onProgress – Synchronous, non-throwing observer invoked
+	 *   after each batch with cumulative counts; a throw is isolated, not
+	 *   propagated.
+	 * @param options.signal – Coarse-grained cancellation checked between
+	 *   batches; abort throws `ImportAbortedError` with the partials.
+	 * @returns A structured {@link AddManyResult} discriminating outcomes.
+	 * @throws {TrackValidationError} Pre-flight: invalid `options` or `tracks`.
+	 * @throws {ConflictError} Pre-flight: duplicate `id` in the payload.
+	 * @throws {ReferentialIntegrityError} Pre-flight: payload references a
+	 *   non-existent collection.
+	 * @throws {PayloadLimitExceededError} Pre-flight: payload exceeds the size cap.
+	 * @throws {ImportAbortedError} Mid-import failure or cancellation — carries
+	 *   `partial` + `progress` + `cause`; retry-safe.
+	 */
 	async addMany(
-		tracks: Metadata[],
-		{ targetCollectionId = SYSTEM_COLLECTION_ID } = {},
-	): Promise<string[]> {
-		assertTargetCollectionId(targetCollectionId);
+		tracks: readonly unknown[],
+		options: AddManyOptions = {},
+	): Promise<AddManyResult> {
+		// Step 1: validate options.
+		const validatedOptions = assertAddManyOptions(options);
+		const targetCollectionId =
+			validatedOptions.targetCollectionId ?? SYSTEM_COLLECTION_ID;
+		const onProgress = validatedOptions.onProgress;
+		const batchSize = validatedOptions.batchSize ?? IMPORT_BATCH_SIZE;
+		const signal = validatedOptions.signal;
+		const startedAt = Date.now();
 
-		if (!Array.isArray(tracks)) {
-			throw new Error("Tracks must be an array");
-		}
-		if (tracks.length === 0) {
-			return [];
-		}
-
-		const seenFilePaths = new Set<string>();
-
-		for (const [index, track] of tracks.entries()) {
-			assertTrackInput(track, index);
-			const filePath = (track as Metadata).filePath;
-			if (seenFilePaths.has(filePath)) {
-				throw new Error(`tracks contains duplicate filePath: ${filePath}`);
-			}
-			seenFilePaths.add(filePath);
+		// Step 2: validate + parse tracks.
+		const parsedTracks = validateAndParseTracks(tracks);
+		if (parsedTracks.length === 0) {
+			return { added: [], merged: [], skipped: [] };
 		}
 
-		const filePaths = tracks.map((track) => track.filePath);
+		// Step 3: pre-flight checks (payload, headroom, uniqueness, dedupe, RI).
+		const { dedupedTracks, preSkipped } = await runPreflightChecks(
+			parsedTracks,
+			targetCollectionId,
+			db,
+		);
 
-		return await db.transaction("rw", db.tracks, async () => {
-			const existingTracks = await db.tracks
-				.where("filePath")
-				.anyOf(filePaths)
-				.toArray();
+		// Step 4: execute batches (loop, signal, progress, abort wrapping).
+		const progressEmitter = createProgressEmitter(onProgress);
+		const total = parsedTracks.length;
 
-			const existingByFilePath = new Map<string, Metadata>();
+		try {
+			const { result, batchCount } = await executeImportBatches({
+				dedupedTracks,
+				batchSize,
+				targetCollectionId,
+				signal,
+				progressEmitter,
+				preSkipped,
+				db,
+			});
 
-			for (const existingTrack of existingTracks) {
-				if (isNonEmptyString(existingTrack.filePath)) {
-					existingByFilePath.set(existingTrack.filePath, existingTrack);
-				}
-			}
+			// Step 5: completion telemetry.
+			// biome-ignore lint/suspicious/noConsole: Intentional telemetry at import completion.
+			console.info("[tracksRepository.addMany] import complete", {
+				summary: getAddManySummary(result),
+				durationMs: Date.now() - startedAt,
+				batchCount,
+				total,
+			});
 
-			const toAdd: Metadata[] = [];
-			const toUpdate: { key: string; changes: Partial<Metadata> }[] = [];
-
-			for (const track of tracks) {
-				const existingRow = existingByFilePath.get(track.filePath);
-
-				if (existingRow) {
-					const nextCollectionIds = normalizeCollectionIds(
-						existingRow.collectionIds,
-						targetCollectionId,
-					);
-					if (
-						!areCollectionIdsEqual(existingRow.collectionIds, nextCollectionIds)
-					) {
-						toUpdate.push({
-							key: existingRow.id,
-							changes: {
-								collectionIds: nextCollectionIds,
-							},
-						});
-					}
-				} else {
-					toAdd.push({
-						...track,
-						collectionIds: normalizeCollectionIds(
-							track.collectionIds,
-							targetCollectionId,
-						),
-					});
-				}
-			}
-
-			const resultIds: string[] = [];
-
-			if (toAdd.length > 0) {
-				const addedIds = await db.tracks.bulkAdd(toAdd, { allKeys: true });
-				const addedIdArray = Array.isArray(addedIds) ? addedIds : [addedIds];
-				resultIds.push(...(addedIdArray as string[]));
-			}
-
-			if (toUpdate.length > 0) {
-				await db.tracks.bulkUpdate(toUpdate);
-			}
-			return resultIds;
-		});
+			return result;
+		} finally {
+			progressEmitter.flush();
+		}
 	},
 
-	async update(id: string, changes: TrackChanges): Promise<number> {
+	async update(id: string, changes: unknown): Promise<number> {
 		if (!isNonEmptyString(id)) {
-			throw new Error("ID must be a non-empty string");
+			throw new TrackValidationError("id", [
+				createRootIssue("invalid_type", "ID must be a non-empty string"),
+			]);
 		}
-		if (!isPlainObject(changes)) {
-			throw new Error("Changes must be an object");
+		const validated = validateTrackChanges(changes, "changes");
+		if (!("status" in validated)) {
+			const collectionIds = validated.collectionIds;
+			if (collectionIds !== undefined) {
+				return db.transaction("rw", db.tracks, db.collections, async () => {
+					await assertReferentialIntegrity(
+						collectionIds,
+						db.collections,
+						"changes.collectionIds",
+					);
+					return applyGuardedTrackUpdate(db.tracks, id, validated);
+				});
+			}
+			return db.tracks.update(id, validated);
 		}
-		return await db.tracks.update(
-			id,
-			normalizeTrackChanges(changes, "changes"),
+
+		return db.transaction("rw", db.tracks, () =>
+			applyGuardedTrackUpdate(db.tracks, id, validated),
 		);
 	},
 
-	async updateMany(updates: { id: string; changes: TrackChanges }[]) {
+	async updateMany(updates: unknown): Promise<number> {
 		if (!Array.isArray(updates)) {
-			throw new Error("Updates must be an array");
+			throw new TrackValidationError("updates", [
+				createRootIssue("invalid_type", "Updates must be an array"),
+			]);
 		}
 		if (updates.length === 0) {
 			return 0;
 		}
 
-		const seenIds = new Set<string>();
-		const normalizedUpdates: {
+		const validated: {
 			id: string;
-			changes: Partial<Metadata>;
+			raw: Record<string, unknown>;
+			context: string;
 		}[] = [];
-
 		for (const [index, update] of updates.entries()) {
 			const context = `updates[${index}]`;
 			if (!isPlainObject(update)) {
-				throw new Error(`${context} must be an object`);
+				throw new TrackValidationError(context, [
+					createRootIssue("invalid_type", `${context} must be an object`),
+				]);
 			}
-			const candidate = update as Partial<TrackUpdate>;
-			if (!isNonEmptyString(candidate.id)) {
-				throw new Error(`${context}.id must be a non-empty string`);
+			if (!isNonEmptyString(update.id)) {
+				throw new TrackValidationError(`${context}.id`, [
+					createRootIssue(
+						"invalid_type",
+						`${context}.id must be a non-empty string`,
+					),
+				]);
 			}
-			if (!isPlainObject(candidate.changes)) {
-				throw new Error(`${context}.changes must be an object`);
-			}
-			if (seenIds.has(candidate.id)) {
-				throw new Error(`updates contains duplicate id: ${candidate.id}`);
-			}
-			seenIds.add(candidate.id);
-			normalizedUpdates.push({
-				id: candidate.id,
-				changes: normalizeTrackChanges(
-					candidate.changes as Partial<Metadata>,
-					`${context}.changes`,
-				),
-			});
+			validated.push({ id: update.id, raw: update, context });
 		}
 
+		assertBatchUniqueness({
+			items: validated,
+			getKey: (u) => u.id,
+			fieldPath: (i) => `updates[${i}].id`,
+			label: "id",
+			context: "Updates",
+		});
+
+		const normalizedUpdates = validated.map(({ id, raw, context }) => ({
+			id,
+			changes: validateTrackChanges(raw.changes, `${context}.changes`),
+		}));
+
+		const needsCollectionCheck = normalizedUpdates.some(
+			(u) =>
+				"collectionIds" in u.changes && u.changes.collectionIds !== undefined,
+		);
+
+		const transactionTables = needsCollectionCheck
+			? [db.tracks, db.collections]
+			: [db.tracks];
+
 		let total = 0;
-		await db.transaction("rw", db.tracks, async () => {
-			for (const { id, changes } of normalizedUpdates) {
-				total += await db.tracks.update(id, changes);
+		await db.transaction("rw", transactionTables, async () => {
+			for (const [index, { id, changes }] of normalizedUpdates.entries()) {
+				if ("collectionIds" in changes && changes.collectionIds !== undefined) {
+					const collectionIds = changes.collectionIds;
+					await assertReferentialIntegrity(
+						collectionIds,
+						db.collections,
+						`updates[${index}].changes.collectionIds`,
+					);
+				}
+				total += await applyGuardedTrackUpdate(db.tracks, id, changes);
 			}
 		});
 		return total;
 	},
+
 	async remove(id: string): Promise<void> {
 		if (!isNonEmptyString(id)) {
-			throw new Error("ID must be a non-empty string");
+			throw new TrackValidationError("id", [
+				createRootIssue("invalid_type", "ID must be a non-empty string"),
+			]);
 		}
 		await db.tracks.delete(id);
 	},

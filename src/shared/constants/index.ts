@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 export const STATUS_VALUES = [
 	"pending",
 	"processing",
@@ -23,7 +24,82 @@ export const STATUS_VALUES = [
 ] as const;
 
 export const SYSTEM_COLLECTION_ID = "all";
+export const SYSTEM_COLLECTION_TITLE = "All";
 
 export const CORRUPTION_SETTINGS_TOAST =
 	"Stored settings are corrupted and were reset to defaults.";
 export const SAVE_ERROR_TOAST = "Unable to save settings. Please try again.";
+
+export const MAX_PICTURE_COUNT = 20;
+
+/**
+ * Maximum allowed size per artwork Blob (5 MB).
+ * Enforced during ingestion validation to prevent oversized binary payloads
+ * from overwhelming the IndexedDB quota.
+ */
+export const MAX_BLOB_IMAGE_SIZE = 5 * 1024 * 1024;
+
+/**
+ * Maximum total payload size per batch (50 MB).
+ * Enforced before database transactions to shift failure left, preventing
+ * the environment from rejecting the operation due to engine or quota limits.
+ */
+export const MAX_BATCH_PAYLOAD_SIZE = 50 * 1024 * 1024;
+
+export const MAX_REASON_LENGTH = 1000;
+export const MAX_PATH_LENGTH = 4096;
+export const NULL_BYTE_PATTERN = /\0/;
+
+export const PATH_TRAVERSAL_PATTERN = /(^|[/\\])\.\.([/\\]|$)/;
+
+/**
+ * Pattern matching path separator characters (forward and backslash).
+ * Used to enforce that a field is a bare filename, not a path fragment.
+ */
+export const PATH_SEPARATOR_PATTERN = /[/\\]/;
+
+/**
+ * Upper bound on the number of collection IDs a single track may reference.
+ * Bounds Dexie multi-entry index fan-out and prevents adversarial payloads
+ * from inflating write amplification.
+ */
+export const MAX_COLLECTION_IDS_PER_TRACK = 100;
+
+export const MIN_CONCURRENCY = 1;
+export const MAX_CONCURRENCY = 10;
+
+export const MIN_YEAR = 1000;
+export const MAX_YEAR = 9999;
+
+/**
+ * Pattern matching C0 control characters (U+0000–U+001F) and U+007F (DEL).
+ *
+ * Used to sanitize path segments before string interpolation, preventing
+ * log injection and terminal escape-sequence attacks when hostile payloads
+ * contain control characters in field names or array indices.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional pattern to strip malicious control characters and block injection attacks.
+export const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/g;
+
+/**
+ * Default number of tracks processed in a single IndexedDB transaction
+ * during `addMany`.
+ */
+export const IMPORT_BATCH_SIZE = 500;
+
+/** Upper bound on the user-supplied `batchSize` in {@link AddManyOptions}. */
+export const MAX_IMPORT_BATCH_SIZE = IMPORT_BATCH_SIZE;
+
+/**
+ * Maximum number of keys passed to a single IndexedDB `anyOf()` call.
+ */
+export const ANYOF_CHUNK_SIZE = 500;
+
+/** Supported platform identifiers for filePath normalization. */
+export type PLATFORM = "win32" | "darwin" | "linux";
+
+/**
+ * Maximum length of an error `name` echoed into diagnostic
+ * logs (e.g. when an `onProgress` callback throws).
+ */
+export const MAX_LOGGED_ERROR_NAME_LENGTH = 64;

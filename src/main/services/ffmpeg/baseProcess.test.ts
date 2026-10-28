@@ -18,6 +18,7 @@
 
 import { spawn } from "node:child_process";
 import EventEmitter from "node:events";
+import { MAX_STDERR_BUFFER } from "@main/constants";
 import { BaseProcess } from "./baseProcess";
 
 class TestProcess extends BaseProcess {
@@ -47,8 +48,6 @@ function createMockChildProcess() {
 	mockChildProcess.pid = 12345;
 	return mockChildProcess;
 }
-
-const MAX_STDERR_BUFFER = 1024 * 1024; // 1MB
 
 describe("BaseProcess", () => {
 	let mockSpawn: ReturnType<typeof vi.fn>;
@@ -199,14 +198,7 @@ describe("BaseProcess", () => {
 				"FFmpeg process was terminated by signal: SIGINT",
 			);
 		});
-		it("should reject when process exits with signal SIGINT", async () => {
-			const { mockProc, proc } = createProcess();
-			const promise = proc.run([]);
-			mockProc.emit("close", null, "SIGINT");
-			await expect(promise).rejects.toThrow(
-				"FFmpeg process was terminated by signal: SIGINT",
-			);
-		});
+
 		it("should prioritize signal over code 0", async () => {
 			const { mockProc, proc } = createProcess();
 			const promise = proc.run([]);

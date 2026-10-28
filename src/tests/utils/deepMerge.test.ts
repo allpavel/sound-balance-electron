@@ -64,11 +64,21 @@ describe("deepMerge", () => {
 			});
 		});
 
-		it("overwrites objects with arrays and arrays with objects", () => {
-			expect(deepMerge({ a: { x: 1 } }, { a: [1, 2] })).toEqual({ a: [1, 2] });
-			expect(deepMerge({ a: [1, 2] }, { a: { x: 1 } })).toEqual({
-				a: { x: 1 },
-			});
+		it.each([
+			[
+				"object overwritten by array",
+				{ a: { x: 1 } },
+				{ a: [1, 2] },
+				{ a: [1, 2] },
+			],
+			[
+				"array overwritten by object",
+				{ a: [1, 2] },
+				{ a: { x: 1 } },
+				{ a: { x: 1 } },
+			],
+		])("%s", (_desc, base, overrides, expected) => {
+			expect(deepMerge(base, overrides)).toEqual(expected);
 		});
 	});
 

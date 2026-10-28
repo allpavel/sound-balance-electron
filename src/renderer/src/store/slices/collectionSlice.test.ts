@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { configureStore } from "@reduxjs/toolkit";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
 import collectionReducer, { setActiveCollection } from "./collectionSlice";
 
 describe("collectionSlice", () => {
@@ -25,8 +29,8 @@ describe("collectionSlice", () => {
 
 	it("has the correct initial state", () => {
 		expect(store.getState().activeCollection).toEqual({
-			id: "all",
-			title: "All",
+			id: SYSTEM_COLLECTION_ID,
+			title: SYSTEM_COLLECTION_TITLE,
 		});
 	});
 

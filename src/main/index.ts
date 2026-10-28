@@ -17,11 +17,14 @@
  */
 import path from "node:path";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
+import { registerIpcHandlers } from "@main/handlers/handlers";
+import { normalizePlatform } from "@shared/utils";
 import { app, BrowserWindow, shell } from "electron";
-import icon from "../../resources/icon.png?asset";
-import { registerIpcHandlers } from "./handlers/handlers";
+import icon from "@/resources/icon.png?asset";
 
 let mainWindow: BrowserWindow;
+
+const detectedPlatform = normalizePlatform(process.platform);
 
 function createWindow(): void {
 	mainWindow = new BrowserWindow({
@@ -29,7 +32,7 @@ function createWindow(): void {
 		height: 670,
 		show: false,
 		autoHideMenuBar: true,
-		...(process.platform === "linux" ? { icon } : {}),
+		...(detectedPlatform === "linux" ? { icon } : {}),
 		webPreferences: {
 			preload: path.join(__dirname, "../preload/index.js"),
 			sandbox: false,
@@ -71,7 +74,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-	if (process.platform !== "darwin") {
+	if (detectedPlatform !== "darwin") {
 		app.quit();
 	}
 });

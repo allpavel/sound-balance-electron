@@ -17,19 +17,23 @@
  */
 
 import { db } from "@renderer/db/db";
-import { makeCollection, makeTrack } from "@shared/utils/factories";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
+import { makeCollection, makeTrack } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 import {
 	type SettingsForm,
 	strictSettingsSchema as settingsSchema,
 } from "@/src/shared/schemas/settings.schema";
-import { SYSTEM_COLLECTION_ID } from "../../db/constants/constants";
 import {
 	configureUuidMock,
+	recreateDatabase,
 	resetDatabase,
 	resetSequences,
 	resetTestState,
-} from "./testFactories";
+} from ".";
 
 function getValidSettings(): SettingsForm {
 	return settingsSchema.parse({
@@ -121,7 +125,7 @@ describe("testFactories", () => {
 	});
 
 	describe("resetDatabase", () => {
-		it("clears tracks, collections, and settings, then re-seeds the 'all' collection", async () => {
+		it("clears tracks, collections, settings, and artworks, then re-seeds the 'all' collection", async () => {
 			await db.tracks.bulkAdd([
 				makeTrack({ id: "t1" }),
 				makeTrack({ id: "t2" }),
@@ -131,22 +135,29 @@ describe("testFactories", () => {
 				id: "globalSettings",
 				settings: getValidSettings(),
 			});
+			await db.artworks.add({
+				id: "art-1",
+				blob: new Blob(["cover"], { type: "image/png" }),
+				format: "image/png",
+			});
 			expect(await db.tracks.count()).toBe(2);
 			expect(await db.collections.count()).toBe(2);
 			expect(await db.settings.count()).toBe(1);
+			expect(await db.artworks.count()).toBe(1);
 			await resetDatabase();
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.collections.toArray()).toEqual([
-				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
 			]);
 			expect(await db.settings.count()).toBe(0);
+			expect(await db.artworks.count()).toBe(0);
 		});
 
 		it("is idempotent on an already-clean database", async () => {
 			await resetDatabase();
 			await expect(resetDatabase()).resolves.toBeUndefined();
 			expect(await db.collections.toArray()).toEqual([
-				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
 			]);
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.settings.count()).toBe(0);
@@ -164,6 +175,26 @@ describe("testFactories", () => {
 				new Error("seed failed"),
 			);
 			await expect(resetDatabase()).rejects.toThrow("seed failed");
+		});
+	});
+
+	describe("recreateDatabase", () => {
+		it("re-fires the populate hook and destroys rows resetDatabase would keep", async () => {
+			await db.tracks.add(makeTrack({ id: "t1" }));
+			await db.collections.add(makeCollection({ id: "extra", title: "Extra" }));
+			await recreateDatabase();
+			expect(await db.collections.toArray()).toEqual([
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
+			]);
+			expect(await db.tracks.count()).toBe(0);
+		});
+
+		it("leaves the database usable for reads and writes afterwards", async () => {
+			await recreateDatabase();
+			await db.tracks.add(makeTrack({ id: "after-recreate" }));
+			expect((await db.tracks.get("after-recreate"))?.id).toBe(
+				"after-recreate",
+			);
 		});
 	});
 
@@ -195,7 +226,7 @@ describe("testFactories", () => {
 				format: {},
 			});
 			expect(await db.collections.toArray()).toEqual([
-				{ id: SYSTEM_COLLECTION_ID, title: "All" },
+				{ id: SYSTEM_COLLECTION_ID, title: SYSTEM_COLLECTION_TITLE },
 			]);
 			expect(await db.tracks.count()).toBe(0);
 			expect(await db.settings.count()).toBe(0);
@@ -348,7 +379,7 @@ describe("testFactories", () => {
 				file: "track-1.mp3",
 				filePath: "/music/track-1.mp3",
 				status: "failed",
-				collectionIds: ["all"],
+				collectionIds: [SYSTEM_COLLECTION_ID],
 				selected: 0,
 				common: {},
 				format: {},

@@ -16,15 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { MAX_CONCURRENCY, MIN_CONCURRENCY } from "@shared/constants";
 import type {
 	AUDIO_ENCODERS,
 	AUDIO_FILTERS,
 } from "@shared/schemas/settings.schema";
 import type { AUDIO_MUXER_EXTENSIONS, EXTENSIONS } from "./settings.types";
 
-export const CONCURRENCY_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
-	value: String(i + 1),
-}));
+export const CONCURRENCY_OPTIONS = Array.from(
+	{ length: MAX_CONCURRENCY - MIN_CONCURRENCY + 1 },
+	(_, i) => ({
+		value: String(MIN_CONCURRENCY + i),
+	}),
+);
 
 export const FILTER_OPTIONS = {
 	acompressor: {

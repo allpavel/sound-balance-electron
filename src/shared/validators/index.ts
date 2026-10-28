@@ -15,42 +15,256 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+import { type Data, dataSchema } from "@shared/schemas/data.schema";
 import {
 	looseSettingsSchema,
 	type SettingsForm,
 	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
-import type { ZodSafeParseResult } from "zod";
+import {
+	type AddManyOptions,
+	addManyOptionsSchema,
+	type CollectionId,
+	type IngestionMetadata,
+	type TrackChanges,
+	targetCollectionIdSchema,
+	trackChangesSchema,
+	trackInputSchema,
+	tracksArraySchema,
+} from "@shared/schemas/track.schema";
+import { pathToString, sanitizeControlChars } from "@shared/utils";
+import type { ZodError, ZodSafeParseResult, ZodType, z } from "zod";
 
-export interface SettingsValidationIssue {
-	path: string;
-	message: string;
-	code: string;
+export const MAX_VALIDATION_ISSUES = 100;
+export const ISSUE_LIMIT_CODE = "issue_limit_reached";
+
+const FALLBACK_MESSAGE = "Invalid input";
+const FALLBACK_CODE = "custom";
+
+/**
+ * A single, frozen validation issue produced by {@link mapZodIssues} or
+ * {@link createRootIssue}.
+ *
+ */
+export interface ValidationIssue {
+	readonly pathString: string;
+	readonly path: readonly PropertyKey[];
+	readonly message: string;
+	readonly code: string;
 }
 
-export type SettingsParseResult =
-	| { success: true; data: SettingsForm }
-	| { success: false; issues: SettingsValidationIssue[] };
+export type SettingsParseMode = "strict" | "loose";
 
+export type ValidationResult<T> =
+	| { success: true; data: T }
+	| { success: false; issues: readonly ValidationIssue[] };
+
+export type SettingsParseResult = ValidationResult<SettingsForm>;
+export type TrackParseResult = ValidationResult<IngestionMetadata>;
+export type TracksParseResult = ValidationResult<IngestionMetadata[]>;
+export type DataParseResult = ValidationResult<Data>;
+export type TrackChangesParseResult = ValidationResult<TrackChanges>;
+export type CollectionIdParseResult = ValidationResult<CollectionId>;
+export type AddManyOptionsParseResult = ValidationResult<AddManyOptions>;
+
+export interface Issue {
+	readonly path?: PropertyKey[];
+	readonly message?: string;
+	readonly code?: z.core.$ZodIssue["code"];
+	readonly errors?: readonly (readonly Issue[])[];
+}
+
+/**
+ * Creates a frozen root-level {@link ValidationIssue} (empty path) with
+ * the given code and message.
+ *
+ * Used by non-schema validation layers (e.g., repository preconditions,
+ * persistence errors in Redux thunks) to produce issues that conform
+ * to the shared `ValidationIssue` contract without invoking a Zod schema.
+ * This ensures that all errors thrown as `TrackValidationError` — whether
+ * from schema validation or from precondition checks — carry issues with
+ * a consistent shape, so consumers can always access `.issues` uniformly.
+ *
+ * @param code    - Machine-readable issue code (e.g. `"persist_error"`,
+ *                  `"invalid_type"`, `"duplicate_id"`).
+ * @param message - Human-readable issue message.
+ * @returns A frozen `ValidationIssue` with empty `path` and `pathString`.
+ *
+ * @example
+ * ```ts
+ * throw new TrackValidationError("id", [
+ *     createRootIssue("invalid_type", "ID must be a non-empty string"),
+ * ]);
+ * ```
+ */
+export function createRootIssue(
+	code: string,
+	message: string,
+): ValidationIssue {
+	return Object.freeze({
+		path: Object.freeze([]),
+		pathString: "",
+		message,
+		code,
+	});
+}
+
+/**
+ * Flattens ZodError.issues into a list of frozen ValidationIssue objects,
+ * recursing into union branch errors and deduplicating by
+ * (path | code | message) signature.
+ */
+function mapZodIssues(error: ZodError): readonly ValidationIssue[] {
+	const result: ValidationIssue[] = [];
+	const seen = new Set<string>();
+	let truncated = false;
+
+	const walk = (issues: Issue[], prefix: PropertyKey[] = []): void => {
+		if (!Array.isArray(issues)) return;
+
+		for (const issue of issues) {
+			if (result.length >= MAX_VALIDATION_ISSUES) {
+				truncated = true;
+				return;
+			}
+			if (!issue || typeof issue !== "object") continue;
+
+			const currentPath = [...prefix, ...(issue.path ?? [])];
+
+			if (issue.code === "invalid_union" && Array.isArray(issue.errors)) {
+				let flattened = false;
+				for (const branch of issue.errors) {
+					const leaves = Array.isArray(branch)
+						? (branch as readonly Issue[])
+						: null;
+					if (leaves && leaves.length > 0) {
+						// Paths on invalid_union.errors sub-issues
+						// are relative to the union node, not absolute
+						// from the schema root. If a future Zod major
+						// version changes this to absolute paths, this
+						// recursion must be updated to avoid
+						// double-prefixing.
+						walk(leaves as Issue[], currentPath);
+						flattened = true;
+					}
+				}
+				if (flattened) continue;
+			}
+
+			const pathString = pathToString(currentPath);
+			const message = sanitizeControlChars(issue.message ?? FALLBACK_MESSAGE);
+			let code = issue.code ?? FALLBACK_CODE;
+			if (code === "invalid_union") {
+				code = "invalid_type";
+			}
+
+			const signature = `${JSON.stringify(currentPath)}|${code}|${message}`;
+			if (!seen.has(signature)) {
+				seen.add(signature);
+				result.push(
+					Object.freeze({
+						path: Object.freeze([...currentPath]),
+						pathString,
+						message,
+						code,
+					}),
+				);
+			}
+		}
+	};
+
+	walk(error.issues as unknown as Issue[]);
+
+	if (truncated) {
+		result.push(
+			Object.freeze({
+				path: Object.freeze([]),
+				pathString: "",
+				message: `Validation aborted after ${MAX_VALIDATION_ISSUES} issues; the payload may be malformed or hostile.`,
+				code: ISSUE_LIMIT_CODE,
+			}),
+		);
+	}
+
+	return Object.freeze(result);
+}
+
+/**
+ * Single generic implementation for all validators.
+ */
+function validate<T>(schema: ZodType<T>, input: unknown): ValidationResult<T> {
+	const result: ZodSafeParseResult<T> = schema.safeParse(input);
+	return result.success
+		? { success: true, data: result.data }
+		: { success: false, issues: mapZodIssues(result.error) };
+}
+
+/**
+ * Validates a target collection ID string against `targetCollectionIdSchema`.
+ *
+ * @param input - Untrusted input to validate as a collection ID.
+ * @returns A `ValidationResult<CollectionId>` — `{ success, data }` or
+ *          `{ success: false, issues }`.
+ */
+export function safeParseTargetCollectionId(
+	input: unknown,
+): CollectionIdParseResult {
+	return validate(targetCollectionIdSchema, input);
+}
+
+/**
+ * Validates settings input against strict or loose schema.
+ */
 export function safeParseSettings(
 	input: unknown,
-	{ mode }: { mode: "strict" | "loose" } = { mode: "strict" },
+	{ mode }: { mode: SettingsParseMode } = { mode: "strict" },
 ): SettingsParseResult {
-	let result: ZodSafeParseResult<SettingsForm>;
-	if (mode === "strict") {
-		result = strictSettingsSchema.safeParse(input);
-	} else {
-		result = looseSettingsSchema.safeParse(input);
-	}
-	if (result.success) {
-		return { success: true, data: result.data };
-	}
-	const issues: SettingsValidationIssue[] = result.error.issues.map(
-		(issue) => ({
-			path: issue.path.join("."),
-			message: issue.message,
-			code: issue.code,
-		}),
-	);
-	return { success: false, issues };
+	const schema = mode === "strict" ? strictSettingsSchema : looseSettingsSchema;
+	return validate(schema, input);
+}
+
+/**
+ * Validates an array of track objects against trackInputSchema.
+ */
+export function safeParseTracks(input: unknown): TracksParseResult {
+	return validate(tracksArraySchema, input);
+}
+
+/**
+ * Validates a track object against trackInputSchema.
+ */
+export function safeParseTrack(input: unknown): TrackParseResult {
+	return validate(trackInputSchema, input);
+}
+
+/**
+ * Validates the complete IPC processing payload (tracks + settings).
+ * This is the primary boundary validator for Renderer → Main IPC calls.
+ * Uses dataSchema which composes tracksArraySchema + strictSettingsSchema.
+ */
+export function safeParseData(input: unknown): DataParseResult {
+	return validate(dataSchema, input);
+}
+
+/**
+ * Validates partial track mutation payloads.
+ */
+export function safeParseTrackChanges(input: unknown): TrackChangesParseResult {
+	return validate(trackChangesSchema, input);
+}
+
+/**
+ * Validates `tracksRepository.addMany` options against
+ * {@link addManyOptionsSchema}.
+ *
+ * Issue messages produced by this validator are sanitized at creation.
+ *
+ * @param input - Untrusted options payload.
+ * @returns A {@link AddManyOptionsParseResult}.
+ */
+export function safeParseAddManyOptions(
+	input: unknown,
+): AddManyOptionsParseResult {
+	return validate(addManyOptionsSchema, input);
 }

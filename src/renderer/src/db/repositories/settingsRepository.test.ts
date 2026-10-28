@@ -20,7 +20,7 @@ import {
 	SETTINGS_ID,
 	settingsRepository,
 } from "@renderer/db/repositories/settingsRepository";
-import { resetDatabase } from "@renderer/utils/test-utils/testFactories";
+import { resetDatabase } from "@renderer/utils/test-utils";
 import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
@@ -68,11 +68,6 @@ async function saveSettings(settings: unknown): Promise<void> {
 describe("settingsRepository", () => {
 	beforeEach(async () => {
 		await resetDatabase();
-	});
-
-	afterEach(() => {
-		vi.restoreAllMocks();
-		3;
 	});
 
 	describe("getSettings", () => {

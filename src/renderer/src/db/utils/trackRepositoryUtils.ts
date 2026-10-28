@@ -16,84 +16,307 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-
+import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
+import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
+import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
+import { ENGINE_ERROR_MAP } from "@renderer/db/utils/engineErrors";
 import {
-	collectionIdsSchema,
-	type Metadata,
-	type TrackChanges,
-	targetCollectionIdSchema,
-	trackInputSchema,
+	MAX_BATCH_PAYLOAD_SIZE,
+	MAX_LOGGED_ERROR_NAME_LENGTH,
+	SYSTEM_COLLECTION_ID,
+} from "@shared/constants";
+import {
+	ConflictError,
+	PayloadLimitExceededError,
+	ReferentialIntegrityError,
+	StorageCapacityError,
+	StorageUnavailableError,
+	TrackValidationError,
+} from "@shared/errors";
+import type {
+	AddManyOptions,
+	IngestionMetadata,
+	Metadata,
+	TrackChanges,
 } from "@shared/schemas/track.schema";
+import type { AddManyProgress, AddManyProgressCallback } from "@shared/types";
+import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
+import {
+	safeParseAddManyOptions,
+	safeParseTrack,
+	safeParseTrackChanges,
+	type ValidationResult,
+} from "@shared/validators";
+import type { EntityTable } from "dexie";
+import type { CollectionType } from "@/types";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
 }
 
-function isPlainObject(value: unknown): boolean {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function assertTargetCollectionId(value: unknown): void {
-	const result = targetCollectionIdSchema.safeParse(value);
-	if (!result.success) {
-		throw new Error("targetCollectionId must be a non-empty string");
+/**
+ * Type guard to safely extract `name` and `message` from unknown error
+ * shapes.
+ *
+ * Behavior deltas (both intentional, both covered by existing pins):
+ * - objects with a string `name` but a missing/non-string `message` no
+ *   longer match; callers fall through to the next rule (Rule 3 → Rule 5
+ *   identity re-throw in the mapper), which preserves outcomes — no
+ *   existing pin asserts the old over-claim;
+ * - arrays are rejected up front instead of at the `"name" in` check
+ *   (same net outcome for every array input, since arrays never carried a
+ *   matching `name`).
+ */
+function isErrorWithName(
+	error: unknown,
+): error is { name: string; message: string } {
+	if (!isPlainObject(error)) {
+		return false;
 	}
+	return typeof error.name === "string" && typeof error.message === "string";
 }
 
-function assertCollectionIds(value: unknown, context: string): void {
-	const result = collectionIdsSchema.safeParse(value);
-	if (result.success) {
-		return;
-	}
-	const path = result.error.issues[0]?.path ?? [];
-	if (path.length === 0) {
-		throw new Error(`${context}.collectionIds must be an array of strings`);
-	}
-	throw new Error(
-		`${context}.collectionIds[${String(path[0])}] must be a non-empty string`,
-	);
+/**
+ * Narrows an unknown error to the Dexie `BulkError` shape (name + failures
+ * array) without coupling this module to the Dexie runtime via `instanceof`.
+ *
+ * @param error - The caught unknown error value.
+ * @returns `true` when the value structurally matches a BulkError.
+ */
+function isBulkError(
+	error: unknown,
+): error is { name: string; message: string; failures: unknown[] } {
+	if (!isErrorWithName(error)) return false;
+	if (error.name !== "BulkError") return false;
+	if (!("failures" in error)) return false;
+	// Widening assignment: { name, message } → Record<string, unknown>.
+	const record: Record<string, unknown> = error;
+	return Array.isArray(record.failures);
 }
 
-function assertTrackInput(track: unknown, index: number): void {
-	const context = `tracks[${index}]`;
-	if (!isPlainObject(track)) {
-		throw new Error(`${context} must be an object`);
+/**
+ * Discriminates raw IndexedDB / Dexie errors into typed domain errors.
+ *
+ * Precedence (first matching rule wins):
+ * 1. **Domain re-throw** — any write-path domain error except
+ *    `ImportAbortedError` (`TrackValidationError` / `ConflictError` /
+ *    `ReferentialIntegrityError` / `StorageCapacityError` /
+ *    `StorageUnavailableError` / `PayloadLimitExceededError`) is re-thrown
+ *    verbatim (no wrapping).
+ * 2. **`inner` unwrap** — if the error has a non-null `inner` property,
+ *    recurse on it (the inner error wins over the outer error's own `name`).
+ * 3. **Top-level `name`** — `QuotaExceededError` → `StorageCapacityError`;
+ *    `ConstraintError` → `ConflictError`; `InvalidStateError` /
+ *    `AbortError` / `UnknownError` / `VersionError` / `NotFoundError` →
+ *    `StorageUnavailableError`.
+ * 4. **`failures[]` scan** — first matching failure wins (same name mapping
+ *    as rule 3).
+ * 5. **Identity re-throw** — unknown errors are re-thrown by identity.
+ *
+ * Documented limitations:
+ * - **`failures[]` entries are NOT inner-unwrapped**: only top-level
+ *   `name` is inspected within each failure element.
+ * - **Aggregate-error allowlist: the `failures[]` scan
+ *   accepts the Dexie `BulkError` shape only (name === "BulkError").
+ *   Dexie's `ModifyError` — bulkUpdate's aggregate — also carries a
+ *   `failures` array but is intentionally NOT scanned: `bulkUpdate`
+ *   failures are re-throw-by-identity today (rule 5). If a future write
+ *   path surfaces `ModifyError`, extend {@link isBulkError} deliberately,
+ *   with boundary pins — do not widen silently.
+ *
+ * @param error   - The caught unknown error value.
+ * @param visited - Internal WeakSet to track visited objects and break cyclic `inner` chains.
+ *
+ * @throws {TrackValidationError|ConflictError|ReferentialIntegrityError|
+ *          StorageCapacityError|StorageUnavailableError|PayloadLimitExceededError}
+ *         Re-thrown domain errors (rule 1, verbatim).
+ * @throws {StorageCapacityError|ConflictError|StorageUnavailableError} Mapped
+ *         domain errors (rules 2–4).
+ * @throws {unknown} Re-thrown by identity (rule 5, no match).
+ */
+function mapStorageWriteError(
+	error: unknown,
+	visited: WeakSet<object> = new WeakSet(),
+): never {
+	// Rule 1: domain re-throw
+	if (
+		error instanceof TrackValidationError ||
+		error instanceof ConflictError ||
+		error instanceof ReferentialIntegrityError ||
+		error instanceof StorageCapacityError ||
+		error instanceof StorageUnavailableError ||
+		error instanceof PayloadLimitExceededError
+	) {
+		throw error;
 	}
 
-	const result = trackInputSchema.safeParse(track);
-	if (result.success) {
-		return;
-	}
-
-	const [field, collectionIndex] = result.error.issues[0]?.path ?? [];
-
-	if (field === "id") {
-		throw new Error(`${context}.id must be a non-empty string`);
-	}
-	if (field === "file") {
-		throw new Error(`${context}.file must be a non-empty string`);
-	}
-	if (field === "filePath") {
-		throw new Error(`${context}.filePath must be a non-empty string`);
-	}
-	if (field === "status") {
-		throw new Error(
-			`${context}.status must be one of: pending, processing, completed, failed`,
-		);
-	}
-	if (field === "selected") {
-		throw new Error(`${context}.selected must be 0 or 1`);
-	}
-	if (field === "collectionIds") {
-		if (collectionIndex === undefined) {
-			throw new Error(`${context}.collectionIds must be an array of strings`);
+	// Rule 2: inner unwrap
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"inner" in error &&
+		error.inner !== undefined &&
+		error.inner !== null
+	) {
+		const inner = error.inner;
+		if (typeof inner === "object" && inner !== null) {
+			if (!visited.has(inner)) {
+				visited.add(inner);
+				mapStorageWriteError(inner, visited);
+			}
+		} else {
+			mapStorageWriteError(inner, visited);
 		}
-		throw new Error(
-			`${context}.collectionIds[${String(collectionIndex)}] must be a non-empty string`,
+	}
+
+	// Rule 3: top-level name
+	if (isErrorWithName(error)) {
+		const factory = ENGINE_ERROR_MAP[error.name];
+		if (factory) throw factory(error, "single");
+	}
+	// Rule 4: failures[] scan
+	if (isBulkError(error)) {
+		for (const f of error.failures) {
+			if (!isErrorWithName(f)) continue;
+			const factory = ENGINE_ERROR_MAP[f.name];
+			if (factory) throw factory(f, "batch");
+		}
+	}
+
+	// Rule 5: identity re-throw
+	throw error;
+}
+
+/**
+ * Asserts that a derived key is unique across a batch of items.
+ *
+ * @param params.items     – The batch to inspect.
+ * @param params.getKey    – Pure extractor returning the uniqueness key.
+ * @param params.fieldPath – Template for the error context, e.g. `"tracks[{i}].id"`.
+ * @param params.label     – Human-readable noun for the message, e.g. `"id"`.
+ * @param params.context   – Message prefix, default `"Batch"`. Use `"Updates"`
+ *                           for `updateMany` so the phrasing survives.
+ *
+ * @throws {ConflictError} On the first duplicate detected.
+ */
+function assertBatchUniqueness<T>(params: {
+	items: readonly T[];
+	getKey: (item: T) => string;
+	fieldPath: (index: number) => string;
+	label: string;
+	context?: string;
+}): void {
+	const { items, getKey, fieldPath, label, context = "Batch" } = params;
+	const seen = new Set<string>();
+	for (const [index, item] of items.entries()) {
+		const key = getKey(item);
+		if (seen.has(key)) {
+			throw new ConflictError(
+				`${sanitizeControlChars(context)} contains duplicate ${sanitizeControlChars(label)}: "${sanitizeControlChars(key)}" at ${sanitizeControlChars(fieldPath(index))}`,
+			);
+		}
+		seen.add(key);
+	}
+}
+
+/**
+ * Verifies that all collection IDs in the provided array exist in the database.
+ *
+ * @param collectionIds - Array of collection IDs to verify.
+ * @param collectionsTable - Dexie EntityTable for collections.
+ * @param context - Error context string for validation failures.
+ * @throws {ReferentialIntegrityError} If any collection ID does not exist.
+ */
+async function assertReferentialIntegrity(
+	collectionIds: readonly string[],
+	collectionsTable: EntityTable<CollectionType, "id">,
+	context: string,
+): Promise<void> {
+	if (collectionIds.length === 0) return;
+
+	const referencedCollectionIds = new Set<string>(collectionIds);
+	const idsToCheck = [...referencedCollectionIds];
+
+	const foundKeys = await chunkedAnyOfKeys(collectionsTable, "id", idsToCheck);
+	const existingIds = new Set<string>();
+	for (const key of foundKeys) {
+		if (typeof key === "string") {
+			existingIds.add(key);
+		}
+	}
+
+	const missing = idsToCheck.filter((id) => !existingIds.has(id));
+	if (missing.length > 0) {
+		const display = missing
+			.slice(0, MAX_DISPLAY_MISSING)
+			.map(sanitizeControlChars)
+			.join(", ");
+		const suffix =
+			missing.length > MAX_DISPLAY_MISSING
+				? ` (and ${missing.length - MAX_DISPLAY_MISSING} more)`
+				: "";
+		throw new ReferentialIntegrityError(
+			`${sanitizeControlChars(context)}: Referenced collection(s) do not exist: ${display}${suffix}`,
 		);
 	}
-	throw new Error(`${context} is invalid`);
+}
+
+/**
+ * Generic parse-or-throw boundary helper.
+ *
+ * @typeParam T - The parsed output type of the schema.
+ * @param parse   - A `safeParseX` validator from `@shared/validators`.
+ * @param context - Location prefix for the thrown error (e.g. `"tracks[0]"`).
+ * @param input   - Untrusted input to validate.
+ * @returns The parsed, schema-validated data.
+ * @throws {TrackValidationError} When validation fails. Carries the full
+ *         structured issue list — no issues are discarded.
+ */
+function assertParsed<T>(
+	parse: (input: unknown) => ValidationResult<T>,
+	context: string,
+	input: unknown,
+): T {
+	const result = parse(input);
+	if (!result.success) {
+		throw new TrackValidationError(context, result.issues);
+	}
+	return result.data;
+}
+
+/**
+ * Validates a single track object against `trackInputSchema` and returns
+ * the parsed `Metadata` on success.
+ *
+ * @param track - Untrusted input to validate.
+ * @param index - Positional index for the error context prefix.
+ * @returns The parsed, schema-validated `Metadata`.
+ * @throws {TrackValidationError} When validation fails. Carries the full
+ *         structured issue list — no issues are discarded.
+ */
+function assertTrackInput(track: unknown, index: number): IngestionMetadata {
+	return assertParsed(safeParseTrack, `tracks[${index}]`, track);
+}
+
+/**
+ * Asserts that the untrusted `addMany` options satisfy `addManyOptionsSchema`.
+ *
+ * Rejects (does not clamp) invalid `batchSize` / `onProgress`
+ * at the trust boundary, throwing {@link TrackValidationError} carrying the
+ * structured issues from the schema. Callers receive the validated options
+ * with `batchSize` guaranteed to be an integer in `[1, MAX_IMPORT_BATCH_SIZE]`
+ * and `onProgress` guaranteed to be a function (or `undefined`).
+ *
+ * @param options - Untrusted options payload (UI/Redux → data layer).
+ * @returns The schema-validated options.
+ * @throws {TrackValidationError} When validation fails.
+ */
+function assertAddManyOptions(options: unknown): AddManyOptions {
+	return assertParsed(safeParseAddManyOptions, "options", options);
 }
 
 function normalizeCollectionIds(
@@ -104,6 +327,12 @@ function normalizeCollectionIds(
 	const seen = new Set<string>();
 
 	const addId = (id: unknown): void => {
+		if (typeof id !== "string") {
+			throw new StorageUnavailableError(
+				`collectionIds contained a non-string id (received ${sanitizeControlChars(typeof id)}); ` +
+					"stored rows and schema-validated payloads guarantee string ids",
+			);
+		}
 		if (!isNonEmptyString(id)) {
 			return;
 		}
@@ -152,31 +381,307 @@ function uniqueTracks(tracks: Metadata[]): Metadata[] {
 	return [...byId.values()];
 }
 
-function normalizeTrackChanges(
-	changes: TrackChanges,
-	context: string,
-): TrackChanges {
-	if (!("collectionIds" in changes) || changes.collectionIds === undefined) {
-		return changes;
+/**
+ * Validates a partial track mutation payload and normalises collectionIds.
+ *
+ * @param changes - Untrusted mutation payload.
+ * @param context - Location prefix for error messages (e.g. `"changes"`).
+ * @returns The validated and normalised `TrackChanges`.
+ * @throws {TrackValidationError} When validation fails.
+ */
+function validateTrackChanges(changes: unknown, context: string): TrackChanges {
+	const validated = assertParsed(safeParseTrackChanges, context, changes);
+	if (
+		!("collectionIds" in validated) ||
+		validated.collectionIds === undefined
+	) {
+		return validated;
 	}
-	assertCollectionIds(changes.collectionIds, context);
+
 	return {
-		...changes,
+		...validated,
 		collectionIds: normalizeCollectionIds(
-			changes.collectionIds,
+			validated.collectionIds,
 			SYSTEM_COLLECTION_ID,
 		),
 	};
 }
 
+/**
+ * Evaluates whether a track update should be applied based on state machine and sequence guards.
+ * Returns the patch to apply if valid, or null if the update should be rejected.
+ *
+ * @param track - The current track state from the DB, or undefined if missing.
+ * @param changes - The validated track changes payload.
+ * @returns The partial patch to apply, or null if the update is rejected.
+ */
+function shouldApplyUpdate(
+	track: Metadata | undefined,
+	changes: TrackChanges,
+): Partial<Metadata> | null {
+	if (track === undefined) return null;
+
+	if (!("status" in changes)) {
+		return changes;
+	}
+
+	if (!isLegalStatusTransition(track.status, changes.status)) {
+		return null;
+	}
+
+	const currentSeq = track.statusSeq ?? 0;
+	if (
+		"seq" in changes &&
+		changes.seq !== undefined &&
+		changes.seq <= currentSeq
+	) {
+		return null;
+	}
+
+	const patch: Record<string, unknown> = {
+		status: changes.status,
+	};
+
+	if (changes.status === "failed") {
+		patch.reason = changes.reason;
+	} else {
+		patch.reason = undefined;
+	}
+
+	if ("seq" in changes && changes.seq !== undefined) {
+		patch.statusSeq = changes.seq;
+	}
+
+	return patch;
+}
+
+/**
+ * Applies a guarded track update, enforcing state machine legality and sequence monotonicity.
+ *
+ * This function acts as the final defensive layer (Defense in Depth) before persisting
+ * status changes to IndexedDB. It evaluates two distinct guard layers:
+ * 1. State Machine: Validates status transition legality.
+ * 2. Sequence Guard: Ensures event is strictly newer than persisted high-water mark.
+ *
+ * @param tracksTable - The injected Dexie EntityTable for tracks.
+ * @param id - The primary key of the track to update.
+ * @param changes - The shape-validated track mutation payload.
+ * @returns A promise resolving to 1 if updated, or 0 if rejected.
+ */
+async function applyGuardedTrackUpdate(
+	tracksTable: EntityTable<Metadata, "id">,
+	id: string,
+	changes: TrackChanges,
+): Promise<number> {
+	if (!("status" in changes)) {
+		return await tracksTable.update(id, changes);
+	}
+
+	const track = await tracksTable.get(id);
+	const patch = shouldApplyUpdate(track, changes);
+
+	if (patch === null) return 0;
+
+	return await tracksTable.update(id, patch);
+}
+
+/**
+ * Calculates the total estimated payload size of a batch by summing artwork Blob/Uint8Array sizes.
+ * @param tracks - The parsed ingestion metadata array.
+ * @returns Total size in bytes.
+ */
+function calculateBatchPayloadSize(
+	tracks: readonly IngestionMetadata[],
+): number {
+	let size = 0;
+	for (const track of tracks) {
+		if (track.common?.picture) {
+			for (const pic of track.common.picture) {
+				if (pic.data instanceof Blob) {
+					size += pic.data.size;
+				} else if (pic.data instanceof Uint8Array) {
+					size += pic.data.byteLength;
+				}
+			}
+		}
+	}
+	return size;
+}
+
+/**
+ * Asserts that the batch payload size does not exceed the maximum allowed limit.
+ * @param size - Total size in bytes.
+ * @throws {PayloadLimitExceededError} If size exceeds `MAX_BATCH_PAYLOAD_SIZE`.
+ */
+function assertBatchPayloadSize(size: number): void {
+	if (size > MAX_BATCH_PAYLOAD_SIZE) {
+		throw new PayloadLimitExceededError(
+			`Batch payload size ${size} exceeds maximum allowed ${MAX_BATCH_PAYLOAD_SIZE}`,
+		);
+	}
+}
+
+/**
+ * Gathers the set of collection ids referenced by a batch/import: the target
+ * collection plus every track's `collectionIds`. Pure; no I/O.
+ *
+ * @param tracks              - Parsed, validated ingestion tracks.
+ * @param targetCollectionId - The target collection of this import/batch.
+ * @returns The referenced collection-id set (always includes the target).
+ */
+function gatherReferencedCollectionIds(
+	tracks: readonly IngestionMetadata[],
+	targetCollectionId: string,
+): Set<string> {
+	const ids = new Set<string>();
+	ids.add(targetCollectionId);
+	for (const track of tracks) {
+		if (Array.isArray(track.collectionIds)) {
+			for (const cid of track.collectionIds) {
+				if (isNonEmptyString(cid)) {
+					ids.add(cid);
+				}
+			}
+		}
+	}
+	return ids;
+}
+
+/**
+ * First-wins deduplication of ingestion tracks by normalized `filePath`.
+ *
+ * Once `trackBaseSchema` normalizes `filePath` at parse time,
+ * case-variant duplicates within a single import payload collapse onto
+ * the same canonical key. Rather than aborting the whole import
+ * with a `ConflictError` (the previous strict `assertBatchUniqueness` behavior),
+ * this helper keeps the first occurrence and reports the rest
+ * as `skipped` — the same outcome channel already used for tracks that exist in the database.
+ * This tolerates noisy scanner output (symlink re-resolution, re-scans, case-renames)
+ * without losing data and without aborting a long-running import.
+ *
+ * Duplicate `id`s remain a hard {@link ConflictError} (asserted separately
+ * by {@link assertBatchUniqueness} on the `id` key): two ingestion tracks
+ * claiming the same primary key is a genuine integrity violation, not a
+ * case-folding artifact, and must not be silently folded.
+ *
+ * The function is pure and total: it performs no I/O, does not touch the
+ * database, and preserves input order for the surviving tracks. It relies
+ * on the schema-enforced precondition that every `track.filePath` is
+ * already normalized (see `filePathSchema`).
+ *
+ * @see [ADR-0002](../../../../../docs/adr/ADR-0002-asymmetric-duplicate-policy.md)
+ *               for the asymmetric duplicate policy decision (filePath
+ *               first-wins-`skipped` vs id hard-`ConflictError`).
+ *
+ * @param tracks - Parsed, schema-validated ingestion tracks whose
+ *                 `filePath` values are already normalized by `filePathSchema`.
+ * @returns The deduped unique tracks and the IDs folded into them.
+ */
+function dedupeByFilePath(
+	tracks: readonly IngestionMetadata[],
+): FilePathDedupeResult {
+	const seen = new Set<string>();
+	const unique: IngestionMetadata[] = [];
+	const skipped: string[] = [];
+	for (const track of tracks) {
+		if (seen.has(track.filePath)) {
+			skipped.push(track.id);
+			continue;
+		}
+		seen.add(track.filePath);
+		unique.push(track);
+	}
+	return { unique, skipped };
+}
+
+/**
+ * Derives a log-safe, length-bounded descriptor for a thrown value.
+ *
+ * @param error - The caught unknown value from a callback invocation or a
+ *                mid-import failure.
+ * @returns A sanitized, truncated name safe for diagnostic logs.
+ */
+function describeThrownValue(error: unknown): string {
+	const name = isErrorWithName(error) ? error.name : "unknown";
+	return sanitizeControlChars(name).slice(0, MAX_LOGGED_ERROR_NAME_LENGTH);
+}
+
+/**
+ * Creates the failure-isolated progress emitter for an `addMany` import.
+ *
+ * The callback contract (synchronous, non-throwing, lightweight,
+ * renderer-local) is documented on {@link AddManyProgressCallback}.
+ *
+ * @param onProgress - The schema-validated callback (may be `undefined`,
+ *   in which case both emitter operations are no-ops and the hot path
+ *   carries no try/catch or closure bookkeeping).
+ * @returns A {@link ProgressEmitter} bound to this single import.
+ */
+function createProgressEmitter(
+	onProgress: AddManyProgressCallback | undefined,
+): ProgressEmitter {
+	if (onProgress === undefined) {
+		return { emit: (): void => {}, flush: (): void => {} };
+	}
+	const callback: AddManyProgressCallback = onProgress;
+	let failureCount = 0;
+	let firstFailureLogged = false;
+
+	return {
+		emit(progress: AddManyProgress): void {
+			try {
+				callback(progress);
+			} catch (callbackError: unknown) {
+				failureCount += 1;
+				if (!firstFailureLogged) {
+					firstFailureLogged = true;
+					// biome-ignore lint/suspicious/noConsole: Intentional diagnostic for a throwing onProgress callback; sanitized and truncated output only (error name, never message); logged once per import.
+					console.warn(
+						"[tracksRepository.addMany] onProgress callback threw; continuing import. Further callback failures are suppressed and summarized on completion.",
+						{
+							processed: progress.processed,
+							total: progress.total,
+							errorName: describeThrownValue(callbackError),
+						},
+					);
+				}
+			}
+		},
+		flush(): void {
+			if (failureCount > 1) {
+				// biome-ignore lint/suspicious/noConsole: Terminal diagnostic summary; pure counts only — no attacker-influenceable content.
+				console.warn(
+					"[tracksRepository.addMany] onProgress callback failed repeatedly during this import; every failure was isolated (see the first warning for detail)",
+					{
+						totalFailures: failureCount,
+						suppressedAfterFirst: failureCount - 1,
+					},
+				);
+			}
+		},
+	};
+}
+
 export {
+	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
-	assertCollectionIds,
-	assertTargetCollectionId,
+	assertAddManyOptions,
+	assertBatchPayloadSize,
+	assertBatchUniqueness,
+	assertParsed,
+	assertReferentialIntegrity,
 	assertTrackInput,
+	calculateBatchPayloadSize,
+	createProgressEmitter,
+	dedupeByFilePath,
+	describeThrownValue,
+	gatherReferencedCollectionIds,
+	isErrorWithName,
 	isNonEmptyString,
 	isPlainObject,
+	mapStorageWriteError,
 	normalizeCollectionIds,
-	normalizeTrackChanges,
+	shouldApplyUpdate,
 	uniqueTracks,
+	validateTrackChanges,
 };

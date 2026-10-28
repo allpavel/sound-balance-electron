@@ -29,6 +29,7 @@ export default defineConfig({
 			"@main": path.resolve(import.meta.dirname, "src/main"),
 			"@renderer": path.resolve(import.meta.dirname, "src/renderer/src"),
 			"@shared": path.resolve(import.meta.dirname, "src/shared"),
+			"@tests": path.resolve(import.meta.dirname, "src/tests"),
 			"@types": path.resolve(import.meta.dirname, "src/shared/types/index.ts"),
 			"@": path.resolve(import.meta.dirname, "."),
 		},

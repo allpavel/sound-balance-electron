@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import fs from "node:fs/promises";
 import {
 	buildLoudnormFirstPassOptions,
 	buildLoudnormSecondPassOptions,
@@ -31,8 +30,6 @@ vi.mock("@main/lib/ffmpeg/utils/buildLoudnormOptions", () => ({
 describe("TwoPassProcessManager", () => {
 	let tpm: TwoPassProcessManager;
 	let runProcessingSpy: ReturnType<typeof vi.fn>;
-	let cleanupSpy: ReturnType<typeof vi.fn>;
-	let rmSpy: ReturnType<typeof vi.fn>;
 
 	const stderrData =
 		'{"input_i": "-20.0", "input_lra": "5.0", "input_tp": "-2.0", "input_thresh": "-30.0", "target_offset": "-1.0"}';
@@ -61,15 +58,6 @@ describe("TwoPassProcessManager", () => {
 				"runProcessing",
 			)
 			.mockResolvedValue(undefined);
-
-		cleanupSpy = vi
-			.spyOn(
-				tpm as unknown as { cleanup: (args: string[]) => Promise<void> },
-				"cleanup",
-			)
-			.mockResolvedValue(undefined);
-
-		rmSpy = vi.spyOn(fs, "rm").mockResolvedValue(undefined);
 
 		vi.mocked(buildLoudnormFirstPassOptions).mockReturnValue([
 			"-af",
@@ -164,7 +152,6 @@ describe("TwoPassProcessManager", () => {
 			);
 			expect(runProcessingSpy).not.toHaveBeenCalled();
 			expect(buildLoudnormFirstPassOptions).not.toHaveBeenCalled();
-			expect(cleanupSpy).not.toHaveBeenCalled();
 		});
 	});
 
@@ -231,79 +218,35 @@ describe("TwoPassProcessManager", () => {
 		});
 	});
 
-	describe("run - error handling and cleanup", () => {
-		it("should call cleanup in finally block on success", async () => {
-			mockstderrData('{"input_i": "-20.0"}');
-			await tpm.run(baseOptions);
-			expect(cleanupSpy).toHaveBeenCalledTimes(1);
-		});
-
-		it("should call cleanup in finally block if first pass fails", async () => {
+	describe("run - error handling", () => {
+		it("should throw if first pass fails", async () => {
 			const errorMessage = "First pass failed";
 			runProcessingSpy.mockRejectedValueOnce(new Error(errorMessage));
 			await expect(tpm.run(baseOptions)).rejects.toThrow(errorMessage);
-			expect(cleanupSpy).toHaveBeenCalledTimes(1);
-			expect(buildLoudnormSecondPassOptions).not.toHaveBeenCalled();
 		});
 
-		it("should call cleanup in finally block if second pass fails", async () => {
+		it("should throw if second pass fails", async () => {
 			const errorMessage = "Second pass failed";
-			mockstderrData('{"input_i": "-20.0"}').mockRejectedValueOnce(
-				new Error(errorMessage),
-			);
+			mockstderrData('{"input_i": "-20.0"}');
+			runProcessingSpy.mockRejectedValueOnce(new Error(errorMessage));
 			await expect(tpm.run(baseOptions)).rejects.toThrow(errorMessage);
-			expect(cleanupSpy).toHaveBeenCalledTimes(1);
 		});
 
-		it("should call cleanup in finally block if stats extraction fails", async () => {
+		it("should throw if stats extraction fails", async () => {
 			mockstderrData("No stats");
 			await expect(tpm.run(baseOptions)).rejects.toThrow(
 				"Could not find loudnorm stats in stderr output",
 			);
-			expect(cleanupSpy).toHaveBeenCalledTimes(1);
 		});
 	});
 
 	describe("kill", () => {
-		it("should call super.kill and cleanup", async () => {
+		it("should call super.kill (inherited from BaseProcess)", () => {
 			const superKillSpy = vi
 				.spyOn(BaseProcess.prototype, "kill")
 				.mockImplementation(() => {});
-			await tpm.kill("SIGTERM");
+			tpm.kill("SIGTERM");
 			expect(superKillSpy).toHaveBeenCalledWith("SIGTERM");
-			expect(cleanupSpy).toHaveBeenCalledTimes(1);
-		});
-	});
-
-	describe("cleanup (private)", () => {
-		beforeEach(() => {
-			cleanupSpy.mockRestore();
-		});
-
-		it("should do nothing if tempDir is null", async () => {
-			(tpm as unknown as { tempDir: string | null }).tempDir = null;
-			await (tpm as unknown as { cleanup: () => Promise<void> }).cleanup();
-			expect(rmSpy).not.toHaveBeenCalled();
-		});
-
-		it("should remove tempDir recursively and set it to null", async () => {
-			const tempDir = "/tmp/loudnorm-123";
-			(tpm as unknown as { tempDir: string | null }).tempDir = tempDir;
-			await (tpm as unknown as { cleanup: () => Promise<void> }).cleanup();
-			expect(rmSpy).toHaveBeenCalledWith(tempDir, {
-				recursive: true,
-				force: true,
-			});
-			expect((tpm as unknown as { tempDir: string | null }).tempDir).toBeNull();
-		});
-
-		it("should swallow errors from fs.rm and still set tempDir to null", async () => {
-			const tempDir = "/tmp/loudnorm-123";
-			(tpm as unknown as { tempDir: string | null }).tempDir = tempDir;
-			rmSpy.mockRejectedValueOnce(new Error("Permission denied"));
-			await (tpm as unknown as { cleanup: () => Promise<void> }).cleanup();
-			expect(rmSpy).toHaveBeenCalled();
-			expect((tpm as unknown as { tempDir: string | null }).tempDir).toBeNull();
 		});
 	});
 });

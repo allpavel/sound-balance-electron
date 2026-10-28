@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import fs from "node:fs/promises";
 import {
 	buildLoudnormFirstPassOptions,
 	buildLoudnormSecondPassOptions,
@@ -40,8 +39,6 @@ type Stats = {
 };
 
 export class TwoPassProcessManager extends BaseProcess {
-	private tempDir: string | null = null;
-
 	private extractStatsFromStderr(stderr: string): Stats {
 		const match = stderr.match(/\{[\s\S]*\}/);
 		if (!match) {
@@ -75,68 +72,44 @@ export class TwoPassProcessManager extends BaseProcess {
 			throw new Error("Processing aborted before start");
 		}
 
-		// this.tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loudnorm-"));
-		// const statsFile = path.join(this.tempDir, "stats.json");
-
-		const analysisFilter = buildLoudnormFirstPassOptions(options);
-
+		// First pass: measure loudness
+		const firstPassFilter = buildLoudnormFirstPassOptions(options);
 		const firstPassArgs = [
 			...globalSettings,
 			"-i",
 			input,
-			...analysisFilter,
+			...firstPassFilter,
 			"-f",
 			"null",
 			"-",
 		];
-		try {
-			// run first pass
-			await this.runProcessing(firstPassArgs);
+		// Run first pass
+		await this.runProcessing(firstPassArgs);
 
-			// prepare second pass with measured values
-			const stats = this.extractStatsFromStderr(this.stderrData);
-			const measuredParams: Stats = {
-				measured_I: stats.measured_I,
-				measured_LRA: stats.measured_LRA,
-				measured_TP: stats.measured_TP,
-				measured_thresh: stats.measured_thresh,
-				measured_offset: stats.measured_offset,
-			};
+		const stats = this.extractStatsFromStderr(this.stderrData);
+		const measuredParams: Stats = {
+			measured_I: stats.measured_I,
+			measured_LRA: stats.measured_LRA,
+			measured_TP: stats.measured_TP,
+			measured_thresh: stats.measured_thresh,
+			measured_offset: stats.measured_offset,
+		};
 
-			const secondPassFilter = buildLoudnormSecondPassOptions(
-				filterOptions,
-				measuredParams,
-			);
-			const secondPassArgs = [
-				...globalSettings,
-				"-i",
-				input,
-				...secondPassFilter,
-				...trackSettings,
-				output,
-			];
+		// Prepare second pass with measured values
+		const secondPassFilter = buildLoudnormSecondPassOptions(
+			filterOptions,
+			measuredParams,
+		);
+		const secondPassArgs = [
+			...globalSettings,
+			"-i",
+			input,
+			...secondPassFilter,
+			...trackSettings,
+			output,
+		];
 
-			// run second pass
-			await this.runProcessing(secondPassArgs);
-		} finally {
-			// always cleanup temporary files
-			await this.cleanup();
-		}
-	}
-
-	async kill(signal: NodeJS.Signals = "SIGINT"): Promise<void> {
-		super.kill(signal);
-		await this.cleanup();
-	}
-
-	private async cleanup(): Promise<void> {
-		if (this.tempDir) {
-			try {
-				await fs.rm(this.tempDir, { recursive: true, force: true });
-			} catch {
-			} finally {
-				this.tempDir = null;
-			}
-		}
+		// run second pass
+		await this.runProcessing(secondPassArgs);
 	}
 }

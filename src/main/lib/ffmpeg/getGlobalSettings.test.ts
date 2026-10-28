@@ -20,18 +20,21 @@ import { getGlobalSettings } from "./getGlobalSettings";
 describe("getGlobalSettings", () => {
 	it("returns [-y] when overwrite is true", () => {
 		const settings = { overwrite: true, noOverwrite: false };
-		expect(getGlobalSettings(settings as any));
+		expect(getGlobalSettings(settings as any)).toEqual(["-y"]);
 	});
+
 	it("returns [-n] when noOverwrite is true", () => {
 		const settings = { overwrite: false, noOverwrite: true };
-		expect(getGlobalSettings(settings as any));
+		expect(getGlobalSettings(settings as any)).toEqual(["-n"]);
 	});
+
 	it("returns [] when both are false", () => {
 		const settings = { overwrite: false, noOverwrite: false };
-		expect(getGlobalSettings(settings as any));
+		expect(getGlobalSettings(settings as any)).toEqual([]);
 	});
+
 	it("returns [-y, -n] when both are true", () => {
 		const settings = { overwrite: true, noOverwrite: true };
-		expect(getGlobalSettings(settings as any));
+		expect(getGlobalSettings(settings as any)).toEqual(["-y", "-n"]);
 	});
 });

@@ -19,12 +19,14 @@
 // @vitest-environment jsdom
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { resetTestState } from "@renderer/utils/test-utils/testFactories";
+import { resetTestState, seedCollection } from "@renderer/utils/test-utils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import { ConflictError, TrackValidationError } from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
-import { makeTrack } from "@shared/utils/factories";
+import type { AddManyResult } from "@shared/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { makeTrack } from "@tests/factories";
 import type { PropsWithChildren } from "react";
 import {
 	type AddTracksPayload,
@@ -76,7 +78,6 @@ describe("useTracks", () => {
 
 	afterEach(() => {
 		cleanup();
-		vi.restoreAllMocks();
 	});
 
 	describe("initialization and live queries", () => {
@@ -270,6 +271,7 @@ describe("useTracks", () => {
 
 	describe("mutations integrated with live queries", () => {
 		it("addTracksAsync persists tracks and updates visible tracks", async () => {
+			await seedCollection("custom");
 			const result = await renderUseTracks();
 			const payload: AddTracksPayload = {
 				tracks: [
@@ -497,11 +499,11 @@ describe("useTracks", () => {
 					targetCollectionId: SYSTEM_COLLECTION_ID,
 				},
 			};
-			const successDeferred = createDeferred<string[]>();
+			const successDeferred = createDeferred<AddManyResult>();
 			const addSpy = vi
 				.spyOn(tracksRepository, "addMany")
 				.mockReturnValueOnce(successDeferred.promise);
-			let pendingPromise!: Promise<string[]>;
+			let pendingPromise!: Promise<AddManyResult>;
 			act(() => {
 				pendingPromise = result.current.addTracksAsync(payload);
 			});
@@ -511,7 +513,11 @@ describe("useTracks", () => {
 			expect(result.current.addTracksState.isError).toBe(false);
 			expect(result.current.addTracksState.error).toBeNull();
 			await act(async () => {
-				successDeferred.resolve(["lifecycle-track"]);
+				successDeferred.resolve({
+					added: ["lifecycle-track"],
+					merged: [],
+					skipped: [],
+				});
 				await pendingPromise;
 			});
 			await waitFor(() =>
@@ -687,6 +693,32 @@ describe("useTracks", () => {
 			);
 			expect(result.current.removeManyTracksState.error).toBe(error);
 		});
+
+		it("forwards onProgress and batchSize to tracksRepository.addMany (F-12.8)", async () => {
+			const result = await renderUseTracks();
+			const onProgress = vi.fn();
+			const payload: AddTracksPayload = {
+				tracks: [
+					makeTrack({ id: "fwd-track", filePath: "/music/fwd-track.mp3" }),
+				],
+				options: {
+					onProgress,
+					batchSize: 2,
+					targetCollectionId: SYSTEM_COLLECTION_ID,
+				},
+			};
+			const addSpy = vi
+				.spyOn(tracksRepository, "addMany")
+				.mockResolvedValue({ added: [], merged: [], skipped: [] });
+			await act(async () => {
+				await result.current.addTracksAsync(payload);
+			});
+			expect(addSpy).toHaveBeenCalledTimes(1);
+			expect(addSpy).toHaveBeenCalledWith(
+				payload.tracks,
+				expect.objectContaining({ onProgress, batchSize: 2 }),
+			);
+		});
 	});
 
 	describe("error propagation", () => {
@@ -695,12 +727,12 @@ describe("useTracks", () => {
 			const payload: AddTracksPayload = {
 				tracks: [
 					makeTrack({
-						id: "a",
-						filePath: "/music/same.mp3",
+						id: "duplicate-id",
+						filePath: "/music/a.mp3",
 					}),
 					makeTrack({
-						id: "b",
-						filePath: "/music/same.mp3",
+						id: "duplicate-id",
+						filePath: "/music/b.mp3",
 					}),
 				],
 				options: {
@@ -709,14 +741,14 @@ describe("useTracks", () => {
 			};
 			await act(async () => {
 				await expect(result.current.addTracksAsync(payload)).rejects.toThrow(
-					/duplicate filePath/i,
+					ConflictError,
 				);
 			});
 			await waitFor(() =>
 				expect(result.current.addTracksState.isError).toBe(true),
 			);
 			expect(result.current.addTracksState.isPending).toBe(false);
-			expect(result.current.addTracksState.error).toBeInstanceOf(Error);
+			expect(result.current.addTracksState.error).toBeInstanceOf(ConflictError);
 		});
 
 		it("propagates repository validation errors from updateTrackAsync", async () => {
@@ -727,15 +759,15 @@ describe("useTracks", () => {
 			};
 			await act(async () => {
 				await expect(result.current.updateTrackAsync(payload)).rejects.toThrow(
-					"ID must be a non-empty string",
+					TrackValidationError,
 				);
 			});
 			await waitFor(() =>
 				expect(result.current.updateTrackState.isError).toBe(true),
 			);
 			expect(result.current.updateTrackState.isPending).toBe(false);
-			expect(result.current.updateTrackState.error?.message).toBe(
-				"ID must be a non-empty string",
+			expect(result.current.updateTrackState.error).toBeInstanceOf(
+				TrackValidationError,
 			);
 		});
 	});

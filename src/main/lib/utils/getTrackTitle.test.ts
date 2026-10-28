@@ -22,25 +22,35 @@ describe("getTrackTitle", () => {
 	const artist = "The Beatles";
 	const title = "Come Together";
 	const defaultTitle = "default";
+
 	it("returns 'artist - title' when both are provided", () => {
 		expect(getTrackTitle(artist, title, defaultTitle)).toBe(
 			`${artist} - ${title}`,
 		);
 	});
+
 	it("returns only artist when title is missing", () => {
 		expect(getTrackTitle(artist, undefined, defaultTitle)).toBe(artist);
 	});
+
 	it("returns only title when artist is missing", () => {
 		expect(getTrackTitle(undefined, title, defaultTitle)).toBe(title);
 	});
+
 	it("returns default when title and artist are missing", () => {
 		expect(getTrackTitle(undefined, undefined, defaultTitle)).toBe(
 			defaultTitle,
 		);
 	});
-	it("handles empty strings gracefully", () => {
-		expect(getTrackTitle("", "", defaultTitle)).toBe(defaultTitle);
-		expect(getTrackTitle(artist, "", defaultTitle)).toBe(artist);
-		expect(getTrackTitle("", title, defaultTitle)).toBe(title);
-	});
+
+	it.each([
+		["both empty strings", "", "", "default", "default"],
+		["empty title with valid artist", artist, "", "default", artist],
+		["empty artist with valid title", "", title, "default", title],
+	])(
+		"handles empty strings gracefully: %s",
+		(_desc, artistArg, titleArg, defaultArg, expected) => {
+			expect(getTrackTitle(artistArg, titleArg, defaultArg)).toBe(expected);
+		},
+	);
 });

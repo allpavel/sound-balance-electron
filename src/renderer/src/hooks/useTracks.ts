@@ -16,17 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import type { Metadata, TrackChanges } from "@shared/schemas/track.schema";
+import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import type {
+	AddManyOptions,
+	Metadata,
+	TrackChanges,
+} from "@shared/schemas/track.schema";
 import { useMutation } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 
-export type AddTracksOptions = {
-	targetCollectionId?: string;
-};
-
 export type AddTracksPayload = {
 	tracks: Metadata[];
-	options?: AddTracksOptions;
+	options?: AddManyOptions;
 };
 
 export type UpdateTrackPayload = {
@@ -62,7 +63,15 @@ function createMutationState(mutation: {
 	};
 }
 
-export function useTracks(activeCollection = "all") {
+/**
+ * Live track list for the active collection plus every track mutation the
+ * table UI exposes. Queries re-run automatically when the underlying
+ * IndexedDB tables change.
+ *
+ * @param activeCollection - Collection id to display; defaults to the
+ *                           system collection (`SYSTEM_COLLECTION_ID`).
+ */
+export function useTracks(activeCollection = SYSTEM_COLLECTION_ID) {
 	const tracks = useLiveQuery(
 		() => tracksRepository.getAll(activeCollection),
 		[activeCollection],

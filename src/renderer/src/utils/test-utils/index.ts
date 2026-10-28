@@ -17,7 +17,11 @@
  */
 
 import { db } from "@renderer/db/db";
-import { resetFactorySequences } from "@shared/utils/factories";
+import {
+	SYSTEM_COLLECTION_ID,
+	SYSTEM_COLLECTION_TITLE,
+} from "@shared/constants";
+import { resetFactorySequences } from "@tests/factories";
 import { v7 as uuidV7 } from "uuid";
 
 let uuidSeq = 0;
@@ -28,11 +32,33 @@ export function configureUuidMock(): void {
 	vi.mocked(uuidV7).mockImplementation(() => `mock-uuid-${++uuidSeq}` as any);
 }
 
+/**
+ * Resets every IndexedDB store the application writes to, then re-seeds the
+ * protected system collection. Any new persistent store MUST be added here —
+ * an omitted store leaks rows across tests.
+ */
 export async function resetDatabase(): Promise<void> {
 	await db.tracks.clear();
 	await db.collections.clear();
 	await db.settings.clear();
-	await db.collections.add({ id: "all", title: "All" });
+	await db.artworks.clear();
+	await db.collections.add({
+		id: SYSTEM_COLLECTION_ID,
+		title: SYSTEM_COLLECTION_TITLE,
+	});
+}
+
+/**
+ * Deletes and re-opens the database, triggering Dexie's `populate` hook.
+ *
+ * Required for tests that verify populate/migration behavior —
+ * {@link resetDatabase} (clear + re-seed) cannot re-trigger `populate`
+ * because it never destroys the database, only clears its stores.
+ */
+export async function recreateDatabase(): Promise<void> {
+	db.close();
+	await db.delete();
+	await db.open();
 }
 
 export function resetSequences() {
@@ -44,4 +70,18 @@ export async function resetTestState() {
 	resetSequences();
 	await resetDatabase();
 	configureUuidMock();
+}
+
+/**
+ * Seeds a collection row so that referential-integrity checks
+ * pass for non-system collection IDs used in test inputs.
+ *
+ * @param id    – The collection primary key to insert.
+ * @param title – Optional human-readable title; defaults to `"Collection <id>"`.
+ */
+export async function seedCollection(
+	id: string,
+	title?: string,
+): Promise<void> {
+	await db.collections.add({ id, title: title ?? `Collection ${id}` });
 }

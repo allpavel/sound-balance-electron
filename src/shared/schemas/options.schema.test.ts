@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+import { hasIssueWithPath } from "@tests/utils";
 import { optionsSchema } from "./options.schema";
 
 const createNumberOption = (
@@ -67,13 +68,14 @@ const optionFactories = [
 	["text", createTextOption],
 ] as const;
 
+const nonNumberCases = ["min", "max", "defaultValue"].flatMap((field) =>
+	["10", true, null].map((value) => ({ field, value })),
+);
+
 describe("optionsSchema", () => {
 	describe("discriminated union routing", () => {
-		it("accepts every supported option type", () => {
-			expect(optionsSchema.safeParse(createNumberOption()).success).toBe(true);
-			expect(optionsSchema.safeParse(createSelectOption()).success).toBe(true);
-			expect(optionsSchema.safeParse(createSwitchOption()).success).toBe(true);
-			expect(optionsSchema.safeParse(createTextOption()).success).toBe(true);
+		it.each(optionFactories)("accepts valid %s option", (_name, factory) => {
+			expect(optionsSchema.safeParse(factory()).success).toBe(true);
 		});
 
 		it("rejects an unknown option type and reports the type path", () => {
@@ -82,7 +84,7 @@ describe("optionsSchema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["type"]);
+				expect(hasIssueWithPath(result.error.issues, ["type"])).toBe(true);
 			}
 		});
 
@@ -91,14 +93,19 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutType);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["type"]);
+				expect(hasIssueWithPath(result.error.issues, ["type"])).toBe(true);
 			}
 		});
 
-		it("rejects non-object input", () => {
-			for (const value of [null, undefined, "number", 42, true, []]) {
-				expect(optionsSchema.safeParse(value).success).toBe(false);
-			}
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["string", "number"],
+			["number", 42],
+			["boolean", true],
+			["array", []],
+		])("rejects non-object input: %s", (_label, value) => {
+			expect(optionsSchema.safeParse(value).success).toBe(false);
 		});
 	});
 
@@ -110,7 +117,7 @@ describe("optionsSchema", () => {
 				const result = optionsSchema.safeParse(withoutLabel);
 				expect(result.success).toBe(false);
 				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual(["label"]);
+					expect(hasIssueWithPath(result.error.issues, ["label"])).toBe(true);
 				}
 			},
 		);
@@ -122,7 +129,7 @@ describe("optionsSchema", () => {
 				const result = optionsSchema.safeParse(withoutDesc);
 				expect(result.success).toBe(false);
 				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual(["desc"]);
+					expect(hasIssueWithPath(result.error.issues, ["desc"])).toBe(true);
 				}
 			},
 		);
@@ -177,20 +184,18 @@ describe("optionsSchema", () => {
 				const result = optionsSchema.safeParse(option);
 				expect(result.success).toBe(false);
 				if (!result.success) {
-					expect(result.error.issues[0]?.path).toEqual([field]);
+					expect(hasIssueWithPath(result.error.issues, [field])).toBe(true);
 				}
 			},
 		);
 
-		it.each(["min", "max", "defaultValue"])(
-			"rejects a non-number %s",
-			(field) => {
-				for (const value of ["10", true, null]) {
-					const result = optionsSchema.safeParse(
-						createNumberOption({ [field]: value }),
-					);
-					expect(result.success).toBe(false);
-				}
+		it.each(nonNumberCases)(
+			"rejects a non-number $field value: $value",
+			({ field, value }) => {
+				const result = optionsSchema.safeParse(
+					createNumberOption({ [field]: value }),
+				);
+				expect(result.success).toBe(false);
 			},
 		);
 
@@ -200,7 +205,7 @@ describe("optionsSchema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["min"]);
+				expect(hasIssueWithPath(result.error.issues, ["min"])).toBe(true);
 			}
 		});
 
@@ -210,7 +215,9 @@ describe("optionsSchema", () => {
 			);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["defaultValue"]);
+				expect(hasIssueWithPath(result.error.issues, ["defaultValue"])).toBe(
+					true,
+				);
 			}
 		});
 	});
@@ -252,7 +259,7 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutOptions);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["options"]);
+				expect(hasIssueWithPath(result.error.issues, ["options"])).toBe(true);
 			}
 		});
 
@@ -265,58 +272,46 @@ describe("optionsSchema", () => {
 			expect(result.success).toBe(false);
 		});
 
-		it("rejects object options with a missing label or value", () => {
+		it.each([
+			["missing label", { value: "downward" }],
+			["missing value", { label: "Downward" }],
+		])("rejects object options with %s", (_desc, optionObj) => {
 			expect(
-				optionsSchema.safeParse(
-					createSelectOption({
-						options: [{ value: "downward" }],
-					}),
-				).success,
-			).toBe(false);
-			expect(
-				optionsSchema.safeParse(
-					createSelectOption({
-						options: [{ label: "Downward" }],
-					}),
-				).success,
+				optionsSchema.safeParse(createSelectOption({ options: [optionObj] }))
+					.success,
 			).toBe(false);
 		});
 
-		it("rejects object options with non-string label or value", () => {
+		it.each([
+			["non-string label", { label: 1, value: "downward" }],
+			["non-string value", { label: "Downward", value: true }],
+		])("rejects object options with %s", (_desc, optionObj) => {
 			expect(
-				optionsSchema.safeParse(
-					createSelectOption({
-						options: [{ label: 1, value: "downward" }],
-					}),
-				).success,
-			).toBe(false);
-			expect(
-				optionsSchema.safeParse(
-					createSelectOption({
-						options: [{ label: "Downward", value: true }],
-					}),
-				).success,
+				optionsSchema.safeParse(createSelectOption({ options: [optionObj] }))
+					.success,
 			).toBe(false);
 		});
 
-		it("rejects a non-string defaultValue", () => {
-			for (const value of [0, true, null, ["downward"]]) {
-				const result = optionsSchema.safeParse(
-					createSelectOption({ defaultValue: value }),
-				);
-				expect(result.success).toBe(false);
-			}
+		it.each([
+			["number", 0],
+			["boolean", true],
+			["null", null],
+			["array", ["downward"]],
+		])("rejects a non-string defaultValue: %s", (_label, value) => {
+			const result = optionsSchema.safeParse(
+				createSelectOption({ defaultValue: value }),
+			);
+			expect(result.success).toBe(false);
 		});
 	});
 
 	describe("switch option", () => {
-		it("accepts true and false defaultValue", () => {
+		it.each([
+			["true", true],
+			["false", false],
+		])("accepts %s defaultValue", (_label, value) => {
 			expect(
-				optionsSchema.safeParse(createSwitchOption({ defaultValue: true }))
-					.success,
-			).toBe(true);
-			expect(
-				optionsSchema.safeParse(createSwitchOption({ defaultValue: false }))
+				optionsSchema.safeParse(createSwitchOption({ defaultValue: value }))
 					.success,
 			).toBe(true);
 		});
@@ -326,7 +321,9 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutDefault);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["defaultValue"]);
+				expect(hasIssueWithPath(result.error.issues, ["defaultValue"])).toBe(
+					true,
+				);
 			}
 		});
 
@@ -358,7 +355,9 @@ describe("optionsSchema", () => {
 			const result = optionsSchema.safeParse(withoutDefault);
 			expect(result.success).toBe(false);
 			if (!result.success) {
-				expect(result.error.issues[0]?.path).toEqual(["defaultValue"]);
+				expect(hasIssueWithPath(result.error.issues, ["defaultValue"])).toBe(
+					true,
+				);
 			}
 		});
 

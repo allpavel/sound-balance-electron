@@ -25,9 +25,12 @@ import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
 import type { Data } from "@shared/schemas/data.schema";
-import type { TrackChanges } from "@shared/schemas/track.schema";
+import type { ProcessingStatus } from "@shared/schemas/track.schema";
+import { formatValidationIssues } from "@shared/utils";
+import { safeParseData } from "@shared/validators";
 import { useEffect, useState } from "react";
-import type { ProcessingStatus, StoppingStatus } from "@/types";
+import type { StoppingStatus } from "@/types";
+import { processingStatusToTrackChanges } from "./utils/processingStatusToTrackChanges";
 
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
@@ -49,11 +52,10 @@ export default function StartProcessing() {
 	useEffect(() => {
 		const unsubscribe = window.api.processingResult(
 			(data: ProcessingStatus) => {
-				const trackChanges: TrackChanges =
-					data.status === "failed"
-						? { status: "failed", reason: data.message ?? "Unknown error" }
-						: { status: data.status, reason: undefined };
-				updateTrack({ id: data.id, changes: trackChanges });
+				updateTrack({
+					id: data.id,
+					changes: processingStatusToTrackChanges(data),
+				});
 			},
 		);
 		return () => unsubscribe();
@@ -65,16 +67,29 @@ export default function StartProcessing() {
 				"Please specify the output folder in the settings before starting processing.",
 			);
 			open();
+			return;
 		} else if (tracks.length === 0) {
 			setErrorMsg(
 				"No tracks selected. Please select at least one track to process.",
 			);
 			open();
+			return;
 		} else {
 			setIsRunning(true);
 			const data: Data = { tracks, settings };
+			const validatedData = safeParseData(data);
+
+			if (!validatedData.success) {
+				const formattedIssues = formatValidationIssues(validatedData.issues);
+				setErrorMsg(
+					`Pre-flight validation failed — the processing payload is invalid and will not be sent. ` +
+						`Details: ${formattedIssues}`,
+				);
+				open();
+				return;
+			}
 			try {
-				const results = await window.api.startProcessing(data);
+				const results = await window.api.startProcessing(validatedData.data);
 				dispatch(setResults(results));
 				if (
 					settings.global.openOutputFolderOnComplete &&
@@ -86,6 +101,7 @@ export default function StartProcessing() {
 				setErrorMsg(
 					`An error occurred during processing: ${error instanceof Error ? error.message : String(error)}`,
 				);
+				open();
 			} finally {
 				setIsRunning(false);
 			}

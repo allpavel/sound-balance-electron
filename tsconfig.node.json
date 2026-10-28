@@ -6,7 +6,10 @@
 		"src/preload/**/*",
 		"src/shared/**/*",
 		"./types.ts",
-		"src/main/constants.ts"
+		"src/main/constants.ts",
+		"src/tests/factories/index.ts",
+		"src/tests/factories/index.test.ts",
+		"src/tests/utils"
 	],
 	"compilerOptions": {
 		"composite": true,
@@ -23,6 +26,9 @@
 			],
 			"@types": [
 				"./src/shared/types/index.ts"
+			],
+			"@tests/*": [
+				"./src/tests/*"
 			],
 			"@/*": [
 				"./*"

@@ -16,13 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
+import type { Data } from "@shared/schemas/data.schema";
 import {
 	SETTINGS_SCHEMA_VERSION,
 	type SettingsForm,
 } from "@shared/schemas/settings.schema";
-import type { Metadata } from "@shared/schemas/track.schema";
+import type {
+	IngestionMetadata,
+	Metadata,
+	Picture,
+} from "@shared/schemas/track.schema";
+import type { ValidationIssue } from "@shared/validators";
+import { deepMerge } from "@tests/utils";
 import type { CollectionType } from "@/types";
-import { deepMerge } from "./deepMerge";
 
 let collectionSeq = 0;
 let trackSeq = 0;
@@ -58,6 +64,62 @@ export function makeTrack(overrides: Partial<Metadata> = {}): Metadata {
 	} as Metadata;
 }
 
+/**
+ * Builds a raw pending-lane ingestion track fixture with sensible defaults.
+ *
+ * The builder constructs the complete shape structurally (all required
+ * fields, including `common` and `format`) and performs no schema
+ * validation`.
+ *
+ * @param overrides - Ingestion fields to override (pending lane only).
+ * @param pictures  - Binary artwork entries written to `common.picture`.
+ * @returns A structurally complete ingestion track.
+ */
+export function makeIngestionTrack(
+	overrides: Partial<
+		Pick<
+			IngestionMetadata,
+			"id" | "file" | "filePath" | "selected" | "collectionIds" | "statusSeq"
+		>
+	> & {
+		common?: Omit<IngestionMetadata["common"], "picture">;
+		format?: IngestionMetadata["format"];
+	} = {},
+	pictures?: readonly Picture[],
+): IngestionMetadata {
+	const base = makeTrack();
+	return {
+		id: base.id,
+		file: base.file,
+		filePath: base.filePath,
+		status: "pending",
+		selected: base.selected,
+		collectionIds: base.collectionIds,
+		format: base.format,
+		...overrides,
+		common: {
+			...(overrides.common ?? {}),
+			...(pictures && pictures.length > 0 ? { picture: [...pictures] } : {}),
+		},
+	};
+}
+
+/**
+ * Factory for building a minimal frozen `ValidationIssue` in tests.
+ */
+export function makeIssue(
+	pathString: string,
+	message: string,
+	code: string = "custom",
+): ValidationIssue {
+	return Object.freeze({
+		path: Object.freeze(pathString ? pathString.split(".") : []),
+		pathString,
+		message,
+		code,
+	});
+}
+
 export function getValidSettings(
 	overrides: Partial<SettingsForm> = {},
 ): SettingsForm {
@@ -83,4 +145,13 @@ export function getValidSettings(
 		},
 		overrides,
 	);
+}
+
+export function getValidData(
+	overrides: { tracks?: Metadata[]; settings?: Partial<SettingsForm> } = {},
+): Data {
+	return {
+		tracks: overrides.tracks ?? [makeTrack()],
+		settings: getValidSettings(overrides.settings),
+	};
 }
