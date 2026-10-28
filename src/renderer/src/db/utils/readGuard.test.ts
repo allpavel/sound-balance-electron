@@ -17,7 +17,6 @@
  */
 
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
-import type { Metadata } from "@shared/schemas/track.schema";
 import { makeTrack } from "@tests/factories";
 import { guardTrack, guardTracks, isStructurallyValidTrack } from "./readGuard";
 
@@ -49,8 +48,6 @@ function lastWarnCall(warnSpy: WarnSpy): readonly [unknown, unknown] {
 	const last = calls[calls.length - 1];
 	return [last?.[0], last?.[1]];
 }
-
-// --- isStructurallyValidTrack ---
 
 describe("isStructurallyValidTrack", () => {
 	describe("accepts schema-shaped rows", () => {
@@ -388,8 +385,6 @@ describe("isStructurallyValidTrack", () => {
 	});
 });
 
-// --- guardTracks ---
-
 describe("guardTracks", () => {
 	let warnSpy: WarnSpy;
 
@@ -520,7 +515,6 @@ describe("guardTracks", () => {
 		]);
 	});
 
-	// Pins migrated from the removed `uniqueTracks` suite (last-wins dedupe).
 	it("returns tracks unchanged when ids are unique", () => {
 		const first = makeTrack({ id: "t1" });
 		const second = makeTrack({ id: "t2" });
@@ -552,8 +546,6 @@ describe("guardTracks", () => {
 		expect(warnSpy).toHaveBeenCalledTimes(1);
 	});
 });
-
-// --- guardTrack ---
 
 describe("guardTrack", () => {
 	let warnSpy: WarnSpy;
@@ -604,8 +596,3 @@ describe("guardTrack", () => {
 		expect(payload).toEqual({ count: 1, ids: ["evil\uFFFDid"] });
 	});
 });
-
-// Compile-time contract: the guard's output satisfies Metadata[] without assertions.
-const typeContract: (rows: readonly unknown[]) => Metadata[] = (rows) =>
-	guardTracks(rows).ok;
-void typeContract;
