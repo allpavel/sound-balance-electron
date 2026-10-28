@@ -42,6 +42,7 @@ import type {
 import type { AddManyProgress, AddManyProgressCallback } from "@shared/types";
 import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
 import {
+	createRootIssue,
 	safeParseAddManyOptions,
 	safeParseTrack,
 	safeParseTrackChanges,
@@ -371,14 +372,21 @@ function areCollectionIdsEqual(
 	);
 }
 
-function uniqueTracks(tracks: Metadata[]): Metadata[] {
-	const byId = new Map<string, Metadata>();
-	for (const track of tracks) {
-		if (isNonEmptyString(track.id)) {
-			byId.set(track.id, track);
-		}
+/**
+ * Fails loud on an invalid primary-key or collection-id argument.
+ *
+ * Shared by every repository entry point that takes an `id` so the same
+ * `TrackValidationError` surfaces regardless of the operation.
+ *
+ * @param id - Untrusted id argument.
+ * @throws {TrackValidationError} When `id` is not a non-empty, non-blank string.
+ */
+function assertValidTrackId(id: unknown): asserts id is string {
+	if (!isNonEmptyString(id)) {
+		throw new TrackValidationError("id", [
+			createRootIssue("invalid_type", "ID must be a non-empty string"),
+		]);
 	}
-	return [...byId.values()];
 }
 
 /**
@@ -671,6 +679,7 @@ export {
 	assertParsed,
 	assertReferentialIntegrity,
 	assertTrackInput,
+	assertValidTrackId,
 	calculateBatchPayloadSize,
 	createProgressEmitter,
 	dedupeByFilePath,
@@ -682,6 +691,5 @@ export {
 	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
-	uniqueTracks,
 	validateTrackChanges,
 };

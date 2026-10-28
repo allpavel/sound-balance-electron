@@ -38,12 +38,12 @@ import {
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
 	assertTrackInput,
+	assertValidTrackId,
 	createProgressEmitter,
 	isPlainObject,
 	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
-	uniqueTracks,
 	validateTrackChanges,
 } from "./trackRepositoryUtils";
 
@@ -518,49 +518,6 @@ describe("trackRepositoryUtils", () => {
 				expect(areCollectionIdsEqual(current, next)).toBe(false);
 			},
 		);
-	});
-
-	describe("uniqueTracks", () => {
-		it("returns tracks unchanged when ids are unique", () => {
-			const first = makeTrack({ id: "t1" });
-			const second = makeTrack({ id: "t2" });
-			expect(uniqueTracks([first, second])).toEqual([first, second]);
-		});
-
-		it("keeps the last occurrence when duplicated ids are present", () => {
-			const first = makeTrack({
-				id: "t1",
-				filePath: "/music/first.mp3",
-			});
-			const second = makeTrack({
-				id: "t2",
-				filePath: "/music/second.mp3",
-			});
-			const duplicate = makeTrack({
-				id: "t1",
-				filePath: "/music/duplicate.mp3",
-			});
-			const result = uniqueTracks([first, second, duplicate]);
-			expect(result.map((track) => track.id)).toEqual(["t1", "t2"]);
-			expect(result[0]?.filePath).toBe("/music/duplicate.mp3");
-			expect(result[1]?.filePath).toBe("/music/second.mp3");
-		});
-
-		it("filters out tracks with empty ids", () => {
-			const valid = makeTrack({ id: "t1" });
-			const invalid = makeTrack({ id: "" });
-			expect(uniqueTracks([invalid, valid])).toEqual([valid]);
-		});
-
-		it("filters out tracks with whitespace-only ids", () => {
-			const valid = makeTrack({ id: "t1" });
-			const invalid = makeTrack({ id: "   " });
-			expect(uniqueTracks([invalid, valid])).toEqual([valid]);
-		});
-
-		it("returns an empty array for empty input", () => {
-			expect(uniqueTracks([])).toEqual([]);
-		});
 	});
 
 	describe("validateTrackChanges", () => {
@@ -1244,6 +1201,42 @@ describe("trackRepositoryUtils", () => {
 				throw new Error("boom");
 			});
 			expect(() => emitter.emit(snapshot)).not.toThrow();
+		});
+	});
+
+	describe("assertValidTrackId", () => {
+		it("accepts a non-empty string id without throwing", () => {
+			expect(() => assertValidTrackId("t1")).not.toThrow();
+		});
+
+		it.each([
+			["empty string", ""],
+			["whitespace-only string", "   "],
+			["tab/newline string", "\t\n"],
+		])("throws TrackValidationError for a %s id", (_label, value) => {
+			expect(() => assertValidTrackId(value)).toThrow(TrackValidationError);
+		});
+
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["number", 42],
+			["boolean", true],
+			["array", []],
+			["object", {}],
+		])("throws TrackValidationError for non-string id: %s", (_label, value) => {
+			expect(() => assertValidTrackId(value)).toThrow(TrackValidationError);
+		});
+
+		it("carries the 'id' context and an invalid_type root issue", () => {
+			const thrown = captureThrown(() => assertValidTrackId(""));
+			expect(thrown).toBeInstanceOf(TrackValidationError);
+			if (thrown instanceof TrackValidationError) {
+				expect(thrown.context).toBe("id");
+				expect(thrown.issues).toHaveLength(1);
+				expect(thrown.issues[0]?.code).toBe("invalid_type");
+				expect(thrown.issues[0]?.message).toBe("ID must be a non-empty string");
+			}
 		});
 	});
 });
