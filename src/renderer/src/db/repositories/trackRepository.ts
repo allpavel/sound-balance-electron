@@ -22,15 +22,16 @@ import {
 	runPreflightChecks,
 	validateAndParseTracks,
 } from "@renderer/db/import";
+import { guardTrack, guardTracks } from "@renderer/db/utils/readGuard";
 import {
 	applyGuardedTrackUpdate,
 	assertAddManyOptions,
 	assertBatchUniqueness,
 	assertReferentialIntegrity,
+	assertValidTrackId,
 	createProgressEmitter,
 	isNonEmptyString,
 	isPlainObject,
-	uniqueTracks,
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
@@ -41,19 +42,40 @@ import { getAddManySummary } from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {
+	/**
+	 * Reads every track belonging to a collection, guarded.
+	 *
+	 * Each raw row is structurally validated before it leaves the
+	 * repository; corrupt rows are quarantined (excluded + logged).
+	 * Duplicate multi-entry-index matches are folded by `id`.
+	 *
+	 * @param id - Collection id.
+	 * @returns Guarded tracks in engine order, deduplicated by `id`.
+	 * @throws {TrackValidationError} When `id` is not a non-empty string.
+	 */
 	async getAll(id: string): Promise<Metadata[]> {
-		if (!isNonEmptyString(id)) {
-			return [];
-		}
-		const tracks = await db.tracks.where("collectionIds").equals(id).toArray();
-		return uniqueTracks(tracks);
+		assertValidTrackId(id);
+		const rows: readonly unknown[] = await db.tracks
+			.where("collectionIds")
+			.equals(id)
+			.toArray();
+		const { ok } = guardTracks(rows, "tracksRepository.getAll");
+		return ok;
 	},
 
-	async getById(id: string) {
-		if (!isNonEmptyString(id)) {
-			return undefined;
-		}
-		return await db.tracks.get(id);
+	/**
+	 * Reads a single track by primary key, guarded.
+	 *
+	 * @param id - Track primary key.
+	 * @returns The guarded track, or `undefined` when the key is absent
+	 *          or the stored row is structurally corrupt (quarantined
+	 *          with a warning).
+	 * @throws {TrackValidationError} When `id` is not a non-empty string.
+	 */
+	async getById(id: string): Promise<Metadata | undefined> {
+		assertValidTrackId(id);
+		const row: unknown = await db.tracks.get(id);
+		return guardTrack(row, id, "tracksRepository.getById");
 	},
 
 	/**
@@ -171,11 +193,7 @@ export const tracksRepository = {
 	},
 
 	async update(id: string, changes: unknown): Promise<number> {
-		if (!isNonEmptyString(id)) {
-			throw new TrackValidationError("id", [
-				createRootIssue("invalid_type", "ID must be a non-empty string"),
-			]);
-		}
+		assertValidTrackId(id);
 		const validated = validateTrackChanges(changes, "changes");
 		if (!("status" in validated)) {
 			const collectionIds = validated.collectionIds;
@@ -270,17 +288,25 @@ export const tracksRepository = {
 	},
 
 	async remove(id: string): Promise<void> {
-		if (!isNonEmptyString(id)) {
-			throw new TrackValidationError("id", [
-				createRootIssue("invalid_type", "ID must be a non-empty string"),
-			]);
-		}
+		assertValidTrackId(id);
 		await db.tracks.delete(id);
 	},
 
+	/**
+	 * Reads every track flagged `selected === 1`, guarded.
+	 *
+	 * Rows that match the index but fail the structural guard are
+	 * quarantined (excluded and logged).
+	 *
+	 * @returns Guarded selected tracks, deduplicated by `id`.
+	 */
 	async getSelectedTracks(): Promise<Metadata[]> {
-		const tracks = await db.tracks.where("selected").equals(1).toArray();
-		return uniqueTracks(tracks);
+		const rows: readonly unknown[] = await db.tracks
+			.where("selected")
+			.equals(1)
+			.toArray();
+		const { ok } = guardTracks(rows, "tracksRepository.getSelectedTracks");
+		return ok;
 	},
 
 	async removeMany(): Promise<void> {

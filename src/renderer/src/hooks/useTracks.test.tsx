@@ -160,17 +160,16 @@ describe("useTracks", () => {
 			]);
 		});
 
-		it("returns an empty track list for an empty collection id", async () => {
-			const getAllSpy = vi.spyOn(tracksRepository, "getAll");
+		it("fails loud for an empty collection id instead of masking it as an empty list", async () => {
 			await seedTracks([
 				makeTrack({
 					id: "ignored-track",
 					collectionIds: [SYSTEM_COLLECTION_ID],
 				}),
 			]);
-			const result = await renderUseTracks("");
-			expect(getAllSpy).toHaveBeenCalledWith("");
-			expect(result.current.tracks).toEqual([]);
+			await expect(tracksRepository.getAll("")).rejects.toThrow(
+				TrackValidationError,
+			);
 		});
 
 		it("reports track loading and selected-track loading independently", async () => {
