@@ -103,3 +103,28 @@ export type PLATFORM = "win32" | "darwin" | "linux";
  * logs (e.g. when an `onProgress` callback throws).
  */
 export const MAX_LOGGED_ERROR_NAME_LENGTH = 64;
+
+/** Copy for a guarded read rejected by argument/data validation. */
+export const TRACK_READ_VALIDATION_MESSAGE =
+	"Stored track data failed validation and could not be displayed.";
+
+/** Copy for a guarded read that failed on the storage engine (incl. DB open failures). */
+export const TRACK_READ_STORAGE_MESSAGE =
+	"The local music database is unavailable, so tracks could not be loaded.";
+
+/** Copy for a guarded read that failed for an unclassified reason. */
+export const TRACK_READ_UNKNOWN_MESSAGE = "Unable to load track data.";
+
+/** Toast shown when a `setActiveCollection` payload is rejected at the store gate. */
+export const INVALID_ACTIVE_COLLECTION_TOAST =
+	"The selected collection is invalid and was not activated.";
+
+/** Fallback heading rendered instead of a crashed subtree. */
+export const RENDER_CRASH_TITLE = "Something went wrong";
+
+/** Fallback body copy; reassures the persisted library is untouched. */
+export const RENDER_CRASH_MESSAGE =
+	"An unexpected error occurred while rendering this view. Your library data is unaffected.";
+
+/** Fallback recovery action label (full renderer reload). */
+export const RENDER_CRASH_RELOAD_LABEL = "Reload application";
