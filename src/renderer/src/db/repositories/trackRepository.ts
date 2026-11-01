@@ -22,7 +22,11 @@ import {
 	runPreflightChecks,
 	validateAndParseTracks,
 } from "@renderer/db/import";
-import { guardTrack, guardTracks } from "@renderer/db/utils/readGuard";
+import {
+	type GuardedTracks,
+	guardTrack,
+	guardTracks,
+} from "@renderer/db/utils/readGuard";
 import {
 	applyGuardedTrackUpdate,
 	assertAddManyOptions,
@@ -50,17 +54,17 @@ export const tracksRepository = {
 	 * Duplicate multi-entry-index matches are folded by `id`.
 	 *
 	 * @param id - Collection id.
-	 * @returns Guarded tracks in engine order, deduplicated by `id`.
+	 * @returns Validated tracks in engine order (deduplicated by `id`) plus
+	 *          the guard's complete quarantined-id list.
 	 * @throws {TrackValidationError} When `id` is not a non-empty string.
 	 */
-	async getAll(id: string): Promise<Metadata[]> {
+	async getAll(id: string): Promise<GuardedTracks> {
 		assertValidTrackId(id);
 		const rows: readonly unknown[] = await db.tracks
 			.where("collectionIds")
 			.equals(id)
 			.toArray();
-		const { ok } = guardTracks(rows, "tracksRepository.getAll");
-		return ok;
+		return guardTracks(rows, "tracksRepository.getAll");
 	},
 
 	/**
@@ -295,18 +299,15 @@ export const tracksRepository = {
 	/**
 	 * Reads every track flagged `selected === 1`, guarded.
 	 *
-	 * Rows that match the index but fail the structural guard are
-	 * quarantined (excluded and logged).
-	 *
-	 * @returns Guarded selected tracks, deduplicated by `id`.
+	 * @returns Validated selected tracks in engine order plus the guard's
+	 *          complete quarantined-id list.
 	 */
-	async getSelectedTracks(): Promise<Metadata[]> {
+	async getSelectedTracks(): Promise<GuardedTracks> {
 		const rows: readonly unknown[] = await db.tracks
 			.where("selected")
 			.equals(1)
 			.toArray();
-		const { ok } = guardTracks(rows, "tracksRepository.getSelectedTracks");
-		return ok;
+		return guardTracks(rows, "tracksRepository.getSelectedTracks");
 	},
 
 	async removeMany(): Promise<void> {

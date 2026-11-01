@@ -40,7 +40,11 @@ import type { Metadata, Status } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
 import { configurePlatform, resetPlatform } from "@shared/utils";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
-import { makeIngestionTrack, makeTrack } from "@tests/factories";
+import {
+	makeCorruptTrackRow,
+	makeIngestionTrack,
+	makeTrack,
+} from "@tests/factories";
 import { captureRejection } from "@tests/utils";
 
 vi.mock("@shared/utils", async (importOriginal) => {
@@ -133,7 +137,7 @@ describe("tracksRepository", () => {
 				makeTrack({ id: "t3", collectionIds: [SYSTEM_COLLECTION_ID] }),
 			]);
 			expect(
-				(await tracksRepository.getAll(SYSTEM_COLLECTION_ID))
+				(await tracksRepository.getAll(SYSTEM_COLLECTION_ID)).ok
 					.map((t) => t.id)
 					.sort(),
 			).toEqual(["t1", "t3"]);
@@ -143,11 +147,13 @@ describe("tracksRepository", () => {
 			await db.tracks.bulkAdd([
 				makeTrack({ id: "t1", collectionIds: [SYSTEM_COLLECTION_ID] }),
 			]);
-			expect(await tracksRepository.getAll("none")).toEqual([]);
+			expect((await tracksRepository.getAll("none")).ok).toEqual([]);
 		});
 
 		it("returns an empty array when the table is empty", async () => {
-			expect(await tracksRepository.getAll(SYSTEM_COLLECTION_ID)).toEqual([]);
+			expect((await tracksRepository.getAll(SYSTEM_COLLECTION_ID)).ok).toEqual(
+				[],
+			);
 		});
 
 		it.each([
@@ -169,7 +175,7 @@ describe("tracksRepository", () => {
 			);
 			await seedCorruptTrackRow(corruptStoredRow("corrupt"));
 			const result = await tracksRepository.getAll(SYSTEM_COLLECTION_ID);
-			expect(result.map((t) => t.id)).toEqual(["ok"]);
+			expect(result.ok.map((t) => t.id)).toEqual(["ok"]);
 			expect(warnSpy).toHaveBeenCalledTimes(1);
 			expect(warnSpy).toHaveBeenCalledWith(
 				"[tracksRepository.getAll] quarantined structurally invalid rows",
@@ -185,8 +191,36 @@ describe("tracksRepository", () => {
 				}),
 			);
 			const result = await tracksRepository.getAll(SYSTEM_COLLECTION_ID);
-			expect(result).toHaveLength(1);
-			expect(result[0]?.id).toBe("dup");
+			expect(result.ok).toHaveLength(1);
+			expect(result.ok[0]?.id).toBe("dup");
+		});
+
+		it("surfaces the complete quarantined-id list for multiple corrupt rows", async () => {
+			const warnSpy = spyOnWarn();
+			await db.tracks.add(
+				makeTrack({ id: "ok", collectionIds: [SYSTEM_COLLECTION_ID] }),
+			);
+			await seedCorruptTrackRow(makeCorruptTrackRow("corrupt-a"));
+			await seedCorruptTrackRow(makeCorruptTrackRow("corrupt-b"));
+			const result = await tracksRepository.getAll(SYSTEM_COLLECTION_ID);
+			expect(result.ok.map((t) => t.id)).toEqual(["ok"]);
+			expect(result.quarantinedIds).toEqual(["corrupt-a", "corrupt-b"]);
+			expect(warnSpy).toHaveBeenCalledTimes(1);
+			expect(warnSpy).toHaveBeenCalledWith(
+				"[tracksRepository.getAll] quarantined structurally invalid rows",
+				{ count: 2, ids: ["corrupt-a", "corrupt-b"] },
+			);
+		});
+
+		it("returns an empty quarantine list for a clean read without warning", async () => {
+			const warnSpy = spyOnWarn();
+			await db.tracks.add(
+				makeTrack({ id: "ok", collectionIds: [SYSTEM_COLLECTION_ID] }),
+			);
+			const result = await tracksRepository.getAll(SYSTEM_COLLECTION_ID);
+			expect(result.ok.map((t) => t.id)).toEqual(["ok"]);
+			expect(result.quarantinedIds).toEqual([]);
+			expect(warnSpy).not.toHaveBeenCalled();
 		});
 	});
 
@@ -1977,7 +2011,7 @@ describe("tracksRepository", () => {
 				makeTrack({ id: "t3", selected: 1 }),
 			]);
 			expect(
-				(await tracksRepository.getSelectedTracks()).map((t) => t.id).sort(),
+				(await tracksRepository.getSelectedTracks()).ok.map((t) => t.id).sort(),
 			).toEqual(["t1", "t3"]);
 		});
 
@@ -1988,7 +2022,7 @@ describe("tracksRepository", () => {
 				makeTrack({ id: "t3", selected: 0 }),
 			]);
 			expect(
-				(await tracksRepository.getSelectedTracks()).map((t) => t.id).sort(),
+				(await tracksRepository.getSelectedTracks()).ok.map((t) => t.id).sort(),
 			).toEqual(["t2"]);
 		});
 
@@ -2010,7 +2044,7 @@ describe("tracksRepository", () => {
 				}),
 			]);
 			expect(
-				(await tracksRepository.getSelectedTracks()).map((t) => t.id).sort(),
+				(await tracksRepository.getSelectedTracks()).ok.map((t) => t.id).sort(),
 			).toEqual(["t1"]);
 		});
 
@@ -2019,7 +2053,7 @@ describe("tracksRepository", () => {
 				makeTrack({ id: "t1", selected: 0 }),
 				makeTrack({ id: "t2", selected: 0 }),
 			]);
-			expect(await tracksRepository.getSelectedTracks()).toEqual([]);
+			expect((await tracksRepository.getSelectedTracks()).ok).toEqual([]);
 		});
 
 		it("quarantines a selected row that is structurally corrupt", async () => {
@@ -2027,12 +2061,22 @@ describe("tracksRepository", () => {
 			await seedCorruptTrackRow(corruptStoredRow("corrupt", { selected: 1 }));
 			const warnSpy = spyOnWarn();
 			const result = await tracksRepository.getSelectedTracks();
-			expect(result.map((t) => t.id)).toEqual(["ok"]);
+			expect(result.ok.map((t) => t.id)).toEqual(["ok"]);
+			expect(result.quarantinedIds).toEqual(["corrupt"]);
 			expect(warnSpy).toHaveBeenCalledTimes(1);
 			expect(warnSpy).toHaveBeenCalledWith(
 				"[tracksRepository.getSelectedTracks] quarantined structurally invalid rows",
 				{ count: 1, ids: ["corrupt"] },
 			);
+		});
+
+		it("returns an empty quarantine list when no selected row is corrupt", async () => {
+			const warnSpy = spyOnWarn();
+			await db.tracks.add(makeTrack({ id: "sel-1", selected: 1 }));
+			const result = await tracksRepository.getSelectedTracks();
+			expect(result.ok.map((t) => t.id)).toEqual(["sel-1"]);
+			expect(result.quarantinedIds).toEqual([]);
+			expect(warnSpy).not.toHaveBeenCalled();
 		});
 	});
 
