@@ -120,6 +120,26 @@ export function makeIssue(
 	});
 }
 
+/**
+ * Builds a structurally corrupt stored-row fixture without type assertions,
+ * for seeding engine-level corruption via the raw table API.
+ *
+ * `common` is always removed after overrides are applied, so the row fails
+ * the structural read guard regardless of overrides.
+ *
+ * @param id        - Row primary key (defaults to `"corrupt-1"`).
+ * @param overrides - Extra raw fields applied before `common` is removed.
+ * @returns A raw row rejected by the structural track guard.
+ */
+export function makeCorruptTrackRow(
+	id = "corrupt-1",
+	overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+	const row: Record<string, unknown> = { ...makeTrack({ id }), ...overrides };
+	delete row.common;
+	return row;
+}
+
 export function getValidSettings(
 	overrides: Partial<SettingsForm> = {},
 ): SettingsForm {
