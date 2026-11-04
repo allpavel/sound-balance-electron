@@ -20,11 +20,8 @@ import {
 	SYSTEM_COLLECTION_ID,
 	SYSTEM_COLLECTION_TITLE,
 } from "@shared/constants";
-
-type ActiveCollection = {
-	id: string;
-	title: string;
-};
+import type { ActiveCollection } from "@shared/schemas/collection.schema";
+import { safeParseActiveCollection } from "@shared/validators";
 
 const initialState: ActiveCollection = {
 	id: SYSTEM_COLLECTION_ID,
@@ -36,7 +33,11 @@ const activeCollectionSlice = createSlice({
 	initialState,
 	reducers: {
 		setActiveCollection: (_, action: PayloadAction<ActiveCollection>) => {
-			return action.payload;
+			const parsed = safeParseActiveCollection(action.payload);
+			if (!parsed.success) {
+				return;
+			}
+			return parsed.data;
 		},
 	},
 });
