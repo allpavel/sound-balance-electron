@@ -19,21 +19,42 @@
 // @vitest-environment jsdom
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
+import type { GuardedTracks } from "@renderer/db/utils/readGuard";
 import { resetTestState, seedCollection } from "@renderer/utils/test-utils";
-import { SYSTEM_COLLECTION_ID } from "@shared/constants";
-import { ConflictError, TrackValidationError } from "@shared/errors";
+import {
+	SYSTEM_COLLECTION_ID,
+	TRACK_READ_STORAGE_MESSAGE,
+	TRACK_READ_UNKNOWN_MESSAGE,
+	TRACK_READ_VALIDATION_MESSAGE,
+} from "@shared/constants";
+import {
+	ConflictError,
+	StorageUnavailableError,
+	TrackValidationError,
+} from "@shared/errors";
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
+import { quarantineTracksToastMessage } from "@shared/utils";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { makeTrack } from "@tests/factories";
+import { makeCorruptTrackRow, makeTrack } from "@tests/factories";
+import { spyOnConsoleError, spyOnConsoleWarn } from "@tests/utils";
 import type { PropsWithChildren } from "react";
+import { toast } from "sonner";
 import {
 	type AddTracksPayload,
+	TRACK_READ_TOAST_IDS,
 	type UpdateManyTracksPayload,
 	type UpdateTrackPayload,
 	useTracks,
 } from "./useTracks";
+
+vi.mock("sonner", () => ({
+	toast: {
+		error: vi.fn(),
+		warning: vi.fn(),
+	},
+}));
 
 function createWrapper() {
 	const queryClient = new QueryClient({
@@ -73,6 +94,7 @@ async function renderUseTracks(collection?: string) {
 
 describe("useTracks", () => {
 	beforeEach(async () => {
+		vi.clearAllMocks();
 		await resetTestState();
 	});
 
@@ -160,7 +182,7 @@ describe("useTracks", () => {
 			]);
 		});
 
-		it("fails loud for an empty collection id instead of masking it as an empty list", async () => {
+		it("rejects an empty collection id at the repository boundary (fail-loud contract)", async () => {
 			await seedTracks([
 				makeTrack({
 					id: "ignored-track",
@@ -173,7 +195,7 @@ describe("useTracks", () => {
 		});
 
 		it("reports track loading and selected-track loading independently", async () => {
-			const selectedDeferred = createDeferred<Metadata[]>();
+			const selectedDeferred = createDeferred<GuardedTracks>();
 			const selectedSpy = vi
 				.spyOn(tracksRepository, "getSelectedTracks")
 				.mockReturnValue(selectedDeferred.promise);
@@ -184,7 +206,7 @@ describe("useTracks", () => {
 			expect(result.current.isSelectedTracksLoading).toBe(true);
 			expect(result.current.isLoading).toBe(true);
 			await act(async () => {
-				selectedDeferred.resolve([]);
+				selectedDeferred.resolve({ ok: [], quarantinedIds: [] });
 			});
 			await waitFor(() => expect(result.current.isLoading).toBe(false));
 			expect(result.current.isTracksLoading).toBe(false);
@@ -768,6 +790,205 @@ describe("useTracks", () => {
 			expect(result.current.updateTrackState.error).toBeInstanceOf(
 				TrackValidationError,
 			);
+		});
+	});
+
+	describe("managed read-failure surface", () => {
+		it("exposes a typed validation failure through the hook instead of crashing render", async () => {
+			spyOnConsoleError();
+			await seedTracks([
+				makeTrack({
+					id: "sel-1",
+					selected: 1,
+					collectionIds: [SYSTEM_COLLECTION_ID],
+				}),
+			]);
+			const result = await renderUseTracks("");
+			expect(result.current.tracks).toEqual([]);
+			expect(result.current.tracksError).toMatchObject({
+				kind: "validation",
+				scope: "tracksRepository.getAll",
+				detail: "id",
+			});
+			expect(result.current.tracksError?.message).toBe(
+				TRACK_READ_VALIDATION_MESSAGE,
+			);
+			expect(result.current.selectedTracksError).toBeNull();
+			expect(result.current.selectedTracks.map((t) => t.id)).toEqual(["sel-1"]);
+			expect(result.current.isLoading).toBe(false);
+			expect(toast.error).toHaveBeenCalledWith(TRACK_READ_VALIDATION_MESSAGE, {
+				id: TRACK_READ_TOAST_IDS.collectionRead,
+			});
+		});
+
+		it("classifies a domain storage failure as the storage kind", async () => {
+			spyOnConsoleError();
+			vi.spyOn(tracksRepository, "getAll").mockRejectedValue(
+				new StorageUnavailableError("Database operation failed: closed"),
+			);
+			const result = await renderUseTracks();
+			expect(result.current.tracksError?.kind).toBe("storage");
+			expect(result.current.tracksError?.message).toBe(
+				TRACK_READ_STORAGE_MESSAGE,
+			);
+			expect(result.current.tracks).toEqual([]);
+			expect(toast.error).toHaveBeenCalledWith(TRACK_READ_STORAGE_MESSAGE, {
+				id: TRACK_READ_TOAST_IDS.collectionRead,
+			});
+		});
+
+		it("routes an engine DB-open failure into the same managed surface", async () => {
+			spyOnConsoleError();
+			const engineError = new Error("Failed to open database");
+			engineError.name = "OpenFailedError";
+			vi.spyOn(tracksRepository, "getAll").mockRejectedValue(engineError);
+			const result = await renderUseTracks();
+			expect(result.current.tracksError).toMatchObject({
+				kind: "storage",
+				detail: "OpenFailedError",
+			});
+			expect(toast.error).toHaveBeenCalledWith(TRACK_READ_STORAGE_MESSAGE, {
+				id: TRACK_READ_TOAST_IDS.collectionRead,
+			});
+		});
+
+		it("never leaks raw error text through an unknown failure", async () => {
+			spyOnConsoleError();
+			vi.spyOn(tracksRepository, "getAll").mockRejectedValue(
+				new Error("C:/secret/library blew up"),
+			);
+			const result = await renderUseTracks();
+			expect(result.current.tracksError?.kind).toBe("unknown");
+			expect(result.current.tracksError?.message).toBe(
+				TRACK_READ_UNKNOWN_MESSAGE,
+			);
+			expect(result.current.tracksError?.message).not.toContain("secret");
+			expect(result.current.tracksError?.detail).toBe("Error");
+		});
+
+		it("reports a selected-tracks read failure on its own channel", async () => {
+			spyOnConsoleError();
+			vi.spyOn(tracksRepository, "getSelectedTracks").mockRejectedValue(
+				new StorageUnavailableError("Database operation failed: closed"),
+			);
+			const result = await renderUseTracks();
+			expect(result.current.selectedTracksError?.kind).toBe("storage");
+			expect(result.current.tracksError).toBeNull();
+			expect(result.current.isSelectedTracksLoading).toBe(false);
+			expect(toast.error).toHaveBeenCalledWith(TRACK_READ_STORAGE_MESSAGE, {
+				id: TRACK_READ_TOAST_IDS.selectedRead,
+			});
+		});
+
+		it("recovers to a healthy state when the active collection changes after a failure", async () => {
+			spyOnConsoleError();
+			await seedTracks([
+				makeTrack({ id: "custom-track", collectionIds: ["custom"] }),
+			]);
+			vi.spyOn(tracksRepository, "getAll").mockRejectedValueOnce(
+				new StorageUnavailableError("Database operation failed: closed"),
+			);
+			const { result, rerender } = renderHook(
+				({ collection }: { collection: string }) => useTracks(collection),
+				{
+					wrapper: createWrapper(),
+					initialProps: { collection: SYSTEM_COLLECTION_ID },
+				},
+			);
+			await waitFor(() =>
+				expect(result.current.tracksError?.kind).toBe("storage"),
+			);
+			expect(toast.error).toHaveBeenCalledTimes(1);
+			rerender({ collection: "custom" });
+			await waitFor(() => expect(result.current.tracksError).toBeNull());
+			expect(result.current.tracks.map((t) => t.id)).toEqual(["custom-track"]);
+		});
+	});
+
+	describe("quarantine visibility", () => {
+		it("surfaces quarantined rows through state and a single deduped toast", async () => {
+			const warnSpy = spyOnConsoleWarn();
+			await seedTracks([
+				makeTrack({ id: "ok", collectionIds: [SYSTEM_COLLECTION_ID] }),
+			]);
+			await db.table("tracks").add(makeCorruptTrackRow("corrupt-1"));
+			const result = await renderUseTracks();
+			await waitFor(() =>
+				expect(result.current.quarantinedTracks.count).toBe(1),
+			);
+			expect(result.current.quarantinedTracks.ids).toEqual(["corrupt-1"]);
+			expect(result.current.tracks.map((t) => t.id)).toEqual(["ok"]);
+			expect(toast.warning).toHaveBeenCalledTimes(1);
+			expect(toast.warning).toHaveBeenCalledWith(
+				quarantineTracksToastMessage(1),
+				{ id: TRACK_READ_TOAST_IDS.collectionQuarantine },
+			);
+			expect(warnSpy).toHaveBeenCalled();
+			await act(async () => {
+				await db.tracks.add(
+					makeTrack({ id: "ok-2", collectionIds: [SYSTEM_COLLECTION_ID] }),
+				);
+			});
+			await waitFor(() => expect(result.current.tracks).toHaveLength(2));
+			expect(result.current.quarantinedTracks.count).toBe(1);
+			expect(toast.warning).toHaveBeenCalledTimes(1);
+			await act(async () => {
+				await db.table("tracks").delete("corrupt-1");
+			});
+			await waitFor(() =>
+				expect(result.current.quarantinedTracks.count).toBe(0),
+			);
+			await act(async () => {
+				await db.table("tracks").add(makeCorruptTrackRow("corrupt-2"));
+			});
+			await waitFor(() =>
+				expect(result.current.quarantinedTracks.count).toBe(1),
+			);
+			expect(result.current.quarantinedTracks.ids).toEqual(["corrupt-2"]);
+			expect(toast.warning).toHaveBeenCalledTimes(2);
+			expect(toast.warning).toHaveBeenLastCalledWith(
+				quarantineTracksToastMessage(1),
+				{ id: TRACK_READ_TOAST_IDS.collectionQuarantine },
+			);
+		});
+
+		it("reports selected-track quarantine under its own toast identity", async () => {
+			spyOnConsoleWarn();
+			await db
+				.table("tracks")
+				.add(makeCorruptTrackRow("corrupt-sel", { selected: 1 }));
+			const result = await renderUseTracks();
+			await waitFor(() =>
+				expect(result.current.quarantinedSelectedTracks.count).toBe(1),
+			);
+			expect(result.current.quarantinedSelectedTracks.ids).toEqual([
+				"corrupt-sel",
+			]);
+			expect(result.current.quarantinedTracks.count).toBe(1);
+			expect(toast.warning).toHaveBeenCalledWith(
+				quarantineTracksToastMessage(1),
+				{ id: TRACK_READ_TOAST_IDS.selectedQuarantine },
+			);
+			expect(toast.warning).toHaveBeenCalledWith(
+				quarantineTracksToastMessage(1),
+				{ id: TRACK_READ_TOAST_IDS.collectionQuarantine },
+			);
+			expect(toast.warning).toHaveBeenCalledTimes(2);
+		});
+
+		it("reports a clean read with zero quarantine state and no warning toast", async () => {
+			spyOnConsoleWarn();
+			await seedTracks([
+				makeTrack({ id: "ok", collectionIds: [SYSTEM_COLLECTION_ID] }),
+			]);
+			const result = await renderUseTracks();
+			await waitFor(() => expect(result.current.isLoading).toBe(false));
+			expect(result.current.quarantinedTracks).toEqual({ count: 0, ids: [] });
+			expect(result.current.quarantinedSelectedTracks).toEqual({
+				count: 0,
+				ids: [],
+			});
+			expect(toast.warning).not.toHaveBeenCalled();
 		});
 	});
 });
