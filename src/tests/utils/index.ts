@@ -6,3 +6,4 @@ export {
 	hasIssueWithPath,
 	hasIssueWithPathAndCode,
 } from "./hasIssue";
+export { spyOnConsoleError, spyOnConsoleWarn } from "./spyOnConsole";
