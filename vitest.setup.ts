@@ -2,6 +2,22 @@ import "fake-indexeddb/auto";
 import { vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
+if (typeof window !== "undefined") {
+	Object.defineProperty(window, "matchMedia", {
+		writable: true,
+		value: vi.fn().mockImplementation((query) => ({
+			matches: false,
+			media: query,
+			onchange: null,
+			addListener: vi.fn(), // Deprecated, but included for legacy library compatibility
+			removeListener: vi.fn(), // Deprecated, but included for legacy library compatibility
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			dispatchEvent: vi.fn(),
+		})),
+	});
+}
+
 vi.mock("electron", () => ({
 	dialog: { showOpenDialog: vi.fn() },
 	shell: { openPath: vi.fn() },
