@@ -18,9 +18,9 @@
 	"linter": {
 		"rules": {
 			"suspicious": {
-				"noConsole": "error",
 				"useBaseline": "off",
-				"noIdenticalTestTitle": "error"
+				"noIdenticalTestTitle": "error",
+				"noConsole": "error"
 			},
 			"correctness": {
 				"noUnusedImports": "error",
