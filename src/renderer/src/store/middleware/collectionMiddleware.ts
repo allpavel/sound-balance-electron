@@ -18,7 +18,10 @@
 
 import { createListenerMiddleware } from "@reduxjs/toolkit";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
-import { INVALID_ACTIVE_COLLECTION_TOAST } from "@shared/constants";
+import {
+	INVALID_ACTIVE_COLLECTION_TOAST,
+	INVALID_ACTIVE_COLLECTION_TOAST_ID,
+} from "@shared/constants";
 import { formatValidationIssues } from "@shared/utils";
 import { safeParseActiveCollection } from "@shared/validators";
 import { toast } from "sonner";
@@ -33,7 +36,9 @@ collectionListenerMiddleware.startListening({
 		if (parsed.success) {
 			return;
 		}
-		toast.error(INVALID_ACTIVE_COLLECTION_TOAST);
+		toast.error(INVALID_ACTIVE_COLLECTION_TOAST, {
+			id: INVALID_ACTIVE_COLLECTION_TOAST_ID,
+		});
 		// biome-ignore lint/suspicious/noConsole: Developer diagnostics for a rejected store payload; sanitized, count-capped issue text only.
 		console.warn(
 			"[collectionMiddleware] rejected an invalid setActiveCollection payload",

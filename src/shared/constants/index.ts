@@ -128,3 +128,8 @@ export const RENDER_CRASH_MESSAGE =
 
 /** Fallback recovery action label (full renderer reload). */
 export const RENDER_CRASH_RELOAD_LABEL = "Reload application";
+
+/** Stable sonner identity so repeated invalid dispatches
+ *  replace one toast instead of stacking.
+ */
+export const INVALID_ACTIVE_COLLECTION_TOAST_ID = "collection:invalid-payload";

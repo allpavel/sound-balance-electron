@@ -20,6 +20,7 @@ import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
 import { type AppStore, createAppStore } from "@renderer/store/store";
 import {
 	INVALID_ACTIVE_COLLECTION_TOAST,
+	INVALID_ACTIVE_COLLECTION_TOAST_ID,
 	SYSTEM_COLLECTION_ID,
 	SYSTEM_COLLECTION_TITLE,
 } from "@shared/constants";
@@ -65,7 +66,9 @@ describe("collectionMiddleware", () => {
 			title: SYSTEM_COLLECTION_TITLE,
 		});
 		expect(toast.error).toHaveBeenCalledTimes(1);
-		expect(toast.error).toHaveBeenCalledWith(INVALID_ACTIVE_COLLECTION_TOAST);
+		expect(toast.error).toHaveBeenCalledWith(INVALID_ACTIVE_COLLECTION_TOAST, {
+			id: INVALID_ACTIVE_COLLECTION_TOAST_ID,
+		});
 		expect(warnSpy).toHaveBeenCalledTimes(1);
 		expect(warnSpy.mock.calls[0]?.[0]).toBe(
 			"[collectionMiddleware] rejected an invalid setActiveCollection payload",
@@ -82,7 +85,9 @@ describe("collectionMiddleware", () => {
 			id: SYSTEM_COLLECTION_ID,
 			title: SYSTEM_COLLECTION_TITLE,
 		});
-		expect(toast.error).toHaveBeenCalledWith(INVALID_ACTIVE_COLLECTION_TOAST);
+		expect(toast.error).toHaveBeenCalledWith(INVALID_ACTIVE_COLLECTION_TOAST, {
+			id: INVALID_ACTIVE_COLLECTION_TOAST_ID,
+		});
 	});
 
 	it("stays silent for unrelated actions", () => {
