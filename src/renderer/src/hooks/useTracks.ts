@@ -24,6 +24,7 @@ import {
 	type TrackQuarantine,
 	toTrackQuarantine,
 } from "@renderer/db/utils/readDiagnostics";
+import { describeThrownValue } from "@renderer/db/utils/trackRepositoryUtils";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type {
 	AddManyOptions,
@@ -88,7 +89,7 @@ function createMutationState(mutation: {
 			mutation.error instanceof Error
 				? mutation.error
 				: mutation.error
-					? new Error(String(mutation.error))
+					? new Error(describeThrownValue(mutation.error))
 					: null,
 	};
 }

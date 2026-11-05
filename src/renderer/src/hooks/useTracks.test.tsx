@@ -903,6 +903,25 @@ describe("useTracks", () => {
 			await waitFor(() => expect(result.current.tracksError).toBeNull());
 			expect(result.current.tracks.map((t) => t.id)).toEqual(["custom-track"]);
 		});
+
+		it("maps a non-Error mutation rejection into a safe Error without hostile toString (W1-3)", async () => {
+			spyOnConsoleError();
+			const hostile = {
+				toString(): never {
+					throw new Error("toString trap");
+				},
+			};
+			vi.spyOn(tracksRepository, "remove").mockRejectedValue(hostile);
+			const result = await renderUseTracks();
+			await act(async () => {
+				result.current.removeTrack("t1");
+			});
+			await waitFor(() =>
+				expect(result.current.removeTrackState.isError).toBe(true),
+			);
+			expect(result.current.removeTrackState.error).toBeInstanceOf(Error);
+			expect(result.current.removeTrackState.error?.message).toBe("unknown");
+		});
 	});
 
 	describe("quarantine visibility", () => {
