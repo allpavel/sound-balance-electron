@@ -18,11 +18,14 @@
 
 import {
 	type LiveQueryFailure,
+	readFailureSignature,
 	toLiveQueryFailure,
 } from "@renderer/db/utils/readDiagnostics";
+import { createSignatureGate, type SignatureGate } from "@renderer/utils";
 import { MAX_REASON_LENGTH } from "@shared/constants";
 import { sanitizeControlChars } from "@shared/utils";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useRef } from "react";
 
 /**
  * One emission of a guarded live query: either data or a typed failure —
@@ -96,12 +99,22 @@ export function useGuardedLiveQuery<T>(
 	deps: readonly unknown[],
 	scope: string,
 ): GuardedLiveQueryState<T> {
+	const gateRef = useRef<SignatureGate | null>(null);
+	if (gateRef.current === null) {
+		gateRef.current = createSignatureGate();
+	}
+	const gate = gateRef.current;
 	const emission = useLiveQuery(async (): Promise<GuardedEmission<T>> => {
 		try {
-			return { data: await querier(), failure: null };
+			const data = await querier();
+			gate.rearm();
+			return { data, failure: null };
 		} catch (error) {
 			const failure = toLiveQueryFailure(error, scope);
-			logGuardedReadFailure(failure, error);
+			const signature = readFailureSignature(failure);
+			if (signature !== null && gate.admit(signature)) {
+				logGuardedReadFailure(failure, error);
+			}
 			return { data: undefined, failure };
 		}
 	}, [...deps]);

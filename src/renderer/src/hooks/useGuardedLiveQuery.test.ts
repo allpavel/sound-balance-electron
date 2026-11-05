@@ -119,7 +119,7 @@ describe("useGuardedLiveQuery", () => {
 		);
 	});
 
-	it("logs a sanitized, bounded developer-channel error once per failed emission", async () => {
+	it("logs a sanitized, bounded developer-channel error once per distinct failure signature", async () => {
 		const errorSpy = spyOnConsoleError();
 		const raw = `\u001b[31m${"x".repeat(MAX_REASON_LENGTH * 2)}`;
 		const { result } = renderQuery(() => Promise.reject(new Error(raw)));
@@ -130,6 +130,52 @@ describe("useGuardedLiveQuery", () => {
 			`[${SCOPE}] guarded read failed (unknown)`,
 			expect.objectContaining({ reason: expectedReason }),
 		);
+	});
+
+	it("does not re-log an identical failure on subsequent re-emissions", async () => {
+		const errorSpy = spyOnConsoleError();
+		const { result, rerender } = renderQuery(validationRejection, ["a"]);
+		await waitFor(() => expect(result.current.failure).not.toBeNull());
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+		rerender({ querier: validationRejection, deps: ["b"], scope: SCOPE });
+		await waitFor(() => expect(result.current.failure).not.toBeNull());
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("re-logs when the failure signature changes (W1-2)", async () => {
+		const errorSpy = spyOnConsoleError();
+		const { result, rerender } = renderQuery(validationRejection, ["a"]);
+		await waitFor(() => expect(result.current.failure).not.toBeNull());
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+		// Same kind/scope, different validation context → new signature.
+		const other = (): Promise<unknown> =>
+			Promise.reject(
+				new TrackValidationError("file", [
+					createRootIssue("invalid_type", "different detail"),
+				]),
+			);
+		rerender({ querier: other, deps: ["c"], scope: SCOPE });
+		await waitFor(() => expect(errorSpy).toHaveBeenCalledTimes(2));
+	});
+
+	it("re-arms after recovery so a recurrence logs again", async () => {
+		const errorSpy = spyOnConsoleError();
+		const { result, rerender } = renderQuery(validationRejection, ["bad"]);
+		await waitFor(() => expect(result.current.failure).not.toBeNull());
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+		rerender({
+			querier: () => Promise.resolve(["ok"]),
+			deps: ["good"],
+			scope: SCOPE,
+		});
+		await waitFor(() => expect(result.current.failure).toBeNull());
+		rerender({
+			querier: validationRejection,
+			deps: ["bad-again"],
+			scope: SCOPE,
+		});
+		await waitFor(() => expect(result.current.failure).not.toBeNull());
+		expect(errorSpy).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not read a message from non-Error rejections (hostile toString safety)", async () => {
