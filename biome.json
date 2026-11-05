@@ -18,15 +18,13 @@
 	"linter": {
 		"rules": {
 			"suspicious": {
+				"useBaseline": "off",
+				"noIdenticalTestTitle": "error",
 				"noConsole": "error"
 			},
 			"correctness": {
 				"noUnusedImports": "error",
 				"useSingleJsDocAsterisk": "error"
-			},
-			"nursery": {
-				"useBaseline": "off",
-				"noIdenticalTestTitle": "error"
 			}
 		}
 	},
