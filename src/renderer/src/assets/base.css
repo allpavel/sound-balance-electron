@@ -15,70 +15,228 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-:root {
-  --ev-c-white: #ffffff;
-  --ev-c-white-soft: #f8f8f8;
-  --ev-c-white-mute: #f2f2f2;
 
-  --ev-c-black: #1b1b1f;
-  --ev-c-black-soft: #222222;
-  --ev-c-black-mute: #282828;
-
-  --ev-c-gray-1: #515c67;
-  --ev-c-gray-2: #414853;
-  --ev-c-gray-3: #32363f;
-
-  --ev-c-text-1: rgba(255, 255, 245, 0.86);
-  --ev-c-text-2: rgba(235, 235, 245, 0.6);
-  --ev-c-text-3: rgba(235, 235, 245, 0.38);
-
-  --ev-button-alt-border: transparent;
-  --ev-button-alt-text: var(--ev-c-text-1);
-  --ev-button-alt-bg: var(--ev-c-gray-3);
-  --ev-button-alt-hover-border: transparent;
-  --ev-button-alt-hover-text: var(--ev-c-text-1);
-  --ev-button-alt-hover-bg: var(--ev-c-gray-2);
+/* Light scheme */
+:root[data-mantine-color-scheme="light"] {
+	/* App canvas: soft warm neutral instead of pure white (eye strain). */
+	--mantine-color-body: #f6f4f0;
+	/* Primary text: 14.8:1 on canvas. */
+	--mantine-color-text: #292521;
+	/* Links: brand shade 7 — 6.3:1 on surfaces. */
+	--mantine-color-anchor: #0d6a62;
+	/* Placeholder text darkened from gray-6 (~3.5:1) to >= 4.5:1. */
+	--mantine-color-placeholder: #7a7166;
+	/* Error/danger text and icon color used by form inputs. */
+	--mantine-color-error: #b42318;
 }
 
-:root {
-  --color-background: var(--ev-c-black);
-  --color-background-soft: var(--ev-c-black-soft);
-  --color-background-mute: var(--ev-c-black-mute);
-
-  --color-text: var(--ev-c-text-1);
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  font-weight: normal;
-}
-
-ul {
-  list-style: none;
+html,
+body,
+#root {
+	min-height: 100%;
+	background-color: #f6f4f0;
+	color: #292521;
 }
 
 body {
-  min-height: 100vh;
-  color: var(--color-text);
-  background: var(--color-background);
-  line-height: 1.6;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+		sans-serif;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Keep OS text selection legible on the warm canvas. */
+::selection {
+	background-color: #b9dcd3;
+	color: #292521;
+}
+
+/* ---------- Utilities ---------- */
+
+/**
+ * Screen-reader-only content (labels for icon-only controls, live-region
+ * duplicates, failure reasons). Standard clip technique — remains in the
+ * accessibility tree, invisible on screen.
+ */
+.visually-hidden {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/** Modals that present copyable output keep text selectable. */
+.allow-text-select {
+	user-select: text;
+}
+
+/* ---------- Skip link ---------- */
+
+/**
+ * First focusable element in the DOM. Hidden off-canvas until focused via
+ * keyboard; jumps to `#main-content`. Prevents keyboard users from tabbing
+ * through the whole toolbar on every view (WCAG 2.4.1 Bypass Blocks).
+ */
+.skip-link {
+	position: fixed;
+	top: 0;
+	left: 16px;
+	z-index: 2000;
+	padding: 10px 20px;
+	background-color: #0f766e;
+	color: #ffffff;
+	font-weight: 600;
+	font-size: 0.9375rem;
+	line-height: 1.4;
+	text-decoration: none;
+	border-radius: 0 0 10px 10px;
+	box-shadow: 0 4px 12px rgba(41, 37, 33, 0.18);
+	transform: translateY(-120%);
+	transition: transform 140ms ease-out;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+	transform: translateY(0);
+	outline: 3px solid #0f766e;
+	outline-offset: 3px;
+}
+
+/* ---------- Universal focus indicator ---------- */
+
+/**
+ * Mantine renders its own focus ring; this global `:focus-visible` outline is
+ * a second layer guaranteeing that EVERY focusable element — including plain
+ * anchors and future custom controls — shows a >= 3:1 indicator on keyboard
+ * navigation (WCAG 2.4.7 / 2.4.11).
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+	outline: 3px solid #0f766e;
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+/* ---------- Animations ---------- */
+
+/** Slow opacity breath for the "Processing" badge dot. ~0.42 Hz. */
+@keyframes sb-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.55;
+	}
+}
+
+.sb-pulse {
+	animation: sb-pulse 2400ms ease-in-out infinite;
+}
+
+/** Slow rotation for the processing spinner. ~0.33 Hz. */
+@keyframes sb-spin-slow {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.sb-spin-slow {
+	animation: sb-spin-slow 3000ms linear infinite;
+}
+
+/**
+ * Operable: honor the OS "reduce motion" preference globally. Mantine's
+ * `respectReducedMotion` covers its own components; this covers ours.
+ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* ---------- Data table ---------- */
+
+.sb-surface-card {
+	background-color: #fdfcf9;
+	border: 1px solid #e3ded4;
+	border-radius: 14px;
+	box-shadow:
+		0 1px 3px rgba(41, 37, 33, 0.07),
+		0 1px 2px rgba(41, 37, 33, 0.05);
+}
+
+.sb-data-table thead th {
+	background-color: #f1eee8;
+	color: #292521;
+	font-weight: 600;
+	font-size: 0.8125rem;
+	letter-spacing: 0.02em;
+	border-bottom: 1px solid #e3ded4;
+}
+
+.sb-data-table tbody td {
+	border-bottom: 1px solid #ede9e1;
+	color: #292521;
+}
+
+/* Selected-row tint. Selection state itself is conveyed by the row
+   checkbox (aria-checked) — color is redundant encoding, never the sole
+   indicator (WCAG 1.4.1). */
+.sb-data-table tbody tr[data-selected="true"] td {
+	background-color: #dcece8;
+}
+
+.sb-data-table tbody tr:hover td {
+	background-color: #f6f4f0;
+}
+
+.sb-data-table tbody tr[data-selected="true"]:hover td {
+	background-color: #cfe3dd;
+}
+
+/* Empty/loading table states */
+.sb-table-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	padding: 48px 24px;
+	text-align: center;
+	color: #57504a;
+}
+
+/* ---------- Scrollbars (WebKit) ---------- */
+
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+	background-color: #cfc8bb;
+	border-radius: 8px;
+	border: 2px solid #f6f4f0;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+	background-color: #877e70;
+}
+
+*::-webkit-scrollbar-track {
+	background-color: transparent;
 }
