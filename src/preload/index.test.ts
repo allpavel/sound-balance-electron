@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { EVENT_CHANNELS, INVOKE_CHANNELS } from "@main/constants";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -26,6 +27,7 @@ vi.mock("electron", () => ({
 	ipcRenderer: {
 		invoke: vi.fn(),
 		on: vi.fn(),
+		removeListener: vi.fn(),
 		removeAllListeners: vi.fn(),
 	},
 }));
@@ -160,14 +162,16 @@ describe("preload", () => {
 				expect(cb).not.toHaveBeenCalledWith(mockEvent, mockMsg);
 			});
 
-			it("returns a cleanup function that removes the specific channel listener", () => {
+			it("returns a cleanup function that removes only this subscription's listener", () => {
 				const cleanup = api.responseOnStart(vi.fn());
 				expect(typeof cleanup).toBe("function");
-
+				const registeredHandler = vi.mocked(ipcRenderer.on).mock.calls[0][1];
 				cleanup();
-				expect(ipcRenderer.removeAllListeners).toHaveBeenCalledWith(
+				expect(ipcRenderer.removeListener).toHaveBeenCalledWith(
 					EVENT_CHANNELS.RESPONSE_ON_START,
+					registeredHandler,
 				);
+				expect(ipcRenderer.removeAllListeners).not.toHaveBeenCalled();
 			});
 		});
 
@@ -238,6 +242,69 @@ describe("preload", () => {
 		it("does not call contextBridge.exposeInMainWorld", async () => {
 			await import("./index");
 			expect(contextBridge.exposeInMainWorld).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("concurrent subscriber isolation", () => {
+		it("one subscriber's teardown does not detach the other (responseOnStart)", () => {
+			const cb1 = vi.fn();
+			const cb2 = vi.fn();
+			const cleanup1 = api.responseOnStart(cb1);
+			const cleanup2 = api.responseOnStart(cb2);
+			expect(ipcRenderer.on).toHaveBeenCalledTimes(2);
+			const handler1 = vi.mocked(ipcRenderer.on).mock.calls[0][1];
+			const handler2 = vi.mocked(ipcRenderer.on).mock.calls[1][1];
+			expect(handler1).not.toBe(handler2);
+			cleanup1();
+			expect(ipcRenderer.removeListener).toHaveBeenCalledWith(
+				EVENT_CHANNELS.RESPONSE_ON_START,
+				handler1,
+			);
+			expect(ipcRenderer.removeListener).not.toHaveBeenCalledWith(
+				EVENT_CHANNELS.RESPONSE_ON_START,
+				handler2,
+			);
+			expect(ipcRenderer.removeAllListeners).not.toHaveBeenCalled();
+			handler2({ sender: {} } as any, "still-alive");
+			expect(cb2).toHaveBeenCalledWith("still-alive");
+			expect(cb1).not.toHaveBeenCalled();
+			cleanup2();
+			expect(ipcRenderer.removeListener).toHaveBeenCalledWith(
+				EVENT_CHANNELS.RESPONSE_ON_START,
+				handler2,
+			);
+			expect(ipcRenderer.removeListener).toHaveBeenCalledTimes(2);
+			expect(ipcRenderer.removeAllListeners).not.toHaveBeenCalled();
+		});
+
+		it("one subscriber's teardown does not detach the other (processingResult)", () => {
+			const cb1 = vi.fn();
+			const cb2 = vi.fn();
+			const cleanup1 = api.processingResult(cb1);
+			const cleanup2 = api.processingResult(cb2);
+			const handlerA = vi.mocked(ipcRenderer.on).mock.calls[0][1];
+			const handlerB = vi.mocked(ipcRenderer.on).mock.calls[1][1];
+			expect(handlerA).not.toBe(handlerB);
+			cleanup1();
+			expect(ipcRenderer.removeListener).toHaveBeenCalledWith(
+				EVENT_CHANNELS.PROCESSING_RESULT,
+				handlerA,
+			);
+			expect(ipcRenderer.removeListener).not.toHaveBeenCalledWith(
+				EVENT_CHANNELS.PROCESSING_RESULT,
+				handlerB,
+			);
+			const status = { id: "t1", status: "completed" as const };
+			handlerB({ sender: {} } as any, status);
+			expect(cb2).toHaveBeenCalledWith(status);
+			expect(cb1).not.toHaveBeenCalled();
+			cleanup2();
+			expect(ipcRenderer.removeListener).toHaveBeenCalledWith(
+				EVENT_CHANNELS.PROCESSING_RESULT,
+				handlerB,
+			);
+			expect(ipcRenderer.removeListener).toHaveBeenCalledTimes(2);
+			expect(ipcRenderer.removeAllListeners).not.toHaveBeenCalled();
 		});
 	});
 });
