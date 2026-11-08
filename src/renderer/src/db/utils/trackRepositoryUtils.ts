@@ -20,6 +20,7 @@ import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
 import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import { ENGINE_ERROR_MAP } from "@renderer/db/utils/engineErrors";
+import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import {
 	MAX_BATCH_PAYLOAD_SIZE,
 	MAX_LOGGED_ERROR_NAME_LENGTH,
@@ -50,14 +51,6 @@ import {
 } from "@shared/validators";
 import type { EntityTable } from "dexie";
 import type { CollectionType } from "@/types";
-
-function isNonEmptyString(value: unknown): value is string {
-	return typeof value === "string" && value.trim().length > 0;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * Type guard to safely extract `name` and `message` from unknown error
@@ -686,8 +679,6 @@ export {
 	describeThrownValue,
 	gatherReferencedCollectionIds,
 	isErrorWithName,
-	isNonEmptyString,
-	isPlainObject,
 	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,

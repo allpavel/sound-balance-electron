@@ -35,9 +35,9 @@ import {
 	dedupeByFilePath,
 	describeThrownValue,
 	gatherReferencedCollectionIds,
-	isNonEmptyString,
 	mapStorageWriteError,
 } from "@renderer/db/utils/trackRepositoryUtils";
+import { isNonEmptyString } from "@renderer/db/utils/typeGuards";
 import {
 	ImportAbortedError,
 	StorageUnavailableError,

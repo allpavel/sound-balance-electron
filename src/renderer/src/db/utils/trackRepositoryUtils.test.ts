@@ -40,7 +40,6 @@ import {
 	assertTrackInput,
 	assertValidTrackId,
 	createProgressEmitter,
-	isPlainObject,
 	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
@@ -67,40 +66,6 @@ function captureThrown(fn: () => unknown): unknown {
 }
 
 describe("trackRepositoryUtils", () => {
-	describe("isPlainObject", () => {
-		it.each([
-			["empty object", {}],
-			["object with id", { id: "track-1" }],
-			["object with collectionIds", { collectionIds: ["all"] }],
-		])("returns true for %s", (_desc, value) => {
-			expect(isPlainObject(value)).toBe(true);
-		});
-
-		it("returns false for null", () => {
-			expect(isPlainObject(null)).toBe(false);
-		});
-
-		it.each([
-			["empty array", []],
-			["non-empty array", ["all"]],
-		])("returns false for %s", (_desc, value) => {
-			expect(isPlainObject(value)).toBe(false);
-		});
-
-		it.each([
-			["undefined", undefined],
-			["string", "string"],
-			["number", 123],
-			["boolean", true],
-		])("returns false for primitive: %s", (_desc, value) => {
-			expect(isPlainObject(value)).toBe(false);
-		});
-
-		it("returns false for functions", () => {
-			expect(isPlainObject(() => {})).toBe(false);
-		});
-	});
-
 	describe("assertTrackInput", () => {
 		it("accepts a valid track", () => {
 			expect(() => assertTrackInput(makeTrack(), 0)).not.toThrow();

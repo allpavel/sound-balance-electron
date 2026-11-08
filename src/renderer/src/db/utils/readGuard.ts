@@ -17,10 +17,7 @@
  */
 
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
-import {
-	isNonEmptyString,
-	isPlainObject,
-} from "@renderer/db/utils/trackRepositoryUtils";
+import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import { STATUS_VALUES } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
 import { sanitizeControlChars } from "@shared/utils";
