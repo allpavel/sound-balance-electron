@@ -34,10 +34,9 @@ import {
 	assertReferentialIntegrity,
 	assertValidTrackId,
 	createProgressEmitter,
-	isNonEmptyString,
-	isPlainObject,
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
+import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import type { AddManyOptions, Metadata } from "@shared/schemas/track.schema";

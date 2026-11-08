@@ -52,9 +52,12 @@ export type GuardedTracks = {
 /**
  * Cheap structural type guard for a raw track row.
  *
- * Validates only top-level shape (fields consumers dereference directly).
- * Deep metadata conformance remains the responsibility of
- * `storedTrackSchema` at sweep/egress boundaries.
+ * **Canonical source:** `storedTrackSchema`
+ * (`@shared/schemas/track.schema`). This guard is a projection of the
+ * schema's top-level invariants, checking only the fields that
+ * consumers dereference directly. It does NOT deep-validate `common`
+ * or `format` internals — that remains the schema's responsibility at
+ * the sweep/egress boundary.
  *
  * @param row - Untrusted value read from IndexedDB.
  * @returns `true` when the row is safe to hand to UI/logic consumers.
@@ -69,7 +72,9 @@ export function isStructurallyValidTrack(row: unknown): row is Metadata {
 	}
 	if (row.selected !== 0 && row.selected !== 1) return false;
 	if (!Array.isArray(row.collectionIds)) return false;
+
 	const collectionIds: readonly unknown[] = row.collectionIds;
+
 	if (!collectionIds.every((cid) => typeof cid === "string")) return false;
 	if (!isPlainObject(row.common)) return false;
 	if (!isPlainObject(row.format)) return false;

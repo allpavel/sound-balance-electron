@@ -17,6 +17,8 @@
  */
 
 import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
+import { STATUS_VALUES } from "@shared/constants";
+import { storedTrackSchema } from "@shared/schemas/track.schema";
 import { makeTrack } from "@tests/factories";
 import { guardTrack, guardTracks, isStructurallyValidTrack } from "./readGuard";
 
@@ -278,7 +280,7 @@ describe("isStructurallyValidTrack", () => {
 		});
 	});
 
-	describe("common / format (U-01 crash scenario)", () => {
+	describe("common / format", () => {
 		it.each<[string, RowCorruptor]>([
 			[
 				"missing common",
@@ -381,6 +383,26 @@ describe("isStructurallyValidTrack", () => {
 				}),
 			);
 			expect(valid).toBe(true);
+		});
+	});
+
+	describe("schema↔guard drift insurance", () => {
+		it("accepts every row the stored schema accepts (round-trip pin)", () => {
+			for (const status of STATUS_VALUES) {
+				const base = makeTrack();
+				const input =
+					status === "failed"
+						? { ...base, status, reason: "round-trip test" }
+						: { ...base, status };
+				const row = storedTrackSchema.parse(input);
+				expect(isStructurallyValidTrack(row)).toBe(true);
+			}
+		});
+
+		it("rejects a row the stored schema rejects (inverse round-trip)", () => {
+			const invalidRow = { id: "t1" };
+			expect(storedTrackSchema.safeParse(invalidRow).success).toBe(false);
+			expect(isStructurallyValidTrack(invalidRow)).toBe(false);
 		});
 	});
 });
