@@ -20,7 +20,12 @@ import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import { STATUS_VALUES } from "@shared/constants";
 import { storedTrackSchema } from "@shared/schemas/track.schema";
 import { makeTrack } from "@tests/factories";
-import { guardTrack, guardTracks, isStructurallyValidTrack } from "./readGuard";
+import {
+	guardTrack,
+	guardTracks,
+	isStructurallyValidTrack,
+	quarantineMessage,
+} from "./readGuard";
 
 /** Mutates a raw row fixture to simulate one flavor of engine-level corruption. */
 type RowCorruptor = (row: Record<string, unknown>) => void;
@@ -452,7 +457,7 @@ describe("guardTracks", () => {
 		]);
 		expect(warnSpy).toHaveBeenCalledTimes(1);
 		expect(warnSpy).toHaveBeenCalledWith(
-			"[tracksRepository.read] quarantined structurally invalid rows",
+			quarantineMessage("tracksRepository.read"),
 			{ count: 2, ids: ["bad-1", "bad-2"] },
 		);
 	});
@@ -467,9 +472,7 @@ describe("guardTracks", () => {
 			"tracksRepository.getAll",
 		);
 		const [message] = lastWarnCall(warnSpy);
-		expect(message).toBe(
-			"[tracksRepository.getAll] quarantined structurally invalid rows",
-		);
+		expect(message).toBe(quarantineMessage("tracksRepository.getAll"));
 	});
 
 	it("caps the logged id list at MAX_DISPLAY_MISSING while returning the full quarantine list", () => {
@@ -498,7 +501,7 @@ describe("guardTracks", () => {
 		]);
 		expect(result.quarantinedIds).toEqual(["bad\uFFFD[31mid\uFFFD"]);
 		expect(warnSpy).toHaveBeenCalledWith(
-			"[tracksRepository.read] quarantined structurally invalid rows",
+			quarantineMessage("tracksRepository.read"),
 			{ count: 1, ids: ["bad\uFFFD[31mid\uFFFD"] },
 		);
 	});
@@ -595,7 +598,7 @@ describe("guardTrack", () => {
 			guardTrack(corrupt, "t1", "tracksRepository.getById"),
 		).toBeUndefined();
 		expect(warnSpy).toHaveBeenCalledWith(
-			"[tracksRepository.getById] quarantined structurally invalid rows",
+			quarantineMessage("tracksRepository.getById"),
 			{ count: 1, ids: ["t1"] },
 		);
 	});
@@ -616,5 +619,33 @@ describe("guardTrack", () => {
 		expect(guardTrack(corrupt, "evil\u001bid")).toBeUndefined();
 		const [, payload] = lastWarnCall(warnSpy);
 		expect(payload).toEqual({ count: 1, ids: ["evil\uFFFDid"] });
+	});
+
+	it("uses a sanitized scope in the quarantine warning", () => {
+		const hostileScope = "tracksRepository.getAll\u001b[31m";
+		const safeScope = "tracksRepository.getAll\uFFFD[31m";
+		guardTracks(
+			[
+				corruptRow((r) => {
+					delete r.common;
+				}, "bad-1"),
+			],
+			hostileScope,
+		);
+		expect(warnSpy).toHaveBeenCalledWith(quarantineMessage(safeScope), {
+			count: 1,
+			ids: ["bad-1"],
+		});
+	});
+});
+
+describe("quarantineMessage", () => {
+	it("sanitizes control characters in the scope prefix", () => {
+		const hostileScope = "tracksRepository.getAll\u001b[31m";
+		const safeScope = "tracksRepository.getAll\uFFFD[31m";
+		const message = quarantineMessage(hostileScope);
+		expect(message).toBe(quarantineMessage(safeScope));
+		expect(message).not.toContain("\u001b");
+		expect(message).toContain("\uFFFD");
 	});
 });

@@ -18,6 +18,7 @@
 
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
+import { quarantineMessage } from "@renderer/db/utils/readGuard";
 import {
 	resetDatabase,
 	resetTestState,
@@ -178,7 +179,7 @@ describe("tracksRepository", () => {
 			expect(result.ok.map((t) => t.id)).toEqual(["ok"]);
 			expect(warnSpy).toHaveBeenCalledTimes(1);
 			expect(warnSpy).toHaveBeenCalledWith(
-				"[tracksRepository.getAll] quarantined structurally invalid rows",
+				quarantineMessage("tracksRepository.getAll"),
 				{ count: 1, ids: ["corrupt"] },
 			);
 		});
@@ -207,7 +208,7 @@ describe("tracksRepository", () => {
 			expect(result.quarantinedIds).toEqual(["corrupt-a", "corrupt-b"]);
 			expect(warnSpy).toHaveBeenCalledTimes(1);
 			expect(warnSpy).toHaveBeenCalledWith(
-				"[tracksRepository.getAll] quarantined structurally invalid rows",
+				quarantineMessage("tracksRepository.getAll"),
 				{ count: 2, ids: ["corrupt-a", "corrupt-b"] },
 			);
 		});
@@ -255,7 +256,7 @@ describe("tracksRepository", () => {
 			expect(await tracksRepository.getById("corrupt-1")).toBeUndefined();
 			expect(warnSpy).toHaveBeenCalledTimes(1);
 			expect(warnSpy).toHaveBeenCalledWith(
-				"[tracksRepository.getById] quarantined structurally invalid rows",
+				quarantineMessage("tracksRepository.getById"),
 				{ count: 1, ids: ["corrupt-1"] },
 			);
 		});
@@ -2065,7 +2066,7 @@ describe("tracksRepository", () => {
 			expect(result.quarantinedIds).toEqual(["corrupt"]);
 			expect(warnSpy).toHaveBeenCalledTimes(1);
 			expect(warnSpy).toHaveBeenCalledWith(
-				"[tracksRepository.getSelectedTracks] quarantined structurally invalid rows",
+				quarantineMessage("tracksRepository.getSelectedTracks"),
 				{ count: 1, ids: ["corrupt"] },
 			);
 		});

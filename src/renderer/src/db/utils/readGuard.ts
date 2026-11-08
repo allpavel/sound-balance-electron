@@ -50,6 +50,16 @@ export type GuardedTracks = {
 };
 
 /**
+ * Builds the quarantine diagnostic message for a given repository scope.
+ *
+ * @param scope - Repository operation tag (e.g. `"tracksRepository.getAll"`).
+ * @returns The formatted diagnostic message string.
+ */
+export function quarantineMessage(scope: string): string {
+	return `[${sanitizeControlChars(scope)}] quarantined structurally invalid rows`;
+}
+
+/**
  * Cheap structural type guard for a raw track row.
  *
  * **Canonical source:** `storedTrackSchema`
@@ -122,7 +132,7 @@ function warnQuarantined(
 ): void {
 	if (quarantinedIds.length === 0) return;
 	// biome-ignore lint/suspicious/noConsole: Intentional read-path diagnostic; output is sanitized and count-capped.
-	console.warn(`[${scope}] quarantined structurally invalid rows`, {
+	console.warn(quarantineMessage(scope), {
 		count: quarantinedIds.length,
 		ids: quarantinedIds.slice(0, MAX_DISPLAY_MISSING),
 	});
