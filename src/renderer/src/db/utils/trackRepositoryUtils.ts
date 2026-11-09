@@ -20,6 +20,7 @@ import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
 import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import { ENGINE_ERROR_MAP } from "@renderer/db/utils/engineErrors";
+import { guardTrack } from "@renderer/db/utils/readGuard";
 import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import {
 	MAX_BATCH_PAYLOAD_SIZE,
@@ -477,8 +478,8 @@ async function applyGuardedTrackUpdate(
 	if (!("status" in changes)) {
 		return await tracksTable.update(id, changes);
 	}
-
-	const track = await tracksTable.get(id);
+	const row: unknown = await tracksTable.get(id);
+	const track = guardTrack(row, id, "tracksRepository.update");
 	const patch = shouldApplyUpdate(track, changes);
 
 	if (patch === null) return 0;

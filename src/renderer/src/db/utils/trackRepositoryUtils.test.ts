@@ -665,10 +665,12 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("returns 0 for an illegal state transition (e.g., completed -> pending)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "completed",
-			});
+			vi.mocked(mockTable.get).mockResolvedValue(
+				makeTrack({
+					id: "t1",
+					status: "completed",
+				}),
+			);
 			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
 				status: "pending",
 			});
@@ -677,12 +679,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("applies a legal state transition and returns 1", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "pending",
-			});
+			vi.mocked(mockTable.get).mockResolvedValue(
+				makeTrack({
+					id: "t1",
+					status: "pending",
+				}),
+			);
 			vi.mocked(mockTable.update).mockResolvedValue(1);
-
 			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
 				status: "processing",
 			});
@@ -693,11 +696,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("returns 0 for a stale sequence number (out-of-order event)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
+			vi.mocked(mockTable.get).mockResolvedValue(
+				makeTrack({
+					id: "t1",
+					status: "processing",
+					statusSeq: 5,
+				}),
+			);
 			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
 				status: "completed",
 				seq: 4,
@@ -707,11 +712,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects an event whose seq equals the stored high-water mark (replay protection)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
+			vi.mocked(mockTable.get).mockResolvedValue(
+				makeTrack({
+					id: "t1",
+					status: "processing",
+					statusSeq: 5,
+				}),
+			);
 			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
 				status: "completed",
 				seq: 5,
@@ -721,11 +728,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("applies update and advances statusSeq for a fresh sequence number", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
+			vi.mocked(mockTable.get).mockResolvedValue(
+				makeTrack({
+					id: "t1",
+					status: "processing",
+					statusSeq: 5,
+				}),
+			);
 			vi.mocked(mockTable.update).mockResolvedValue(1);
 			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
 				status: "completed",
@@ -740,11 +749,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("does not advance statusSeq if the event lacks a seq (graceful degradation)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
+			vi.mocked(mockTable.get).mockResolvedValue(
+				makeTrack({
+					id: "t1",
+					status: "processing",
+					statusSeq: 5,
+				}),
+			);
 			vi.mocked(mockTable.update).mockResolvedValue(1);
 			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
 				status: "completed",
@@ -755,6 +766,52 @@ describe("trackRepositoryUtils", () => {
 				status: "completed",
 				reason: undefined,
 			});
+		});
+
+		it("quarantines a corrupt row and returns 0 instead of silently failing", async () => {
+			const corruptRow = { id: "t1", status: "processing" };
+			vi.mocked(mockTable.get).mockResolvedValue(corruptRow as any);
+			vi.mocked(mockTable.update).mockResolvedValue(1);
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "completed",
+			});
+			// undefined → shouldApplyUpdate returns null → 0.
+			expect(result).toBe(0);
+			expect(mockTable.update).not.toHaveBeenCalled();
+			// quarantine warning must have been emitted.
+			expect(warnSpy).toHaveBeenCalledTimes(1);
+			expect(warnSpy).toHaveBeenCalledWith(
+				expect.stringContaining("quarantined structurally invalid rows"),
+				expect.objectContaining({ count: 1 }),
+			);
+		});
+
+		it("passes a valid row through to shouldApplyUpdate", async () => {
+			const validRow = makeTrack({ id: "t1", status: "processing" });
+			vi.mocked(mockTable.get).mockResolvedValue(validRow);
+			vi.mocked(mockTable.update).mockResolvedValue(1);
+			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+				status: "completed",
+			});
+			expect(result).toBe(1);
+			expect(mockTable.update).toHaveBeenCalledWith(
+				"t1",
+				expect.objectContaining({
+					status: "completed",
+				}),
+			);
+		});
+
+		it("returns 0 for an absent row without warning", async () => {
+			vi.mocked(mockTable.get).mockResolvedValue(undefined);
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const result = await applyGuardedTrackUpdate(mockTable, "missing", {
+				status: "completed",
+			});
+			expect(result).toBe(0);
+			expect(mockTable.update).not.toHaveBeenCalled();
+			expect(warnSpy).not.toHaveBeenCalled();
 		});
 	});
 
