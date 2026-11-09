@@ -24,6 +24,7 @@ import {
 	SYSTEM_COLLECTION_TITLE,
 } from "@shared/constants";
 import { makeTrack } from "@tests/factories";
+import { spyOnConsoleWarn } from "@tests/utils";
 import { v7 as uuidV7 } from "uuid";
 
 const TITLE_VALIDATION_ERROR = /title.*empty/;
@@ -37,8 +38,8 @@ describe("collectionsRepository", () => {
 	describe("getAllCollections", () => {
 		it("returns the seeded 'all' collection after a reset", async () => {
 			const collections = await collectionsRepository.getAllCollections();
-			expect(collections).toHaveLength(1);
-			expect(collections[0]).toEqual({
+			expect(collections.ok).toHaveLength(1);
+			expect(collections.ok[0]).toEqual({
 				id: SYSTEM_COLLECTION_ID,
 				title: SYSTEM_COLLECTION_TITLE,
 			});
@@ -47,7 +48,7 @@ describe("collectionsRepository", () => {
 		it("returns every collection after several are added", async () => {
 			await collectionsRepository.addCollection({ title: "Collection 1" });
 			await collectionsRepository.addCollection({ title: "Collection 2" });
-			const titles = (await collectionsRepository.getAllCollections())
+			const titles = (await collectionsRepository.getAllCollections()).ok
 				.map((collection) => collection.title)
 				.sort();
 			expect(titles).toEqual([
@@ -62,12 +63,27 @@ describe("collectionsRepository", () => {
 				title: "Mix",
 			});
 			await collectionsRepository.deleteCollection({ id });
-			expect(await collectionsRepository.getAllCollections()).toEqual([
+			expect((await collectionsRepository.getAllCollections()).ok).toEqual([
 				{
 					id: SYSTEM_COLLECTION_ID,
 					title: SYSTEM_COLLECTION_TITLE,
 				},
 			]);
+		});
+
+		it("quarantines structurally corrupt collection rows", async () => {
+			// seed a corrupt row directly via the raw table API
+			await db.table("collections").add({
+				id: "corrupt-col",
+				title: 42,
+			});
+			const warnSpy = spyOnConsoleWarn();
+			const result = await collectionsRepository.getAllCollections();
+			// The seeded system collection ("all") is valid; the corrupt one is quarantined.
+			expect(result.ok.length).toBeGreaterThanOrEqual(1);
+			expect(result.ok.some((c) => c.id === "corrupt-col")).toBe(false);
+			expect(result.quarantinedIds).toContain("corrupt-col");
+			expect(warnSpy).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -105,6 +121,25 @@ describe("collectionsRepository", () => {
 				id,
 				title: "New",
 			});
+		});
+
+		it("quarantines a corrupt row: undefined plus a warning", async () => {
+			await db.table("collections").add({
+				id: "corrupt-col",
+				title: "", // blank title fails the guard
+			});
+			const warnSpy = spyOnConsoleWarn();
+			const result =
+				await collectionsRepository.getCollectionById("corrupt-col");
+			expect(result).toBeUndefined();
+			expect(warnSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("returns undefined without warning when the row is absent", async () => {
+			const warnSpy = spyOnConsoleWarn();
+			const result = await collectionsRepository.getCollectionById("missing");
+			expect(result).toBeUndefined();
+			expect(warnSpy).not.toHaveBeenCalled();
 		});
 	});
 
@@ -171,7 +206,7 @@ describe("collectionsRepository", () => {
 		it("allows duplicate titles because no uniqueness constraint is defined", async () => {
 			await collectionsRepository.addCollection({ title: "Duplicate" });
 			await collectionsRepository.addCollection({ title: "Duplicate" });
-			const titles = (await collectionsRepository.getAllCollections())
+			const titles = (await collectionsRepository.getAllCollections()).ok
 				.map((collection) => collection.title)
 				.sort();
 			expect(titles).toEqual([
@@ -195,7 +230,9 @@ describe("collectionsRepository", () => {
 			expect(
 				await collectionsRepository.updateCollection("missing", { title: "X" }),
 			).toBe(0);
-			expect(await collectionsRepository.getAllCollections()).toHaveLength(1);
+			expect((await collectionsRepository.getAllCollections()).ok).toHaveLength(
+				1,
+			);
 		});
 
 		it("rejects an empty title update", async () => {
@@ -314,7 +351,7 @@ describe("collectionsRepository", () => {
 					id: collectionId,
 				});
 				expect(await db.collections.get(collectionId)).toBeUndefined();
-				expect(await collectionsRepository.getAllCollections()).toEqual([
+				expect((await collectionsRepository.getAllCollections()).ok).toEqual([
 					{
 						id: SYSTEM_COLLECTION_ID,
 						title: SYSTEM_COLLECTION_TITLE,
@@ -338,7 +375,9 @@ describe("collectionsRepository", () => {
 						deleteFromAllCollections: false,
 					}),
 				).resolves.toBeUndefined();
-				expect(await collectionsRepository.getAllCollections()).toHaveLength(1);
+				expect(
+					(await collectionsRepository.getAllCollections()).ok,
+				).toHaveLength(1);
 				expect(await db.tracks.count()).toBe(0);
 			});
 		});
@@ -415,7 +454,9 @@ describe("collectionsRepository", () => {
 						deleteFromAllCollections: true,
 					}),
 				).resolves.toBeUndefined();
-				expect(await collectionsRepository.getAllCollections()).toHaveLength(1);
+				expect(
+					(await collectionsRepository.getAllCollections()).ok,
+				).toHaveLength(1);
 				expect(await db.tracks.count()).toBe(2);
 			});
 
