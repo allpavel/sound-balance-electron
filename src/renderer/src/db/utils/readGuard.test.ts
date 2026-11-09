@@ -334,6 +334,64 @@ describe("isStructurallyValidTrack", () => {
 		});
 	});
 
+	describe("common / picture", () => {
+		it("accepts a row with common.picture as a valid array", () => {
+			const row: Record<string, unknown> = {
+				...makeTrack({ id: "t1" }),
+				common: { picture: ["artwork-uuid-1", "artwork-uuid-2"] },
+			};
+			expect(isStructurallyValidTrack(row)).toBe(true);
+		});
+
+		it("accepts a row with common.picture absent (optional field)", () => {
+			const row: Record<string, unknown> = {
+				...makeTrack({ id: "t1" }),
+				common: {},
+			};
+			expect(isStructurallyValidTrack(row)).toBe(true);
+		});
+
+		it("accepts a row with common.picture explicitly undefined", () => {
+			const row: Record<string, unknown> = {
+				...makeTrack({ id: "t1" }),
+				common: { picture: undefined },
+			};
+			expect(isStructurallyValidTrack(row)).toBe(true);
+		});
+
+		it("rejects a row where common.picture is a number", () => {
+			const row: Record<string, unknown> = {
+				...makeTrack({ id: "t1" }),
+				common: { picture: 42 },
+			};
+			expect(isStructurallyValidTrack(row)).toBe(false);
+		});
+
+		it("rejects a row where common.picture is a string", () => {
+			const row: Record<string, unknown> = {
+				...makeTrack({ id: "t1" }),
+				common: { picture: "not-an-array" },
+			};
+			expect(isStructurallyValidTrack(row)).toBe(false);
+		});
+
+		it("rejects a row where common.picture is null", () => {
+			const row: Record<string, unknown> = {
+				...makeTrack({ id: "t1" }),
+				common: { picture: null },
+			};
+			expect(isStructurallyValidTrack(row)).toBe(false);
+		});
+
+		it("rejects a row where common.picture is an object", () => {
+			const row: Record<string, unknown> = {
+				...makeTrack({ id: "t1" }),
+				common: { picture: { format: "jpeg" } },
+			};
+			expect(isStructurallyValidTrack(row)).toBe(false);
+		});
+	});
+
 	describe("statusSeq", () => {
 		it.each<[string, unknown]>([
 			["zero", 0],

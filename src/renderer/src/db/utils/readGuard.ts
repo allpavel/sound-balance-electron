@@ -88,6 +88,9 @@ export function isStructurallyValidTrack(row: unknown): row is Metadata {
 	if (!collectionIds.every((cid) => typeof cid === "string")) return false;
 	if (!isPlainObject(row.common)) return false;
 	if (!isPlainObject(row.format)) return false;
+	if (row.common.picture !== undefined && !Array.isArray(row.common.picture)) {
+		return false;
+	}
 	if (
 		row.statusSeq !== undefined &&
 		(typeof row.statusSeq !== "number" ||
@@ -126,7 +129,7 @@ function describeRowId(row: unknown): string {
  * @param quarantinedIds - Descriptors of the rejected rows.
  * @param scope          - Repository operation tag for the log prefix.
  */
-function warnQuarantined(
+export function warnQuarantined(
 	quarantinedIds: readonly string[],
 	scope: string,
 ): void {
