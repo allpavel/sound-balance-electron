@@ -87,6 +87,28 @@ Quarantine surfacing is **dual-channel by design**, with five normative properti
   updated accordingly — the same resolution rule ADR-0004 itself applied to ADR-0003's
   reservation.
 
+  ## Amendment 1 — Uniform guard policy across all entities (WP-4)
+
+- **Date:** 2026-11-08
+- **Resolves:** FE-132 WP-4 (R-5, R-7, R-8)
+
+The quarantine-and-guard policy established by this ADR for track reads
+now extends uniformly to **all** IndexedDB entities:
+
+| Entity | Guard module | Repository | Pattern |
+| :--- | :--- | :--- | :--- |
+| **Tracks** | `readGuard.ts` | `trackRepository.ts` | `guardTracks` / `guardTrack` |
+| **Collections** | `entityGuards.ts` | `collectionsRepository.ts` | `guardCollections` / `guardCollection` |
+| **Artworks** | `entityGuards.ts` | `artworksRepository.ts` | `guardArtworks` / `guardArtwork` |
+| **Track write-path internal read** | `readGuard.ts` | `trackRepositoryUtils.ts` | `guardTrack` inside `applyGuardedTrackUpdate` |
+| **`common.picture`** | `readGuard.ts` | *(structural check in `isStructurallyValidTrack`)* | `Array.isArray` when present |
+
+All surfaces share the same semantics: **fail-loud at the argument
+boundary, quarantine-and-log at the data boundary, never crash the
+render.** The `warnQuarantined` emitter and `quarantineMessage` format
+are shared across all guard modules via a single export from
+`readGuard.ts`.
+
 ## See also
 
 - ADR-0004 — merge-lane collection union; source of the ADR-numbering discipline this ADR had to
