@@ -82,10 +82,11 @@ Quarantine surfacing is **dual-channel by design**, with five normative properti
   quarantined rows inline in the track table. It must not be implemented ad hoc; it requires its
   own decision slice.
 - **Numbering.** ADR-0004's Consequences section reserved `ADR-0005-reconciliation-sweep.md` for
-  the ZT-3 sweep. That number is now taken by this ADR; when the sweep ADR is authored it shall
-  take the next free number (`ADR-0006-reconciliation-sweep.md`) and the P5 register should be
-  updated accordingly — the same resolution rule ADR-0004 itself applied to ADR-0003's
-  reservation.
+  the ZT-3 sweep. That number was taken by this ADR; ADR-0005 originally re-reserved the sweep at
+  `ADR-0006`. **WP-5 update (2026-11-12):** `ADR-0006` is now taken by the read-path-policy ADR,
+  so the sweep ADR shall take the next free number (**`ADR-0007-reconciliation-sweep.md`**) and
+  the P5 register should be updated accordingly — the same resolution rule applied at each prior
+  collision.
 
   ## Amendment 1 — Uniform guard policy across all entities (WP-4)
 
@@ -111,6 +112,8 @@ are shared across all guard modules via a single export from
 
 ## See also
 
+- ADR-0006 — read-path policy (WP-5): the engine-boundary validate / quarantine / fail-loud
+  contract this ADR's surfacing policy sits on top of.
 - ADR-0004 — merge-lane collection union; source of the ADR-numbering discipline this ADR had to
   reconcile.
 - ADR-0003 — `updateMany` error precedence; the pin-contract discipline (decisions recorded with
