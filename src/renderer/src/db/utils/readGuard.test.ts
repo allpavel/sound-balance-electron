@@ -21,6 +21,8 @@ import { STATUS_VALUES } from "@shared/constants";
 import { storedTrackSchema } from "@shared/schemas/track.schema";
 import { makeTrack } from "@tests/factories";
 import {
+	describeRequestedId,
+	describeRowId,
 	guardTrack,
 	guardTracks,
 	isStructurallyValidTrack,
@@ -705,5 +707,32 @@ describe("quarantineMessage", () => {
 		expect(message).toBe(quarantineMessage(safeScope));
 		expect(message).not.toContain("\u001b");
 		expect(message).toContain("\uFFFD");
+	});
+});
+
+describe("shared quarantine descriptors (WP-5)", () => {
+	it("describeRowId sanitizes and bounds a hostile row id", () => {
+		const descriptor = describeRowId({ id: "\u001b[31m" + "x".repeat(200) });
+		expect(descriptor).not.toContain("\u001b");
+		expect(descriptor).toContain("\uFFFD");
+		expect(descriptor).toHaveLength(64);
+	});
+
+	it("describeRowId falls back to '<no-id>' for absent, blank, and null ids", () => {
+		expect(describeRowId({})).toBe("<no-id>");
+		expect(describeRowId({ id: "   " })).toBe("<no-id>");
+		expect(describeRowId({ id: null })).toBe("<no-id>");
+		expect(describeRowId(null)).toBe("<no-id>");
+	});
+
+	it("describeRowId coerces non-string ids via String()", () => {
+		expect(describeRowId({ id: 42 })).toBe("42");
+	});
+
+	it("describeRequestedId sanitizes and bounds a requested key", () => {
+		const descriptor = describeRequestedId("evil\u0007" + "k".repeat(200));
+		expect(descriptor).toBe("evil\uFFFD" + "k".repeat(59));
+		expect(descriptor).toHaveLength(64);
+		expect(descriptor).not.toContain("\u0007");
 	});
 });

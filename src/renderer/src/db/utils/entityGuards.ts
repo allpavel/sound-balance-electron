@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { warnQuarantined } from "@renderer/db/utils/readGuard";
+import {
+	describeRequestedId,
+	describeRowId,
+	warnQuarantined,
+} from "@renderer/db/utils/readGuard";
 import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import type { Artwork } from "@shared/types";
 import type { CollectionType } from "@/types";
@@ -59,26 +63,6 @@ export function isStructurallyValidCollection(
 }
 
 /**
- * Derives a log-safe descriptor for a quarantined collection row's id.
- * Mirrors the track guard's `describeRowId` pattern.
- *
- * @param row - The rejected row.
- * @returns A sanitized, bounded display id, or `"<no-id>"` when absent.
- */
-function describeCollectionRowId(row: unknown): string {
-	const rawId: unknown = isPlainObject(row) ? row.id : undefined;
-	let display: string;
-	if (typeof rawId === "string") {
-		display = rawId.trim().length > 0 ? rawId : "<no-id>";
-	} else if (rawId === undefined || rawId === null) {
-		display = "<no-id>";
-	} else {
-		display = String(rawId);
-	}
-	return display.slice(0, 64);
-}
-
-/**
  * Partitions raw collection rows into guarded results and quarantined
  * descriptors.
  *
@@ -96,7 +80,7 @@ export function guardCollections(
 		if (isStructurallyValidCollection(row)) {
 			ok.push(row);
 		} else {
-			quarantinedIds.push(describeCollectionRowId(row));
+			quarantinedIds.push(describeRowId(row));
 		}
 	}
 	warnQuarantined(quarantinedIds, scope);
@@ -118,7 +102,7 @@ export function guardCollection(
 ): CollectionType | undefined {
 	if (row === undefined) return undefined;
 	if (isStructurallyValidCollection(row)) return row;
-	warnQuarantined([id.slice(0, 64)], scope);
+	warnQuarantined([describeRequestedId(id)], scope);
 	return undefined;
 }
 
@@ -165,25 +149,6 @@ export function isStructurallyValidArtwork(row: unknown): row is Artwork {
 }
 
 /**
- * Derives a log-safe descriptor for a quarantined artwork row's id.
- *
- * @param row - The rejected row.
- * @returns A sanitized, bounded display id, or `"<no-id>"` when absent.
- */
-function describeArtworkRowId(row: unknown): string {
-	const rawId: unknown = isPlainObject(row) ? row.id : undefined;
-	let display: string;
-	if (typeof rawId === "string") {
-		display = rawId.trim().length > 0 ? rawId : "<no-id>";
-	} else if (rawId === undefined || rawId === null) {
-		display = "<no-id>";
-	} else {
-		display = String(rawId);
-	}
-	return display.slice(0, 64);
-}
-
-/**
  * Partitions raw artwork rows into guarded results and quarantined
  * descriptors.
  *
@@ -202,7 +167,7 @@ export function guardArtworks(
 		if (isStructurallyValidArtwork(row)) {
 			ok.push(row);
 		} else {
-			quarantinedIds.push(describeArtworkRowId(row));
+			quarantinedIds.push(describeRowId(row));
 		}
 	}
 	warnQuarantined(quarantinedIds, scope);
@@ -224,6 +189,6 @@ export function guardArtwork(
 ): Artwork | undefined {
 	if (row === undefined) return undefined;
 	if (isStructurallyValidArtwork(row)) return row;
-	warnQuarantined([id.slice(0, 64)], scope);
+	warnQuarantined([describeRequestedId(id)], scope);
 	return undefined;
 }

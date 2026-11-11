@@ -105,11 +105,12 @@ export function isStructurallyValidTrack(row: unknown): row is Metadata {
 
 /**
  * Derives a log-safe descriptor for a quarantined row's id.
+ * Entity-agnostic: shared by track, collection, and artwork guards.
  *
  * @param row - The rejected row.
  * @returns A sanitized, bounded display id, or `"<no-id>"` when absent.
  */
-function describeRowId(row: unknown): string {
+export function describeRowId(row: unknown): string {
 	const rawId: unknown = isPlainObject(row) ? row.id : undefined;
 	let display: string;
 	if (typeof rawId === "string") {
@@ -119,7 +120,17 @@ function describeRowId(row: unknown): string {
 	} else {
 		display = String(rawId);
 	}
-	return sanitizeControlChars(display).slice(0, MAX_LOGGED_ID_LENGTH);
+	return describeRequestedId(display);
+}
+
+/**
+ * Derives a log-safe descriptor for a requested primary key.
+ *
+ * @param id - The caller-supplied key being looked up.
+ * @returns The sanitized, bounded key.
+ */
+export function describeRequestedId(id: string): string {
+	return sanitizeControlChars(id).slice(0, MAX_LOGGED_ID_LENGTH);
 }
 
 /**
@@ -191,9 +202,6 @@ export function guardTrack(
 ): Metadata | undefined {
 	if (row === undefined) return undefined;
 	if (isStructurallyValidTrack(row)) return row;
-	warnQuarantined(
-		[sanitizeControlChars(id).slice(0, MAX_LOGGED_ID_LENGTH)],
-		scope,
-	);
+	warnQuarantined([describeRequestedId(id)], scope);
 	return undefined;
 }

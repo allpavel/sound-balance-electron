@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { spyOnConsoleWarn } from "@tests/utils";
 import {
 	type GuardedArtworks,
 	type GuardedCollections,
@@ -26,6 +27,7 @@ import {
 	isStructurallyValidArtwork,
 	isStructurallyValidCollection,
 } from "./entityGuards";
+import { quarantineMessage } from "./readGuard";
 
 describe("entityGuards", () => {
 	describe("isStructurallyValidCollection", () => {
@@ -205,6 +207,100 @@ describe("entityGuards", () => {
 		it("quarantines a corrupt row and returns undefined", () => {
 			const corrupt = { id: "art-1", blob: 42, format: "image/png" };
 			expect(guardArtwork(corrupt, "art-1")).toBeUndefined();
+		});
+	});
+});
+
+describe("quarantine descriptor hardening (WP-5)", () => {
+	describe("collections", () => {
+		it("sanitizes control characters in batch-quarantined collection ids", () => {
+			const warnSpy = spyOnConsoleWarn();
+			const corrupt = { id: "bad\u001b[31mcol\u0007", title: 42 };
+			const result = guardCollections([corrupt], "collectionsRepository.test");
+			expect(result.quarantinedIds).toEqual(["bad\uFFFD[31mcol\uFFFD"]);
+			expect(warnSpy).toHaveBeenCalledWith(
+				quarantineMessage("collectionsRepository.test"),
+				{ count: 1, ids: ["bad\uFFFD[31mcol\uFFFD"] },
+			);
+		});
+
+		it("caps a quarantined collection id at 64 characters", () => {
+			const result = guardCollections([{ id: "x".repeat(200), title: 42 }]);
+			expect(result.quarantinedIds[0]).toHaveLength(64);
+		});
+
+		it("describes unreadable collection ids as '<no-id>'", () => {
+			const result = guardCollections([
+				{ title: 42 },
+				{ id: "", title: 42 },
+				{ id: 42, title: 42 },
+				null,
+			]);
+			expect(result.quarantinedIds).toEqual([
+				"<no-id>",
+				"<no-id>",
+				"42",
+				"<no-id>",
+			]);
+		});
+
+		it("sanitizes the requested id on a single-row collection quarantine", () => {
+			const warnSpy = spyOnConsoleWarn();
+			const result = guardCollection(
+				{ id: "col-1", title: "" },
+				"evil\u001bid",
+				"collectionsRepository.getCollectionById",
+			);
+			expect(result).toBeUndefined();
+			expect(warnSpy).toHaveBeenCalledWith(
+				quarantineMessage("collectionsRepository.getCollectionById"),
+				{ count: 1, ids: ["evil\uFFFDid"] },
+			);
+		});
+	});
+
+	describe("artworks", () => {
+		it("sanitizes control characters in batch-quarantined artwork ids", () => {
+			const warnSpy = spyOnConsoleWarn();
+			const corrupt = {
+				id: "art\u001b[2J",
+				blob: "not-a-blob",
+				format: "image/png",
+			};
+			const result = guardArtworks([corrupt], "artworksRepository.test");
+			expect(result.quarantinedIds).toEqual(["art\uFFFD[2J"]);
+			expect(warnSpy).toHaveBeenCalledWith(
+				quarantineMessage("artworksRepository.test"),
+				{ count: 1, ids: ["art\uFFFD[2J"] },
+			);
+		});
+
+		it("caps a quarantined artwork id at 64 characters", () => {
+			const result = guardArtworks([
+				{ id: "y".repeat(300), blob: 42, format: "image/png" },
+			]);
+			expect(result.quarantinedIds[0]).toHaveLength(64);
+		});
+
+		it("sanitizes the requested id on a single-row artwork quarantine", () => {
+			const warnSpy = spyOnConsoleWarn();
+			const result = guardArtwork(
+				{ id: "art-1", blob: 42, format: "image/png" },
+				"evil\u0007id",
+				"artworksRepository.getByIds",
+			);
+			expect(result).toBeUndefined();
+			expect(warnSpy).toHaveBeenCalledWith(
+				quarantineMessage("artworksRepository.getByIds"),
+				{ count: 1, ids: ["evil\uFFFDid"] },
+			);
+		});
+
+		it("still skips absent bulkGet entries silently (normal miss, not quarantine)", () => {
+			const warnSpy = spyOnConsoleWarn();
+			const result = guardArtworks([undefined, undefined]);
+			expect(result).toEqual({ ok: [], quarantinedIds: [] });
+			expect(warnSpy).not.toHaveBeenCalled();
 		});
 	});
 });
