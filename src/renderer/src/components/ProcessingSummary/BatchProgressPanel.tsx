@@ -22,21 +22,13 @@ import { useMemo } from "react";
 import ProcessingSummary from "./ProcessingSummary";
 import { summarizeTrackStatuses } from "./summarizeTrackStatuses";
 
-// [REDESIGN] NEW FILE (container/presentational split — Separation of
-// Concerns). Rendered in the main content area above the tracks table.
 /**
  * Container wiring live track data into the presentational
  * {@link ProcessingSummary}.
  *
- * Visibility rule: the panel appears only once a batch run has actually
- * begun (any track is processing/processed/failed). A merely *selected*
- * batch stays hidden so the idle workspace isn't cluttered with a 0% bar.
- *
  * @returns The progress panel, or `null` when no run has started.
  */
 export default function BatchProgressPanel(): JSX.Element | null {
-	// [UNCHANGED source] Same live query the processing flow uses: globally
-	// selected tracks are the batch payload.
 	const { selectedTracks } = useTracks();
 
 	const summary = useMemo(
