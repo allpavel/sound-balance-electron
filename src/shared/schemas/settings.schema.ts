@@ -187,10 +187,13 @@ const cbrValues = [
 ] as const;
 const vbrValues = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
-const cbrSchema = z.enum(cbrValues);
-const vbrSchema = z.enum(vbrValues);
+export const cbrSchema = z.enum(cbrValues);
+export const vbrSchema = z.enum(vbrValues);
+
 const encoderNames = z.enum(ENCODER_NAMES);
 const encoderCategorySchema = z.enum(ENCODER_CATEGORIES);
+
+export const audioFilterNameSchema = z.enum(FILTER_NAMES);
 
 const baseOutputDirectoryPathSchema = z
 	.string()
