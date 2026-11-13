@@ -28,44 +28,54 @@ import {
 } from "./metadataRows";
 
 describe("type guards (no assertions involved)", () => {
-	it("isStringArray accepts only homogeneous string arrays", () => {
-		expect(isStringArray(["a", "b"])).toBe(true);
-		expect(isStringArray([])).toBe(true);
-		expect(isStringArray(["a", 1])).toBe(false);
-		expect(isStringArray("ab")).toBe(false);
-		expect(isStringArray(null)).toBe(false);
+	it.each<[unknown, boolean]>([
+		[["a", "b"], true],
+		[[], true],
+		[["a", 1], false],
+		["ab", false],
+		[null, false],
+	])("isStringArray(%o) === %o", (input, expected) => {
+		expect(isStringArray(input)).toBe(expected);
 	});
 
-	it("isTrackPosition accepts { no, of } shapes with nullable members", () => {
-		expect(isTrackPosition({ no: 3, of: 12 })).toBe(true);
-		expect(isTrackPosition({ no: null, of: null })).toBe(true);
-		expect(isTrackPosition({ no: 3 })).toBe(true);
-		expect(isTrackPosition({ of: 12 })).toBe(true);
-		expect(isTrackPosition({ no: "3", of: 12 })).toBe(false);
-		expect(isTrackPosition({ ratio: 1, dB: -3 })).toBe(false);
-		expect(isTrackPosition(null)).toBe(false);
-		expect(isTrackPosition([1, 2])).toBe(false);
+	it.each<[unknown, boolean]>([
+		[{ no: 3, of: 12 }, true],
+		[{ no: null, of: null }, true],
+		[{ no: 3 }, true],
+		[{ of: 12 }, true],
+		[{ no: "3", of: 12 }, false],
+		[{ ratio: 1, dB: -3 }, false],
+		[null, false],
+		[[1, 2], false],
+	])("isTrackPosition(%o) === %o", (input, expected) => {
+		expect(isTrackPosition(input)).toBe(expected);
 	});
 });
 
 describe("unit formatters", () => {
-	it("formats durations as m:ss / h:mm:ss", () => {
-		expect(formatDuration(65)).toBe("1:05");
-		expect(formatDuration(3725)).toBe("1:02:05");
-		expect(formatDuration(Number.NaN)).toBe("Not set");
-		expect(formatDuration(-1)).toBe("Not set");
+	it.each<[number, string]>([
+		[65, "1:05"],
+		[3725, "1:02:05"],
+		[Number.NaN, "Not set"],
+		[-1, "Not set"],
+	])("formatDuration(%o) === %o", (seconds, expected) => {
+		expect(formatDuration(seconds)).toBe(expected);
 	});
 
-	it("formats bit rates in kbps/Mbps", () => {
-		expect(formatBitrate(320_000)).toBe("320 kbps");
-		expect(formatBitrate(1_411_200)).toBe("1.4 Mbps");
-		expect(formatBitrate(0)).toBe("Not set");
+	it.each<[number, string]>([
+		[320_000, "320 kbps"],
+		[1_411_200, "1.4 Mbps"],
+		[0, "Not set"],
+	])("formatBitrate(%o) === %o", (bps, expected) => {
+		expect(formatBitrate(bps)).toBe(expected);
 	});
 
-	it("formats sample rates in kHz", () => {
-		expect(formatSampleRate(44_100)).toBe("44.1 kHz");
-		expect(formatSampleRate(800)).toBe("800 Hz");
-		expect(formatSampleRate(-1)).toBe("Not set");
+	it.each<[number, string]>([
+		[44_100, "44.1 kHz"],
+		[800, "800 Hz"],
+		[-1, "Not set"],
+	])("formatSampleRate(%o) === %o", (hz, expected) => {
+		expect(formatSampleRate(hz)).toBe(expected);
 	});
 });
 
@@ -134,10 +144,12 @@ describe("buildMetadataRows", () => {
 		]);
 	});
 
-	it("humanizeMetadataKey prefers overrides and falls back to the splitter", () => {
-		expect(humanizeMetadataKey("isrc")).toBe("ISRC");
-		expect(humanizeMetadataKey("key")).toBe("Musical Key");
-		expect(humanizeMetadataKey("originaldate")).toBe("Original Date");
-		expect(humanizeMetadataKey("encodedby")).toBe("Encodedby");
+	it.each<[string, string]>([
+		["isrc", "ISRC"],
+		["key", "Musical Key"],
+		["originaldate", "Original Date"],
+		["encodedby", "Encodedby"],
+	])("humanizeMetadataKey(%s) === %s", (input, expected) => {
+		expect(humanizeMetadataKey(input)).toBe(expected);
 	});
 });
