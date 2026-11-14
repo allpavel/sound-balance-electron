@@ -6,4 +6,5 @@ export {
 	hasIssueWithPath,
 	hasIssueWithPathAndCode,
 } from "./hasIssue";
+export { expectedQuarantineWarning } from "./quarantinePayload";
 export { spyOnConsoleError, spyOnConsoleWarn } from "./spyOnConsole";
