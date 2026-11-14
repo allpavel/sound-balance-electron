@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
-import { STATUS_VALUES } from "@shared/constants";
+import { MAX_DISPLAY_MISSING, STATUS_VALUES } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
-import { sanitizeControlChars } from "@shared/utils";
+import { quarantineMessage, sanitizeControlChars } from "@shared/utils";
 
 /** O(1) status membership lookup. */
 const STATUSES: ReadonlySet<string> = new Set(STATUS_VALUES);
@@ -48,16 +47,6 @@ export type GuardedTracks = {
 	readonly ok: Metadata[];
 	readonly quarantinedIds: readonly string[];
 };
-
-/**
- * Builds the quarantine diagnostic message for a given repository scope.
- *
- * @param scope - Repository operation tag (e.g. `"tracksRepository.getAll"`).
- * @returns The formatted diagnostic message string.
- */
-export function quarantineMessage(scope: string): string {
-	return `[${sanitizeControlChars(scope)}] quarantined structurally invalid rows`;
-}
 
 /**
  * Cheap structural type guard for a raw track row.

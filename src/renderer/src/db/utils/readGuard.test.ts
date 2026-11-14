@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
-import { STATUS_VALUES } from "@shared/constants";
+import { MAX_DISPLAY_MISSING, STATUS_VALUES } from "@shared/constants";
 import { storedTrackSchema } from "@shared/schemas/track.schema";
+import { quarantineMessage } from "@shared/utils";
 import { makeTrack } from "@tests/factories";
 import {
 	describeRequestedId,
@@ -26,7 +26,6 @@ import {
 	guardTrack,
 	guardTracks,
 	isStructurallyValidTrack,
-	quarantineMessage,
 } from "./readGuard";
 
 /** Mutates a raw row fixture to simulate one flavor of engine-level corruption. */
@@ -696,17 +695,6 @@ describe("guardTrack", () => {
 			count: 1,
 			ids: ["bad-1"],
 		});
-	});
-});
-
-describe("quarantineMessage", () => {
-	it("sanitizes control characters in the scope prefix", () => {
-		const hostileScope = "tracksRepository.getAll\u001b[31m";
-		const safeScope = "tracksRepository.getAll\uFFFD[31m";
-		const message = quarantineMessage(hostileScope);
-		expect(message).toBe(quarantineMessage(safeScope));
-		expect(message).not.toContain("\u001b");
-		expect(message).toContain("\uFFFD");
 	});
 });
 

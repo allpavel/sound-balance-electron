@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { quarantineMessage } from "@shared/utils";
 import { spyOnConsoleWarn } from "@tests/utils";
 import {
 	type GuardedArtworks,
@@ -27,7 +28,6 @@ import {
 	isStructurallyValidArtwork,
 	isStructurallyValidCollection,
 } from "./entityGuards";
-import { quarantineMessage } from "./readGuard";
 
 describe("entityGuards", () => {
 	describe("isStructurallyValidCollection", () => {

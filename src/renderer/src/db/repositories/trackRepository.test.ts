@@ -18,7 +18,6 @@
 
 import { db } from "@renderer/db/db";
 import { tracksRepository } from "@renderer/db/repositories/trackRepository";
-import { quarantineMessage } from "@renderer/db/utils/readGuard";
 import {
 	resetDatabase,
 	resetTestState,
@@ -39,7 +38,11 @@ import {
 } from "@shared/errors";
 import type { Metadata, Status } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
-import { configurePlatform, resetPlatform } from "@shared/utils";
+import {
+	configurePlatform,
+	quarantineMessage,
+	resetPlatform,
+} from "@shared/utils";
 import { LEGAL_TRANSITION_EDGES } from "@shared/utils/isLegalStatusTransition";
 import {
 	makeCorruptTrackRow,

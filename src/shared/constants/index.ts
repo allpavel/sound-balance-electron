@@ -133,3 +133,8 @@ export const RENDER_CRASH_RELOAD_LABEL = "Reload application";
  *  replace one toast instead of stacking.
  */
 export const INVALID_ACTIVE_COLLECTION_TOAST_ID = "collection:invalid-payload";
+
+/**
+ * Maximum number of missing collection IDs to display in the error message.
+ */
+export const MAX_DISPLAY_MISSING = 5;

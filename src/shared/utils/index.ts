@@ -11,4 +11,5 @@ export {
 	normalizePlatform,
 	resetPlatform,
 } from "./platformContext";
+export { quarantineMessage } from "./quarantineMessage";
 export { quarantineTracksToastMessage } from "./quarantineTrackToastMessage";

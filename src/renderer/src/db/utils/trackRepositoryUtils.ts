@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
 import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import { ENGINE_ERROR_MAP } from "@renderer/db/utils/engineErrors";
@@ -24,6 +23,7 @@ import { guardTrack } from "@renderer/db/utils/readGuard";
 import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import {
 	MAX_BATCH_PAYLOAD_SIZE,
+	MAX_DISPLAY_MISSING,
 	MAX_LOGGED_ERROR_NAME_LENGTH,
 	SYSTEM_COLLECTION_ID,
 } from "@shared/constants";
