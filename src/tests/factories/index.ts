@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import type { Data } from "@shared/schemas/data.schema";
 import {
@@ -30,10 +31,13 @@ import type { ValidationIssue } from "@shared/validators";
 import { deepMerge } from "@tests/utils";
 import type { CollectionType } from "@/types";
 
+/** In-place corruption applied to a raw row fixture. */
+export type RowCorruptor = (row: Record<string, unknown>) => void;
+
 let collectionSeq = 0;
 let trackSeq = 0;
 
-export function resetFactorySequences() {
+export function resetFactorySequences(): void {
 	collectionSeq = 0;
 	trackSeq = 0;
 }
@@ -137,6 +141,39 @@ export function makeCorruptTrackRow(
 ): Record<string, unknown> {
 	const row: Record<string, unknown> = { ...makeTrack({ id }), ...overrides };
 	delete row.common;
+	return row;
+}
+
+/**
+ * Builds a structurally corrupt track row by applying a mutator function
+ * to a fresh `makeTrack` copy.
+ *
+ * Unlike {@link makeCorruptTrackRow} (which always removes `common`), this
+ * factory supports arbitrary corruption patterns — field deletion, type
+ * coercion, invalid enum values, etc. — making it suitable for exhaustive
+ * guard tests that enumerate every corruption flavor.
+ *
+ * **Type-safety note:** the mutator receives `Record<string, unknown>` (not
+ * `Metadata`) because corruption by definition breaks the typed contract.
+ *
+ * @param mutate - Function that mutates the row in place to introduce corruption.
+ * @param id     - Row primary key (defaults to `"corrupt-1"`).
+ * @returns A raw row rejected by the structural track guard.
+ *
+ * @example
+ * ```ts
+ * // Row missing `common`
+ * const missingCommon = makeTrackWithCorruption((r) => { delete r.common; });
+ * // Row with invalid `selected` value
+ * const badSelected = makeTrackWithCorruption((r) => { r.selected = 2; });
+ * ```
+ */
+export function makeTrackWithCorruption(
+	mutate: RowCorruptor,
+	id = "corrupt-1",
+): Record<string, unknown> {
+	const row: Record<string, unknown> = { ...makeTrack({ id }) };
+	mutate(row);
 	return row;
 }
 
