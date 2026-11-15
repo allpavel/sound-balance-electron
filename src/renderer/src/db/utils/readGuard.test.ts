@@ -19,7 +19,13 @@
 import { MAX_DISPLAY_MISSING, STATUS_VALUES } from "@shared/constants";
 import { storedTrackSchema } from "@shared/schemas/track.schema";
 import { quarantineMessage } from "@shared/utils";
-import { makeTrack } from "@tests/factories";
+import {
+	makeCorruptTrackRow,
+	makeTrack,
+	makeTrackWithCorruption,
+	type RowCorruptor,
+} from "@tests/factories";
+import { expectedQuarantineWarning, spyOnConsoleWarn } from "@tests/utils";
 import {
 	describeRequestedId,
 	describeRowId,
@@ -28,34 +34,9 @@ import {
 	isStructurallyValidTrack,
 } from "./readGuard";
 
-/** Mutates a raw row fixture to simulate one flavor of engine-level corruption. */
-type RowCorruptor = (row: Record<string, unknown>) => void;
+type WarnSpy = ReturnType<typeof spyOnConsoleWarn>;
 
-/** Builds a structurally corrupt row fixture. */
-function corruptRow(
-	mutate: RowCorruptor,
-	id = "corrupt-1",
-): Record<string, unknown> {
-	const row: Record<string, unknown> = { ...makeTrack({ id }) };
-	mutate(row);
-	return row;
-}
-
-/**
- * Silences and captures the quarantine diagnostic for assertions.
- */
-function spyOnWarn() {
-	return vi.spyOn(console, "warn").mockImplementation(() => {});
-}
-
-type WarnSpy = ReturnType<typeof spyOnWarn>;
-
-/** Reads the [message, payload] pair of the spy's most recent call. */
-function lastWarnCall(warnSpy: WarnSpy): readonly [unknown, unknown] {
-	const calls = warnSpy.mock.calls;
-	const last = calls[calls.length - 1];
-	return [last?.[0], last?.[1]];
-}
+const DEFAULT_READ_SCOPE = "tracksRepository.read";
 
 describe("isStructurallyValidTrack", () => {
 	describe("accepts schema-shaped rows", () => {
@@ -92,12 +73,11 @@ describe("isStructurallyValidTrack", () => {
 
 		it("narrows unknown to Metadata for property access (compile-time proof)", () => {
 			const row: unknown = makeTrack({ id: "t1" });
-			if (isStructurallyValidTrack(row)) {
-				expect(row.id).toBe("t1");
-				expect(row.selected === 0 || row.selected === 1).toBe(true);
-			} else {
+			if (!isStructurallyValidTrack(row)) {
 				throw new Error("expected the factory row to be valid");
 			}
+			expect(row.id).toBe("t1");
+			expect(row.selected === 0 || row.selected === 1).toBe(true);
 		});
 	});
 
@@ -166,7 +146,9 @@ describe("isStructurallyValidTrack", () => {
 				},
 			],
 		])("rejects a row with %s", (_label, mutate) => {
-			expect(isStructurallyValidTrack(corruptRow(mutate))).toBe(false);
+			expect(isStructurallyValidTrack(makeTrackWithCorruption(mutate))).toBe(
+				false,
+			);
 		});
 	});
 
@@ -233,7 +215,9 @@ describe("isStructurallyValidTrack", () => {
 				},
 			],
 		])("rejects a row with %s", (_label, mutate) => {
-			expect(isStructurallyValidTrack(corruptRow(mutate))).toBe(false);
+			expect(isStructurallyValidTrack(makeTrackWithCorruption(mutate))).toBe(
+				false,
+			);
 		});
 	});
 
@@ -264,12 +248,14 @@ describe("isStructurallyValidTrack", () => {
 				},
 			],
 		])("rejects collectionIds that are %s", (_label, mutate) => {
-			expect(isStructurallyValidTrack(corruptRow(mutate))).toBe(false);
+			expect(isStructurallyValidTrack(makeTrackWithCorruption(mutate))).toBe(
+				false,
+			);
 		});
 
 		it("accepts an empty array", () => {
 			const valid = isStructurallyValidTrack(
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					r.collectionIds = [];
 				}),
 			);
@@ -278,7 +264,7 @@ describe("isStructurallyValidTrack", () => {
 
 		it("accepts an empty-string member (cheap-guard boundary)", () => {
 			const valid = isStructurallyValidTrack(
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					r.collectionIds = ["all", ""];
 				}),
 			);
@@ -331,7 +317,9 @@ describe("isStructurallyValidTrack", () => {
 				},
 			],
 		])("rejects a row with %s", (_label, mutate) => {
-			expect(isStructurallyValidTrack(corruptRow(mutate))).toBe(false);
+			expect(isStructurallyValidTrack(makeTrackWithCorruption(mutate))).toBe(
+				false,
+			);
 		});
 	});
 
@@ -403,7 +391,7 @@ describe("isStructurallyValidTrack", () => {
 			["null", null],
 		])("rejects statusSeq = %s", (_label, value) => {
 			const valid = isStructurallyValidTrack(
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					r.statusSeq = value;
 				}),
 			);
@@ -412,7 +400,7 @@ describe("isStructurallyValidTrack", () => {
 
 		it("accepts a missing statusSeq (optional field)", () => {
 			const valid = isStructurallyValidTrack(
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					delete r.statusSeq;
 				}),
 			);
@@ -423,7 +411,7 @@ describe("isStructurallyValidTrack", () => {
 	describe("failed-status reason invariant", () => {
 		it("rejects a failed row without reason", () => {
 			const valid = isStructurallyValidTrack(
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					r.status = "failed";
 				}),
 			);
@@ -432,7 +420,7 @@ describe("isStructurallyValidTrack", () => {
 
 		it("rejects a failed row with a non-string reason", () => {
 			const valid = isStructurallyValidTrack(
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					r.status = "failed";
 					r.reason = 42;
 				}),
@@ -442,7 +430,7 @@ describe("isStructurallyValidTrack", () => {
 
 		it("accepts a non-failed row without reason", () => {
 			const valid = isStructurallyValidTrack(
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					delete r.reason;
 				}),
 			);
@@ -475,7 +463,7 @@ describe("guardTracks", () => {
 	let warnSpy: WarnSpy;
 
 	beforeEach(() => {
-		warnSpy = spyOnWarn();
+		warnSpy = spyOnConsoleWarn();
 	});
 
 	it("returns all valid rows unchanged, by reference and order, without warning", () => {
@@ -496,7 +484,7 @@ describe("guardTracks", () => {
 
 	it("quarantines corrupt rows and keeps valid ones", () => {
 		const valid = makeTrack({ id: "t1" });
-		const corrupt = corruptRow((r) => {
+		const corrupt = makeTrackWithCorruption((r) => {
 			delete r.common;
 		}, "bad-1");
 		const result = guardTracks([corrupt, valid]);
@@ -506,69 +494,67 @@ describe("guardTracks", () => {
 
 	it("warns once per batch with the count and the sanitized ids", () => {
 		guardTracks([
-			corruptRow((r) => {
+			makeTrackWithCorruption((r) => {
 				r.selected = 2;
 			}, "bad-1"),
-			corruptRow((r) => {
+			makeTrackWithCorruption((r) => {
 				delete r.common;
 			}, "bad-2"),
 			makeTrack({ id: "ok-1" }),
 		]);
 		expect(warnSpy).toHaveBeenCalledTimes(1);
 		expect(warnSpy).toHaveBeenCalledWith(
-			quarantineMessage("tracksRepository.read"),
-			{ count: 2, ids: ["bad-1", "bad-2"] },
+			...expectedQuarantineWarning(DEFAULT_READ_SCOPE, ["bad-1", "bad-2"]),
 		);
 	});
 
 	it("uses the caller-supplied scope in the warning tag", () => {
 		guardTracks(
 			[
-				corruptRow((r) => {
+				makeTrackWithCorruption((r) => {
 					delete r.format;
 				}, "bad-1"),
 			],
 			"tracksRepository.getAll",
 		);
-		const [message] = lastWarnCall(warnSpy);
-		expect(message).toBe(quarantineMessage("tracksRepository.getAll"));
+		expect(warnSpy).toHaveBeenCalledWith(
+			...expectedQuarantineWarning("tracksRepository.getAll", ["bad-1"]),
+		);
 	});
 
 	it("caps the logged id list at MAX_DISPLAY_MISSING while returning the full quarantine list", () => {
 		const total = MAX_DISPLAY_MISSING + 3;
-		const rows = Array.from({ length: total }, (_, i) =>
-			corruptRow((r) => {
+		const ids = Array.from({ length: total }, (_, i) => `bad-${i}`);
+		const rows = ids.map((id) =>
+			makeTrackWithCorruption((r) => {
 				delete r.common;
-			}, `bad-${i}`),
+			}, id),
 		);
 		const result = guardTracks(rows);
-		expect(result.quarantinedIds).toHaveLength(total);
-		const [, payload] = lastWarnCall(warnSpy);
-		expect(payload).toMatchObject({ count: total });
-		if (typeof payload === "object" && payload !== null && "ids" in payload) {
-			expect(payload.ids).toHaveLength(MAX_DISPLAY_MISSING);
-		} else {
-			throw new Error("expected the warn payload to carry an ids list");
-		}
+		expect(result.quarantinedIds).toEqual(ids);
+		expect(warnSpy).toHaveBeenCalledWith(
+			...expectedQuarantineWarning(DEFAULT_READ_SCOPE, ids),
+		);
 	});
 
 	it("sanitizes control characters in quarantined ids (log-injection defense)", () => {
 		const result = guardTracks([
-			corruptRow((r) => {
+			makeTrackWithCorruption((r) => {
 				delete r.common;
 			}, "bad\u001b[31mid\u0007"),
 		]);
 		expect(result.quarantinedIds).toEqual(["bad\uFFFD[31mid\uFFFD"]);
 		expect(warnSpy).toHaveBeenCalledWith(
-			quarantineMessage("tracksRepository.read"),
-			{ count: 1, ids: ["bad\uFFFD[31mid\uFFFD"] },
+			...expectedQuarantineWarning(DEFAULT_READ_SCOPE, [
+				"bad\uFFFD[31mid\uFFFD",
+			]),
 		);
 	});
 
 	it("caps a single logged id at 64 characters (log-flooding defense)", () => {
 		const longId = "x".repeat(200);
 		const result = guardTracks([
-			corruptRow((r) => {
+			makeTrackWithCorruption((r) => {
 				delete r.common;
 			}, longId),
 		]);
@@ -577,13 +563,13 @@ describe("guardTracks", () => {
 
 	it("describes rows with unreadable ids as '<no-id>'", () => {
 		const result = guardTracks([
-			corruptRow((r) => {
+			makeTrackWithCorruption((r) => {
 				delete r.id;
 			}),
-			corruptRow((r) => {
+			makeTrackWithCorruption((r) => {
 				r.id = "";
 			}, "ignored"),
-			corruptRow((r) => {
+			makeTrackWithCorruption((r) => {
 				r.id = 42;
 			}, "ignored"),
 			null,
@@ -618,10 +604,10 @@ describe("guardTracks", () => {
 
 	it("quarantines rows with empty or whitespace-only ids instead of dropping them silently", () => {
 		const valid = makeTrack({ id: "t1" });
-		const emptyId = corruptRow((r) => {
+		const emptyId = makeTrackWithCorruption((r) => {
 			r.id = "";
 		});
-		const blankId = corruptRow((r) => {
+		const blankId = makeTrackWithCorruption((r) => {
 			r.id = "   ";
 		});
 		const result = guardTracks([emptyId, valid, blankId]);
@@ -629,13 +615,30 @@ describe("guardTracks", () => {
 		expect(result.quarantinedIds).toEqual(["<no-id>", "<no-id>"]);
 		expect(warnSpy).toHaveBeenCalledTimes(1);
 	});
+
+	it("uses a sanitized scope in the quarantine warning", () => {
+		const hostileScope = "tracksRepository.getAll\u001b[31m";
+		const safeScope = "tracksRepository.getAll\uFFFD[31m";
+		guardTracks(
+			[
+				makeTrackWithCorruption((r) => {
+					delete r.common;
+				}, "bad-1"),
+			],
+			hostileScope,
+		);
+		expect(warnSpy).toHaveBeenCalledWith(quarantineMessage(safeScope), {
+			count: 1,
+			ids: ["bad-1"],
+		});
+	});
 });
 
 describe("guardTrack", () => {
 	let warnSpy: WarnSpy;
 
 	beforeEach(() => {
-		warnSpy = spyOnWarn();
+		warnSpy = spyOnConsoleWarn();
 	});
 
 	it("returns undefined silently when the row is absent (normal miss)", () => {
@@ -650,51 +653,35 @@ describe("guardTrack", () => {
 	});
 
 	it("quarantines a corrupt row: undefined plus a warning naming the requested id", () => {
-		const corrupt: unknown = corruptRow((r) => {
+		const corrupt: unknown = makeTrackWithCorruption((r) => {
 			delete r.common;
 		}, "t1");
 		expect(
 			guardTrack(corrupt, "t1", "tracksRepository.getById"),
 		).toBeUndefined();
 		expect(warnSpy).toHaveBeenCalledWith(
-			quarantineMessage("tracksRepository.getById"),
-			{ count: 1, ids: ["t1"] },
+			...expectedQuarantineWarning("tracksRepository.getById", ["t1"]),
 		);
 	});
 
 	it("reports the requested id even when the stored row's own id is unreadable", () => {
-		const corrupt: unknown = corruptRow((r) => {
+		const corrupt: unknown = makeTrackWithCorruption((r) => {
 			delete r.id;
 		}, "ignored");
 		expect(guardTrack(corrupt, "requested-id")).toBeUndefined();
-		const [, payload] = lastWarnCall(warnSpy);
-		expect(payload).toEqual({ count: 1, ids: ["requested-id"] });
+		expect(warnSpy).toHaveBeenCalledWith(
+			...expectedQuarantineWarning(DEFAULT_READ_SCOPE, ["requested-id"]),
+		);
 	});
 
 	it("sanitizes the requested id before logging it", () => {
-		const corrupt: unknown = corruptRow((r) => {
+		const corrupt: unknown = makeTrackWithCorruption((r) => {
 			r.selected = 9;
 		});
 		expect(guardTrack(corrupt, "evil\u001bid")).toBeUndefined();
-		const [, payload] = lastWarnCall(warnSpy);
-		expect(payload).toEqual({ count: 1, ids: ["evil\uFFFDid"] });
-	});
-
-	it("uses a sanitized scope in the quarantine warning", () => {
-		const hostileScope = "tracksRepository.getAll\u001b[31m";
-		const safeScope = "tracksRepository.getAll\uFFFD[31m";
-		guardTracks(
-			[
-				corruptRow((r) => {
-					delete r.common;
-				}, "bad-1"),
-			],
-			hostileScope,
+		expect(warnSpy).toHaveBeenCalledWith(
+			...expectedQuarantineWarning(DEFAULT_READ_SCOPE, ["evil\uFFFDid"]),
 		);
-		expect(warnSpy).toHaveBeenCalledWith(quarantineMessage(safeScope), {
-			count: 1,
-			ids: ["bad-1"],
-		});
 	});
 });
 
@@ -722,5 +709,81 @@ describe("shared quarantine descriptors (WP-5)", () => {
 		expect(descriptor).toBe("evil\uFFFD" + "k".repeat(59));
 		expect(descriptor).toHaveLength(64);
 		expect(descriptor).not.toContain("\u0007");
+	});
+});
+
+describe("readGuard ↔ @tests/factories contract", () => {
+	describe("makeCorruptTrackRow", () => {
+		it("is rejected by the structural guard", () => {
+			expect(isStructurallyValidTrack(makeCorruptTrackRow())).toBe(false);
+		});
+
+		it("stays rejected when overrides replace other fields", () => {
+			const row = makeCorruptTrackRow("corrupt-1", {
+				selected: 1,
+				status: "failed",
+				collectionIds: ["custom"],
+			});
+			expect(isStructurallyValidTrack(row)).toBe(false);
+		});
+
+		// Zero Trust: the factory documents that `common` is deleted after
+		// overrides. Pin that an override cannot smuggle a valid row through.
+		it("stays rejected when an override tries to restore `common`", () => {
+			const row = makeCorruptTrackRow("corrupt-1", {
+				common: { title: "resurrected" },
+			});
+			expect(isStructurallyValidTrack(row)).toBe(false);
+		});
+	});
+
+	describe("makeTrackWithCorruption", () => {
+		const rejectionCases: ReadonlyArray<readonly [string, RowCorruptor]> = [
+			[
+				"deletes `common`",
+				(r) => {
+					delete r.common;
+				},
+			],
+			[
+				"deletes `format`",
+				(r) => {
+					delete r.format;
+				},
+			],
+			[
+				"sets `selected` to 2",
+				(r) => {
+					r.selected = 2;
+				},
+			],
+			[
+				'sets `status` to "done"',
+				(r) => {
+					r.status = "done";
+				},
+			],
+			[
+				"coerces `id` to a number",
+				(r) => {
+					r.id = 42;
+				},
+			],
+		];
+
+		it.each(rejectionCases)(
+			"is rejected when the mutator %s",
+			(_label, mutate) => {
+				expect(isStructurallyValidTrack(makeTrackWithCorruption(mutate))).toBe(
+					false,
+				);
+			},
+		);
+
+		it("is accepted when the mutator is a no-op (clean base guarantee)", () => {
+			expect(isStructurallyValidTrack(makeTrackWithCorruption(() => {}))).toBe(
+				true,
+			);
+		});
 	});
 });
