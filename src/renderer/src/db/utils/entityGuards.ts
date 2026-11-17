@@ -21,8 +21,8 @@ import {
 	describeRowId,
 	warnQuarantined,
 } from "@renderer/db/utils/readGuard";
-import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import type { Artwork } from "@shared/types";
+import { isNonEmptyString, isPlainObject } from "@shared/utils";
 import type { CollectionType } from "@/types";
 
 // ---------------------------------------------------------------------------

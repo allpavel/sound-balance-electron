@@ -13,3 +13,4 @@ export {
 } from "./platformContext";
 export { quarantineMessage } from "./quarantineMessage";
 export { quarantineTracksToastMessage } from "./quarantineTrackToastMessage";
+export { isNonEmptyString, isPlainObject } from "./typeGuards";

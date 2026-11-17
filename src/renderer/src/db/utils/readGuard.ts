@@ -16,10 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import { MAX_DISPLAY_MISSING, STATUS_VALUES } from "@shared/constants";
 import type { Metadata } from "@shared/schemas/track.schema";
-import { quarantineMessage, sanitizeControlChars } from "@shared/utils";
+import {
+	isNonEmptyString,
+	isPlainObject,
+	quarantineMessage,
+	sanitizeControlChars,
+} from "@shared/utils";
 
 /** O(1) status membership lookup. */
 const STATUSES: ReadonlySet<string> = new Set(STATUS_VALUES);

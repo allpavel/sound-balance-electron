@@ -36,12 +36,15 @@ import {
 	createProgressEmitter,
 	validateTrackChanges,
 } from "@renderer/db/utils/trackRepositoryUtils";
-import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import { IMPORT_BATCH_SIZE, SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { TrackValidationError } from "@shared/errors";
 import type { AddManyOptions, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyResult } from "@shared/types";
-import { getAddManySummary } from "@shared/utils";
+import {
+	getAddManySummary,
+	isNonEmptyString,
+	isPlainObject,
+} from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 
 export const tracksRepository = {

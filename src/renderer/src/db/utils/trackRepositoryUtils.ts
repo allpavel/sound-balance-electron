@@ -20,7 +20,6 @@ import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
 import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import { ENGINE_ERROR_MAP } from "@renderer/db/utils/engineErrors";
 import { guardTrack } from "@renderer/db/utils/readGuard";
-import { isNonEmptyString, isPlainObject } from "@renderer/db/utils/typeGuards";
 import {
 	MAX_BATCH_PAYLOAD_SIZE,
 	MAX_DISPLAY_MISSING,
@@ -42,7 +41,12 @@ import type {
 	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyProgressCallback } from "@shared/types";
-import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
+import {
+	isLegalStatusTransition,
+	isNonEmptyString,
+	isPlainObject,
+	sanitizeControlChars,
+} from "@shared/utils";
 import {
 	createRootIssue,
 	safeParseAddManyOptions,
