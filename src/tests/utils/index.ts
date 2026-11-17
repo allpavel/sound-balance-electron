@@ -1,5 +1,5 @@
 export { captureRejection } from "./captureRejection";
-export { deepMerge } from "./deepMerge";
+export { type DeepPartial, deepMerge } from "./deepMerge";
 export { expectFailure, expectSuccess } from "./expectParseResult";
 export {
 	hasIssueWithDotPath,
