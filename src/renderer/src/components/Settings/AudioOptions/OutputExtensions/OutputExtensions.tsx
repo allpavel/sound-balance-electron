@@ -15,25 +15,36 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { NativeSelect } from "@mantine/core";
 import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
-import { EXTENSIONS_LIST } from "../../settings.constants";
+import { EXTENSIONS_LIST } from "@renderer/components/Settings/settings.constants";
+import type { JSX } from "react";
 
-export default function OutputExtensions() {
+/**
+ * Output container/extension selector.
+ *
+ * @returns The extension `<select>` bound to the settings form.
+ */
+export default function OutputExtensions(): JSX.Element {
 	const form = useSettingsFormContext();
 	return (
 		<NativeSelect
-			label="Output file extension:"
+			label="Output file format"
+			description="The container for processed files. “Keep original” preserves each track's own format."
 			key={form.key("audio.outputExtension")}
 			{...form.getInputProps("audio.outputExtension")}
 		>
-			<optgroup label="Default value">
-				<option value="copy">Copy</option>
+			<optgroup label="Keep original">
+				<option value="copy">Keep original format (copy)</option>
 			</optgroup>
-			{EXTENSIONS_LIST.map((item) => (
-				<option key={item}>{item}</option>
-			))}
-			<hr />
+			<optgroup label="Convert to">
+				{EXTENSIONS_LIST.map((item) => (
+					<option key={item} value={item}>
+						{item}
+					</option>
+				))}
+			</optgroup>
 		</NativeSelect>
 	);
 }

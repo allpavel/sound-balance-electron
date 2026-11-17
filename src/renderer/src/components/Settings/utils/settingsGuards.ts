@@ -24,7 +24,15 @@ import {
 } from "@shared/schemas/settings.schema";
 
 /** Slider default when stored data is missing or invalid. */
-const DEFAULT_VBR_POSITION = 4;
+export const DEFAULT_VBR_POSITION = 4;
+
+/**
+ * String form of the VBR slider default. Written into the form when the user
+ * switches into VBR mode while `audioQualityValue` still holds a stale CBR
+ * bitrate (or is absent from auto mode), so the store matches what the slider
+ * renders and schema validation passes on submit.
+ */
+export const DEFAULT_VBR_VALUE: VBR = "4";
 
 /**
  * Type guard narrowing unknown input to a canonical FFmpeg filter name.
