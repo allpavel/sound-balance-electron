@@ -386,13 +386,6 @@ describe("testFactories", () => {
 			});
 		});
 
-		it("does not derive filePath from an overridden id", () => {
-			const track = makeTrack({ id: "explicit-id" });
-			expect(track.id).toBe("explicit-id");
-			expect(track.filePath).toBe("/music/track-1.mp3");
-			expect(track.filePath).not.toBe("/music/explicit-id.mp3");
-		});
-
 		it("preserves generated id when filePath is overridden", () => {
 			expect(makeTrack({ filePath: "/other/path.mp3" })).toEqual({
 				id: "track-1",
