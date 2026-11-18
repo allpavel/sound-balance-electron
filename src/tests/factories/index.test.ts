@@ -27,6 +27,7 @@ import {
 } from "@shared/schemas/track.schema";
 import { formatValidationIssues, pathToString } from "@shared/utils";
 import type { ValidationIssue } from "@shared/validators";
+import { ZodError } from "zod";
 import {
 	getValidData,
 	getValidSettings,
@@ -40,7 +41,7 @@ import {
 	resetFactorySequences,
 } from ".";
 
-describe("shared/utils/factories", () => {
+describe("tests/factories", () => {
 	beforeEach(() => {
 		resetFactorySequences();
 	});
@@ -131,6 +132,13 @@ describe("shared/utils/factories", () => {
 			const failed = makeTrack({ status: "failed", reason: "boom" });
 			expect(trackInputSchema.safeParse(failed).success).toBe(true);
 		});
+
+		it("does not derive file/filePath from an overridden id", () => {
+			const track = makeTrack({ id: "explicit-id" });
+			expect(track.id).toBe("explicit-id");
+			expect(track.file).toBe("track-1.mp3");
+			expect(track.filePath).toBe("/music/track-1.mp3");
+		});
 	});
 
 	describe("getValidSettings", () => {
@@ -160,7 +168,7 @@ describe("shared/utils/factories", () => {
 			const settings = getValidSettings({
 				global: { concurrency: 9 },
 				audio: { filterOptions: { I: -16 } },
-			} as any);
+			});
 			expect(settings.global.concurrency).toBe(9);
 			expect(settings.global.outputDirectoryPath).toBe("/music/output");
 			expect(settings.audio.filterOptions).toEqual({ I: -16, LRA: 7 });
@@ -168,7 +176,7 @@ describe("shared/utils/factories", () => {
 		});
 
 		it("does not leak overrides into subsequent default calls", () => {
-			getValidSettings({ global: { concurrency: 9 } } as any);
+			getValidSettings({ global: { concurrency: 9 } });
 			expect(getValidSettings().global.concurrency).toBe(4);
 		});
 
@@ -176,6 +184,21 @@ describe("shared/utils/factories", () => {
 			expect(strictSettingsSchema.safeParse(getValidSettings()).success).toBe(
 				true,
 			);
+		});
+
+		it.each([
+			["concurrency below the minimum", { global: { concurrency: 0 } }],
+			["concurrency above the maximum", { global: { concurrency: 11 } }],
+			["empty output directory", { global: { outputDirectoryPath: "" } }],
+		])("rejects %s at construction time", (_label, overrides) => {
+			expect(() => getValidSettings(overrides)).toThrow(ZodError);
+		});
+
+		it("does not alias caller-owned override objects into the result", () => {
+			const filterOptions = { I: -16 };
+			const settings = getValidSettings({ audio: { filterOptions } });
+			filterOptions.I = -20;
+			expect(settings.audio.filterOptions.I).toBe(-16);
 		});
 	});
 
@@ -189,10 +212,10 @@ describe("shared/utils/factories", () => {
 		});
 
 		it("uses the provided tracks and deep-merges settings overrides", () => {
-			const tracks = [makeTrack(), makeTrack()];
+			const tracks = [makeIngestionTrack(), makeIngestionTrack()];
 			const data = getValidData({
 				tracks,
-				settings: { global: { concurrency: 2 } } as any,
+				settings: { global: { concurrency: 2 } },
 			});
 			expect(data.tracks).toBe(tracks);
 			expect(data.settings.global.concurrency).toBe(2);
@@ -201,6 +224,20 @@ describe("shared/utils/factories", () => {
 
 		it("produces a payload that satisfies dataSchema", () => {
 			expect(dataSchema.safeParse(getValidData()).success).toBe(true);
+		});
+
+		it("carries binary artwork through the ingestion lane", () => {
+			const pictures = [{ format: "image/png", data: new Uint8Array([1, 2]) }];
+			const data = getValidData({ tracks: [makeIngestionTrack({}, pictures)] });
+			const [track] = data.tracks;
+			expect(track?.common.picture).toEqual(pictures);
+			expect(dataSchema.safeParse(data).success).toBe(true);
+		});
+
+		it("rejects stored-lane artwork references at the ingestion boundary", () => {
+			const stored = makeTrack({ common: { picture: ["artwork-uuid-1"] } });
+			const payload = { tracks: [stored], settings: getValidSettings() };
+			expect(dataSchema.safeParse(payload).success).toBe(false);
 		});
 	});
 
