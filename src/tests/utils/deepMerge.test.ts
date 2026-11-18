@@ -37,6 +37,12 @@ describe("deepMerge", () => {
 			expect(result.touched).not.toBe(base.touched);
 			expect(result.untouched).toBe(base.untouched);
 		});
+
+		it("assigns an override-only nested object by reference (no clone)", () => {
+			const nested = { c: 3 };
+			const result = deepMerge({ a: 1 }, { nested });
+			expect(result.nested).toBe(nested);
+		});
 	});
 
 	describe("shallow merging and type-based overwriting", () => {
