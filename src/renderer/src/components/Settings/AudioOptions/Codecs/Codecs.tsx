@@ -19,28 +19,49 @@
 import { Select, Stack } from "@mantine/core";
 import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { ENCODER_GROUPS } from "@renderer/components/Settings/settings.constants";
+import { codecDisplayName } from "@renderer/components/Settings/utils/settingsLabels";
 import { CodecOptions } from "./CodecOptions/CodecOptions";
 
-const data = ENCODER_GROUPS.map((item) => ({
-	group: item.category,
-	items: [...item.encoders],
-}));
+/**
+ * Grouped codec options for the Select.
+ */
+const CODEC_SELECT_DATA = [
+	{
+		group: "No re-encoding",
+		items: [{ value: "copy", label: codecDisplayName("copy") }],
+	},
+	...ENCODER_GROUPS.map((item) => ({
+		group: item.category,
+		items: item.encoders.map((encoder) => ({
+			value: encoder,
+			label: codecDisplayName(encoder),
+		})),
+	})),
+];
 
+/**
+ * Audio codec selector + the selected encoder's parameter form.
+ *
+ * @returns Codec `<Select>` with grouped, labeled options.
+ */
 export default function Codecs() {
 	const form = useSettingsFormContext();
 	const activeCodec = form.values.audio.audioCodec;
 
 	return (
-		<Stack>
+		<Stack gap="xs">
 			<Select
-				label="Audio codec:"
-				data={data}
+				label="Audio codec"
+				description="How output audio is encoded. “Copy” keeps the original stream untouched and is the fastest option."
+				placeholder="Choose a codec…"
+				data={CODEC_SELECT_DATA}
+				searchable
+				clearable
 				{...form.getInputProps("audio.audioCodec")}
 				onOptionSubmit={(value) => {
 					form.setFieldValue("audio.audioCodec", value);
 					form.setFieldValue("audio.codecOptions", {});
 				}}
-				clearable
 			/>
 			{activeCodec && <CodecOptions codec={activeCodec} />}
 		</Stack>
