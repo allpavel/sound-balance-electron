@@ -15,26 +15,42 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
-export function deepMerge<T extends Record<string, unknown>>(
-	base: T,
+import { isPlainObject } from "@shared/utils";
+
+/** Recursively optional object shape. Arrays and primitives are replaced whole. */
+export type DeepPartial<T> = T extends readonly unknown[]
+	? T
+	: T extends object
+		? { [K in keyof T]?: DeepPartial<T[K]> }
+		: T;
+
+/**
+ * Recursively merges plain-object overrides into a base record.
+ *
+ * Nested plain objects merge; every other value (primitive, array, `null`,
+ * `undefined`) replaces the base value whole. Inputs are never mutated.
+ *
+ * @param base      - Source record. Not mutated.
+ * @param overrides - Patch record; own enumerable keys only.
+ * @returns A new record. Override-only branches are assigned by reference.
+ */
+export function deepMerge(
+	base: Record<string, unknown>,
 	overrides: Record<string, unknown>,
-): T {
-	const result = { ...base };
-	for (const key of Object.keys(overrides)) {
-		const baseValue = (base as Record<string, unknown>)[key];
-		const overrideValue = overrides[key];
+): Record<string, unknown> {
+	const merged: Record<string, unknown> = { ...base };
+	for (const [key, value] of Object.entries(overrides)) {
+		// [CHANGED][T4] Object.entries yields `any` for a record. Widening to
+		// `unknown` forces the type guards below to perform the narrowing —
+		// no assertion, no implicit trust in the patch (Zero Trust).
+		const overrideValue: unknown = value;
+		const baseValue: unknown = merged[key];
 		if (isPlainObject(baseValue) && isPlainObject(overrideValue)) {
-			(result as Record<string, unknown>)[key] = deepMerge(
-				baseValue,
-				overrideValue,
-			);
+			merged[key] = deepMerge(baseValue, overrideValue);
 		} else {
-			(result as Record<string, unknown>)[key] = overrideValue;
+			merged[key] = overrideValue;
 		}
 	}
-	return result;
+	return merged;
 }

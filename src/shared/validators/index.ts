@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import {
+	type ActiveCollection,
+	activeCollectionSchema,
+} from "@shared/schemas/collection.schema";
 import { type Data, dataSchema } from "@shared/schemas/data.schema";
 import {
 	looseSettingsSchema,
@@ -67,6 +71,7 @@ export type DataParseResult = ValidationResult<Data>;
 export type TrackChangesParseResult = ValidationResult<TrackChanges>;
 export type CollectionIdParseResult = ValidationResult<CollectionId>;
 export type AddManyOptionsParseResult = ValidationResult<AddManyOptions>;
+export type ActiveCollectionParseResult = ValidationResult<ActiveCollection>;
 
 export interface Issue {
 	readonly path?: PropertyKey[];
@@ -267,4 +272,17 @@ export function safeParseAddManyOptions(
 	input: unknown,
 ): AddManyOptionsParseResult {
 	return validate(addManyOptionsSchema, input);
+}
+
+/**
+ * Validates an active-collection payload at the Redux selection boundary
+ * (slice gate + listener middleware; FE-132 WP-1).
+ *
+ * @param input - Untrusted `setActiveCollection` dispatch payload.
+ * @returns An {@link ActiveCollectionParseResult}.
+ */
+export function safeParseActiveCollection(
+	input: unknown,
+): ActiveCollectionParseResult {
+	return validate(activeCollectionSchema, input);
 }

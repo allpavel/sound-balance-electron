@@ -17,20 +17,13 @@
  */
 
 import { settingsRepository } from "@renderer/db/repositories/settingsRepository";
-import { tracksRepository } from "@renderer/db/repositories/trackRepository";
 import {
 	SYSTEM_COLLECTION_ID,
 	SYSTEM_COLLECTION_TITLE,
 } from "@shared/constants";
-import { makeTrack } from "@tests/factories";
 import type { ProcessingResult } from "@/types";
 import { setActiveCollection } from "./slices/collectionSlice";
 import { setResults } from "./slices/resultsSlice";
-import {
-	loadSelectedTracks,
-	setAllSelectedTracks,
-	setSelectedTrack,
-} from "./slices/selectedTracksSlice";
 import {
 	getSettings,
 	initialSettings,
@@ -39,14 +32,6 @@ import {
 } from "./slices/settingsSlice";
 import { type AppDispatch, createAppStore, type RootState } from "./store";
 
-vi.mock("@renderer/db/repositories/trackRepository", () => ({
-	tracksRepository: {
-		getAll: vi.fn(),
-		update: vi.fn(),
-		updateMany: vi.fn(),
-		removeMany: vi.fn(),
-	},
-}));
 vi.mock("@renderer/db/repositories/settingsRepository", () => ({
 	settingsRepository: {
 		getSettings: vi.fn(),
@@ -54,7 +39,6 @@ vi.mock("@renderer/db/repositories/settingsRepository", () => ({
 	},
 }));
 
-type SelectedTracksState = RootState["selectedTracks"];
 type ResultsState = RootState["results"];
 type ActiveCollectionState = RootState["activeCollection"];
 type SettingsFormLike = typeof initialSettings;
@@ -63,13 +47,6 @@ type SettingsState = {
 	loading: boolean;
 	error: string | null;
 };
-
-type GetSettingsResult = Awaited<
-	ReturnType<typeof settingsRepository.getSettings>
->;
-type SaveSettingsResult = Awaited<
-	ReturnType<typeof settingsRepository.saveSettings>
->;
 
 const customSettings: SettingsState = {
 	data: {
@@ -117,11 +94,6 @@ const storedSettings: SettingsFormLike = {
 	},
 };
 
-const mockSelectedTracks: SelectedTracksState = {
-	t1: true,
-	t2: false,
-};
-
 const mockCollection: ActiveCollectionState = {
 	id: "custom",
 	title: "Custom",
@@ -140,36 +112,18 @@ const mockResults: ResultsState = {
 };
 
 const fullPreloadedState: RootState = {
-	selectedTracks: mockSelectedTracks,
 	settings: customSettings,
 	results: mockResults,
 	activeCollection: mockCollection,
 };
 
 const getPreloadedState = (): RootState => structuredClone(fullPreloadedState);
-
-const expectNoTrackRepositoryCalls = (): void => {
-	expect(tracksRepository.getAll).not.toHaveBeenCalled();
-	expect(tracksRepository.update).not.toHaveBeenCalled();
-	expect(tracksRepository.updateMany).not.toHaveBeenCalled();
-	expect(tracksRepository.removeMany).not.toHaveBeenCalled();
-};
-
 const expectNoSettingsRepositoryCalls = (): void => {
 	expect(settingsRepository.getSettings).not.toHaveBeenCalled();
 	expect(settingsRepository.saveSettings).not.toHaveBeenCalled();
 };
 
-const expectNoRepositoryCalls = (): void => {
-	expectNoTrackRepositoryCalls();
-	expectNoSettingsRepositoryCalls();
-};
-
 describe("Store shape and initialization", () => {
-	beforeEach(() => {
-		vi.resetAllMocks();
-	});
-
 	it("creates the actual app store with exact root keys and initial state", () => {
 		const initialSettingsSnapshot = structuredClone(initialSettings);
 		const store = createAppStore();
@@ -177,10 +131,8 @@ describe("Store shape and initialization", () => {
 		expect(Object.keys(state).sort()).toEqual([
 			"activeCollection",
 			"results",
-			"selectedTracks",
 			"settings",
 		]);
-		expect(state.selectedTracks).toEqual({});
 		expect(state.activeCollection).toEqual({
 			id: SYSTEM_COLLECTION_ID,
 			title: SYSTEM_COLLECTION_TITLE,
@@ -196,7 +148,7 @@ describe("Store shape and initialization", () => {
 			error: null,
 		});
 		expect(initialSettings).toEqual(initialSettingsSnapshot);
-		expectNoRepositoryCalls();
+		expectNoSettingsRepositoryCalls();
 	});
 
 	it("leaves state unchanged for an unknown action", () => {
@@ -205,15 +157,11 @@ describe("Store shape and initialization", () => {
 		store.dispatch({ type: "unknown/action" });
 		const after = store.getState();
 		expect(after).toBe(before);
-		expectNoRepositoryCalls();
+		expectNoSettingsRepositoryCalls();
 	});
 });
 
 describe("Synchronous slice isolation", () => {
-	beforeEach(() => {
-		vi.resetAllMocks();
-	});
-
 	it("replaces the results and leaves the other slices unchanged when setResults is dispatched", () => {
 		const payload: ProcessingResult = {
 			successful: 3,
@@ -233,10 +181,9 @@ describe("Synchronous slice isolation", () => {
 		expect(after).not.toBe(before);
 		expect(after.results).toEqual(payload);
 		expect(after.results).not.toBe(before.results);
-		expect(after.selectedTracks).toBe(before.selectedTracks);
 		expect(after.settings).toBe(before.settings);
 		expect(after.activeCollection).toBe(before.activeCollection);
-		expectNoRepositoryCalls();
+		expectNoSettingsRepositoryCalls();
 		expect(() => structuredClone(after)).not.toThrow();
 	});
 
@@ -252,47 +199,10 @@ describe("Synchronous slice isolation", () => {
 		expect(after).not.toBe(before);
 		expect(after.activeCollection).toEqual(nextCollection);
 		expect(after.activeCollection).not.toBe(before.activeCollection);
-		expect(after.selectedTracks).toBe(before.selectedTracks);
 		expect(after.settings).toBe(before.settings);
 		expect(after.results).toBe(before.results);
-		expectNoRepositoryCalls();
+		expectNoSettingsRepositoryCalls();
 		expect(() => structuredClone(after)).not.toThrow();
-	});
-
-	it("updates the selected tracks and leaves the other slices unchanged when setSelectedTrack is dispatched", () => {
-		const store = createAppStore(getPreloadedState());
-		const before = store.getState();
-		store.dispatch(setSelectedTrack({ id: "t1", selected: false }));
-		store.dispatch(setSelectedTrack({ id: "t3", selected: true }));
-		const after = store.getState();
-		expect(after).not.toBe(before);
-		expect(after.selectedTracks).toEqual({
-			...mockSelectedTracks,
-			t1: false,
-			t3: true,
-		});
-		expect(after.selectedTracks).not.toBe(before.selectedTracks);
-		expect(after.settings).toBe(before.settings);
-		expect(after.results).toBe(before.results);
-		expect(after.activeCollection).toBe(before.activeCollection);
-		expectNoRepositoryCalls();
-		expect(() => structuredClone(after)).not.toThrow();
-	});
-
-	it("replaces the entire selected tracks map when setAllSelectedTracks is dispatched", () => {
-		const store = createAppStore(getPreloadedState());
-		const before = store.getState();
-		store.dispatch(setAllSelectedTracks({ only: true }));
-		const after = store.getState();
-		expect(after).not.toBe(before);
-		expect(after.selectedTracks).toEqual({
-			only: true,
-		});
-		expect(after.selectedTracks).not.toBe(before.selectedTracks);
-		expect(after.settings).toBe(before.settings);
-		expect(after.results).toBe(before.results);
-		expect(after.activeCollection).toBe(before.activeCollection);
-		expectNoRepositoryCalls();
 	});
 
 	it("replaces the settings, forces loading to false, and leaves the other slices unchanged when setSettings is dispatched", () => {
@@ -314,10 +224,9 @@ describe("Synchronous slice isolation", () => {
 		expect(after.settings).not.toBe(before.settings);
 		expect(after.settings.data.global).not.toBe(before.settings.data.global);
 		expect(after.settings.data.audio).not.toBe(before.settings.data.audio);
-		expect(after.selectedTracks).toBe(before.selectedTracks);
 		expect(after.results).toBe(before.results);
 		expect(after.activeCollection).toBe(before.activeCollection);
-		expectNoRepositoryCalls();
+		expectNoSettingsRepositoryCalls();
 		expect(() => structuredClone(after)).not.toThrow();
 	});
 
@@ -329,17 +238,12 @@ describe("Synchronous slice isolation", () => {
 		};
 		const store = createAppStore(getPreloadedState());
 		store.dispatch(setActiveCollection({ id: "seq", title: "Seq" }));
-		store.dispatch(setSelectedTrack({ id: "t9", selected: true }));
 		store.dispatch(setSettings(savedSettings));
 		store.dispatch(setResults(payload));
 		const state = store.getState();
 		expect(state.activeCollection).toEqual({
 			id: "seq",
 			title: "Seq",
-		});
-		expect(state.selectedTracks).toEqual({
-			...mockSelectedTracks,
-			t9: true,
 		});
 		expect(state.settings).toEqual({
 			data: savedSettings,
@@ -348,7 +252,7 @@ describe("Synchronous slice isolation", () => {
 		});
 		expect(state.results).toEqual(payload);
 		expect(() => structuredClone(state)).not.toThrow();
-		expectNoRepositoryCalls();
+		expectNoSettingsRepositoryCalls();
 	});
 });
 
@@ -361,7 +265,7 @@ describe("Thunk integration smoke tests", () => {
 		vi.mocked(settingsRepository.getSettings).mockResolvedValue({
 			status: "valid",
 			data: storedSettings,
-		} as GetSettingsResult);
+		});
 		const store = createAppStore(getPreloadedState());
 		const dispatch: AppDispatch = store.dispatch;
 		const before = store.getState();
@@ -375,18 +279,14 @@ describe("Thunk integration smoke tests", () => {
 			error: null,
 		});
 		expect(after.settings).not.toBe(before.settings);
-		expect(after.selectedTracks).toBe(before.selectedTracks);
 		expect(after.results).toBe(before.results);
 		expect(after.activeCollection).toBe(before.activeCollection);
 		expect(settingsRepository.getSettings).toHaveBeenCalledTimes(1);
 		expect(settingsRepository.saveSettings).not.toHaveBeenCalled();
-		expectNoTrackRepositoryCalls();
 	});
 
 	it("updates only the settings slice when the saveSettings thunk is dispatched", async () => {
-		vi.mocked(settingsRepository.saveSettings).mockResolvedValue(
-			undefined as SaveSettingsResult,
-		);
+		vi.mocked(settingsRepository.saveSettings).mockResolvedValue(undefined);
 		const store = createAppStore(getPreloadedState());
 		const dispatch: AppDispatch = store.dispatch;
 		const before = store.getState();
@@ -400,41 +300,10 @@ describe("Thunk integration smoke tests", () => {
 			error: null,
 		});
 		expect(after.settings).not.toBe(before.settings);
-		expect(after.selectedTracks).toBe(before.selectedTracks);
 		expect(after.results).toBe(before.results);
 		expect(after.activeCollection).toBe(before.activeCollection);
 		expect(settingsRepository.saveSettings).toHaveBeenCalledTimes(1);
 		expect(settingsRepository.saveSettings).toHaveBeenCalledWith(savedSettings);
 		expect(settingsRepository.getSettings).not.toHaveBeenCalled();
-		expectNoTrackRepositoryCalls();
-	});
-
-	it("updates only the selected tracks slice when the loadSelectedTracks thunk is dispatched", async () => {
-		const tracks = [
-			makeTrack({ id: "a", selected: 1 }),
-			makeTrack({ id: "b", selected: 0 }),
-		];
-		vi.mocked(tracksRepository.getAll).mockResolvedValue(tracks);
-		const store = createAppStore(getPreloadedState());
-		const dispatch: AppDispatch = store.dispatch;
-		const before = store.getState();
-		const result = await dispatch(loadSelectedTracks());
-		expect(result.meta.requestStatus).toBe("fulfilled");
-		const after = store.getState();
-		expect(after).not.toBe(before);
-		expect(after.selectedTracks).toEqual({
-			a: true,
-			b: false,
-		});
-		expect(after.selectedTracks).not.toBe(before.selectedTracks);
-		expect(after.settings).toBe(before.settings);
-		expect(after.results).toBe(before.results);
-		expect(after.activeCollection).toBe(before.activeCollection);
-		expect(tracksRepository.getAll).toHaveBeenCalledTimes(1);
-		expect(tracksRepository.getAll).toHaveBeenCalledWith(SYSTEM_COLLECTION_ID);
-		expect(tracksRepository.update).not.toHaveBeenCalled();
-		expect(tracksRepository.updateMany).not.toHaveBeenCalled();
-		expect(tracksRepository.removeMany).not.toHaveBeenCalled();
-		expectNoSettingsRepositoryCalls();
 	});
 });

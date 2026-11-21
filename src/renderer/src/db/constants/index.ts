@@ -19,11 +19,6 @@
 export const DATABASE_NAME = "AudioDB";
 
 /**
- * Maximum number of missing collection IDs to display in the error message.
- */
-export const MAX_DISPLAY_MISSING = 5;
-
-/**
  * IndexedDB store definitions per schema version.
  */
 export const TRACKS_STORES_V1 = {

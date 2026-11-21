@@ -15,15 +15,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import { listenerMiddleware } from "@renderer/store/middleware/settingsMiddleware";
 import activeCollectionSlice from "@renderer/store/slices/collectionSlice";
 import resultsSlice from "@renderer/store/slices/resultsSlice";
-import selectedTracks from "@renderer/store/slices/selectedTracksSlice";
 import settingsSlice from "@renderer/store/slices/settingsSlice";
+import { collectionListenerMiddleware } from "./middleware/collectionMiddleware";
 
 export const rootReducer = combineReducers({
-	selectedTracks,
 	settings: settingsSlice,
 	results: resultsSlice,
 	activeCollection: activeCollectionSlice,
@@ -34,7 +34,10 @@ export const createAppStore = (preloadedState?: RootState) =>
 		reducer: rootReducer,
 		preloadedState,
 		middleware: (getDefaultMiddleware) =>
-			getDefaultMiddleware().prepend(listenerMiddleware.middleware),
+			getDefaultMiddleware().prepend(
+				listenerMiddleware.middleware,
+				collectionListenerMiddleware.middleware,
+			),
 	});
 
 export const store = createAppStore();

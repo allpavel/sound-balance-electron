@@ -39,4 +39,47 @@ describe("collectionSlice", () => {
 		store.dispatch(setActiveCollection(newCollection));
 		expect(store.getState().activeCollection).toEqual(newCollection);
 	});
+
+	it.each([
+		["an empty id", { id: "", title: "Mix" }],
+		["a whitespace-only id", { id: "   ", title: "Mix" }],
+		["an id with null bytes", { id: "col\u0000x", title: "Mix" }],
+		["a non-string id", { id: 42, title: "Mix" }],
+		["an empty title", { id: "custom", title: "" }],
+		["a non-string title", { id: "custom", title: 7 }],
+		["a missing title", { id: "custom" }],
+		["a null payload", null],
+		["unexpected extra keys", { id: "custom", title: "Mix", extra: 1 }],
+	])("leaves the state untouched for %s", (_label, payload) => {
+		const before = store.getState().activeCollection;
+		store.dispatch({ type: setActiveCollection.type, payload });
+		expect(store.getState().activeCollection).toBe(before);
+	});
+
+	it("accepts the system collection payload", () => {
+		store.dispatch(
+			setActiveCollection({
+				id: SYSTEM_COLLECTION_ID,
+				title: SYSTEM_COLLECTION_TITLE,
+			}),
+		);
+		expect(store.getState().activeCollection).toEqual({
+			id: SYSTEM_COLLECTION_ID,
+			title: SYSTEM_COLLECTION_TITLE,
+		});
+	});
+
+	it("keeps the previously valid selection when a later payload is invalid", () => {
+		store.dispatch(setActiveCollection({ id: "valid", title: "Valid" }));
+		const before = store.getState().activeCollection;
+		store.dispatch({
+			type: setActiveCollection.type,
+			payload: { id: "  ", title: "Bad" },
+		});
+		expect(store.getState().activeCollection).toBe(before);
+		expect(store.getState().activeCollection).toEqual({
+			id: "valid",
+			title: "Valid",
+		});
+	});
 });

@@ -21,20 +21,27 @@ import {
 	SETTINGS_SCHEMA_VERSION,
 	strictSettingsSchema,
 } from "@shared/schemas/settings.schema";
-import { trackInputSchema } from "@shared/schemas/track.schema";
+import {
+	storedTrackSchema,
+	trackInputSchema,
+} from "@shared/schemas/track.schema";
 import { formatValidationIssues, pathToString } from "@shared/utils";
 import type { ValidationIssue } from "@shared/validators";
+import { ZodError } from "zod";
 import {
 	getValidData,
 	getValidSettings,
 	makeCollection,
+	makeCorruptTrackRow,
 	makeIngestionTrack,
 	makeIssue,
 	makeTrack,
+	makeTrackWithCorruption,
+	type RowCorruptor,
 	resetFactorySequences,
 } from ".";
 
-describe("shared/utils/factories", () => {
+describe("tests/factories", () => {
 	beforeEach(() => {
 		resetFactorySequences();
 	});
@@ -125,6 +132,13 @@ describe("shared/utils/factories", () => {
 			const failed = makeTrack({ status: "failed", reason: "boom" });
 			expect(trackInputSchema.safeParse(failed).success).toBe(true);
 		});
+
+		it("does not derive file/filePath from an overridden id", () => {
+			const track = makeTrack({ id: "explicit-id" });
+			expect(track.id).toBe("explicit-id");
+			expect(track.file).toBe("track-1.mp3");
+			expect(track.filePath).toBe("/music/track-1.mp3");
+		});
 	});
 
 	describe("getValidSettings", () => {
@@ -154,7 +168,7 @@ describe("shared/utils/factories", () => {
 			const settings = getValidSettings({
 				global: { concurrency: 9 },
 				audio: { filterOptions: { I: -16 } },
-			} as any);
+			});
 			expect(settings.global.concurrency).toBe(9);
 			expect(settings.global.outputDirectoryPath).toBe("/music/output");
 			expect(settings.audio.filterOptions).toEqual({ I: -16, LRA: 7 });
@@ -162,7 +176,7 @@ describe("shared/utils/factories", () => {
 		});
 
 		it("does not leak overrides into subsequent default calls", () => {
-			getValidSettings({ global: { concurrency: 9 } } as any);
+			getValidSettings({ global: { concurrency: 9 } });
 			expect(getValidSettings().global.concurrency).toBe(4);
 		});
 
@@ -170,6 +184,21 @@ describe("shared/utils/factories", () => {
 			expect(strictSettingsSchema.safeParse(getValidSettings()).success).toBe(
 				true,
 			);
+		});
+
+		it.each([
+			["concurrency below the minimum", { global: { concurrency: 0 } }],
+			["concurrency above the maximum", { global: { concurrency: 11 } }],
+			["empty output directory", { global: { outputDirectoryPath: "" } }],
+		])("rejects %s at construction time", (_label, overrides) => {
+			expect(() => getValidSettings(overrides)).toThrow(ZodError);
+		});
+
+		it("does not alias caller-owned override objects into the result", () => {
+			const filterOptions = { I: -16 };
+			const settings = getValidSettings({ audio: { filterOptions } });
+			filterOptions.I = -20;
+			expect(settings.audio.filterOptions.I).toBe(-16);
 		});
 	});
 
@@ -183,10 +212,10 @@ describe("shared/utils/factories", () => {
 		});
 
 		it("uses the provided tracks and deep-merges settings overrides", () => {
-			const tracks = [makeTrack(), makeTrack()];
+			const tracks = [makeIngestionTrack(), makeIngestionTrack()];
 			const data = getValidData({
 				tracks,
-				settings: { global: { concurrency: 2 } } as any,
+				settings: { global: { concurrency: 2 } },
 			});
 			expect(data.tracks).toBe(tracks);
 			expect(data.settings.global.concurrency).toBe(2);
@@ -195,6 +224,20 @@ describe("shared/utils/factories", () => {
 
 		it("produces a payload that satisfies dataSchema", () => {
 			expect(dataSchema.safeParse(getValidData()).success).toBe(true);
+		});
+
+		it("carries binary artwork through the ingestion lane", () => {
+			const pictures = [{ format: "image/png", data: new Uint8Array([1, 2]) }];
+			const data = getValidData({ tracks: [makeIngestionTrack({}, pictures)] });
+			const [track] = data.tracks;
+			expect(track?.common.picture).toEqual(pictures);
+			expect(dataSchema.safeParse(data).success).toBe(true);
+		});
+
+		it("rejects stored-lane artwork references at the ingestion boundary", () => {
+			const stored = makeTrack({ common: { picture: ["artwork-uuid-1"] } });
+			const payload = { tracks: [stored], settings: getValidSettings() };
+			expect(dataSchema.safeParse(payload).success).toBe(false);
 		});
 	});
 
@@ -444,6 +487,198 @@ describe("shared/utils/factories", () => {
 
 		it("returns a distinct object per call", () => {
 			expect(makeIngestionTrack()).not.toBe(makeIngestionTrack());
+		});
+	});
+
+	describe("makeCorruptTrackRow", () => {
+		it("always removes the `common` field (the corruption trigger)", () => {
+			const row = makeCorruptTrackRow("corrupt-1");
+			expect(row).not.toHaveProperty("common");
+		});
+
+		it("removes `common` even when an override supplies it", () => {
+			const row = makeCorruptTrackRow("corrupt-1", {
+				common: { title: "resurrected" },
+			});
+			expect(row).not.toHaveProperty("common");
+		});
+
+		it("preserves the id from the argument", () => {
+			const row = makeCorruptTrackRow("custom-id");
+			expect(row.id).toBe("custom-id");
+		});
+
+		it("defaults to 'corrupt-1' when no id is provided", () => {
+			const row = makeCorruptTrackRow();
+			expect(row.id).toBe("corrupt-1");
+		});
+
+		it("applies overrides before removing `common`", () => {
+			const row = makeCorruptTrackRow("corrupt-1", {
+				selected: 1,
+				status: "failed",
+			});
+			expect(row.selected).toBe(1);
+			expect(row.status).toBe("failed");
+			expect(row).not.toHaveProperty("common");
+		});
+
+		it("includes the system collection id by default (via makeTrack)", () => {
+			const row = makeCorruptTrackRow("corrupt-1");
+			expect(row.collectionIds).toEqual([SYSTEM_COLLECTION_ID]);
+		});
+
+		it("returns a distinct object with distinct nested references per call", () => {
+			const a = makeCorruptTrackRow("corrupt-1");
+			const b = makeCorruptTrackRow("corrupt-1");
+			expect(a).not.toBe(b);
+			expect(a.collectionIds).not.toBe(b.collectionIds);
+			expect(a.format).not.toBe(b.format);
+		});
+
+		it("produces identical content for identical state and arguments", () => {
+			const a = makeCorruptTrackRow("corrupt-1");
+			resetFactorySequences();
+			const b = makeCorruptTrackRow("corrupt-1");
+			expect(a).toEqual(b);
+		});
+
+		it("override can set collectionIds (does not restore `common`)", () => {
+			const row = makeCorruptTrackRow("corrupt-1", {
+				collectionIds: ["custom"],
+			});
+			expect(row.collectionIds).toEqual(["custom"]);
+			expect(row).not.toHaveProperty("common");
+		});
+	});
+
+	describe("makeTrackWithCorruption", () => {
+		const assignmentCases: ReadonlyArray<
+			readonly [string, RowCorruptor, Record<string, unknown>]
+		> = [
+			[
+				"invalid selected",
+				(r) => {
+					r.selected = 2;
+				},
+				{ selected: 2 },
+			],
+			[
+				"unknown status",
+				(r) => {
+					r.status = "done";
+				},
+				{ status: "done" },
+			],
+			[
+				"non-string id",
+				(r) => {
+					r.id = 42;
+				},
+				{ id: 42 },
+			],
+		];
+
+		const deletionCases: ReadonlyArray<
+			readonly [string, RowCorruptor, string]
+		> = [
+			[
+				"common",
+				(r) => {
+					delete r.common;
+				},
+				"common",
+			],
+			[
+				"format",
+				(r) => {
+					delete r.format;
+				},
+				"format",
+			],
+		];
+
+		it.each(assignmentCases)(
+			"applies an assignment mutator (%s)",
+			(_label, mutate, expected) => {
+				expect(makeTrackWithCorruption(mutate)).toMatchObject(expected);
+			},
+		);
+
+		it.each(deletionCases)(
+			"applies a deletion mutator (delete r.%s)",
+			(_label, mutate, key) => {
+				expect(makeTrackWithCorruption(mutate)).not.toHaveProperty(key);
+			},
+		);
+
+		it("preserves the id from the argument", () => {
+			const row = makeTrackWithCorruption((r) => {
+				delete r.common;
+			}, "custom-id");
+			expect(row.id).toBe("custom-id");
+		});
+
+		it("defaults to 'corrupt-1' when no id is provided", () => {
+			const row = makeTrackWithCorruption((r) => {
+				delete r.common;
+			});
+			expect(row.id).toBe("corrupt-1");
+		});
+
+		it("starts from an unmodified makeTrack base when the mutator is a no-op", () => {
+			const row = makeTrackWithCorruption(() => {}, "valid-1");
+			expect(row).toEqual({
+				id: "valid-1",
+				file: "track-1.mp3",
+				filePath: "/music/track-1.mp3",
+				status: "pending",
+				selected: 0,
+				collectionIds: [SYSTEM_COLLECTION_ID],
+				common: {},
+				format: {},
+			});
+			expect(storedTrackSchema.safeParse(row).success).toBe(true);
+		});
+
+		it("returns a distinct object with distinct nested references per call", () => {
+			const a = makeTrackWithCorruption((r) => {
+				delete r.common;
+			});
+			const b = makeTrackWithCorruption((r) => {
+				delete r.common;
+			});
+			expect(a).not.toBe(b);
+			expect(a.collectionIds).not.toBe(b.collectionIds);
+			expect(a.format).not.toBe(b.format);
+		});
+
+		it("produces identical content for identical state and arguments", () => {
+			const mutate: RowCorruptor = (r) => {
+				delete r.common;
+			};
+			const a = makeTrackWithCorruption(mutate);
+			resetFactorySequences();
+			const b = makeTrackWithCorruption(mutate);
+			expect(a).toEqual(b);
+		});
+
+		it("does not mutate the underlying makeTrack factory state", () => {
+			const validTrack = makeTrack({ id: "clean-1" });
+			makeTrackWithCorruption((r) => {
+				r.id = "mutated";
+				delete r.common;
+			}, "corrupt-1");
+			// The factory's base track should be unaffected.
+			expect(validTrack.id).toBe("clean-1");
+			expect(validTrack.common).toEqual({});
+		});
+
+		it("does not leak nested-object replacements into later fixtures", () => {
+			makeTrackWithCorruption((r) => {
+				r.common = { mutated: true };
+			});
+			expect(makeTrackWithCorruption(() => {}).common).toEqual({});
 		});
 	});
 });

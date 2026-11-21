@@ -15,12 +15,44 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { electronAPI } from "@electron-toolkit/preload";
 import { EVENT_CHANNELS, INVOKE_CHANNELS } from "@main/constants";
 import type { ProcessingStatus } from "@shared/schemas/track.schema";
 import { normalizePlatform } from "@shared/utils";
 import { contextBridge, ipcRenderer } from "electron";
-import type { API } from "@/types";
+import type { API, StoppingStatus } from "@/types";
+
+/**
+ * Registers a typed listener on an IPC event channel and returns a
+ * per-subscription teardown function.
+ *
+ * **Listener ownership:** the returned closure removes *only* the
+ * handler registered by this call (`ipcRenderer.removeListener`),
+ * leaving any concurrent subscribers on the same channel intact.
+ * Callers must invoke the teardown exactly once when they no longer
+ * need the subscription (e.g., in a React `useEffect` cleanup).
+ *
+ * **Teardown order:** subscriptions are independent; no ordering
+ * constraint exists between teardowns on the same channel.
+ *
+ * @typeParam T - Payload type delivered to the callback.
+ * @param channel  - IPC event channel name from `EVENT_CHANNELS`.
+ * @param callback - Application-level consumer of the event payload.
+ * @returns A cleanup function that detaches this subscription only.
+ */
+function subscribeToEvent<T>(
+	channel: string,
+	callback: (payload: T) => void,
+): () => void {
+	const handler = (_event: unknown, payload: T): void => {
+		callback(payload);
+	};
+	ipcRenderer.on(channel, handler);
+	return () => {
+		ipcRenderer.removeListener(channel, handler);
+	};
+}
 
 const api = {
 	showDialog: () => ipcRenderer.invoke(INVOKE_CHANNELS.SHOW_DIALOG),
@@ -29,24 +61,12 @@ const api = {
 	startProcessing: (data) =>
 		ipcRenderer.invoke(INVOKE_CHANNELS.START_PROCESSING, data),
 	stopProcessing: () => ipcRenderer.invoke(INVOKE_CHANNELS.STOP_PROCESSING),
-	responseOnStart: (cb) => {
-		ipcRenderer.on(EVENT_CHANNELS.RESPONSE_ON_START, (_, msg) => cb(msg));
-		return () =>
-			ipcRenderer.removeAllListeners(EVENT_CHANNELS.RESPONSE_ON_START);
-	},
-	responseOnStop: (cb) => {
-		ipcRenderer.on(EVENT_CHANNELS.RESPONSE_ON_STOP, (_, msg) => cb(msg));
-		return () =>
-			ipcRenderer.removeAllListeners(EVENT_CHANNELS.RESPONSE_ON_STOP);
-	},
-	processingResult: (cb) => {
-		ipcRenderer.on(
-			EVENT_CHANNELS.PROCESSING_RESULT,
-			(_, msg: ProcessingStatus) => cb(msg),
-		);
-		return () =>
-			ipcRenderer.removeAllListeners(EVENT_CHANNELS.PROCESSING_RESULT);
-	},
+	responseOnStart: (cb) =>
+		subscribeToEvent<string>(EVENT_CHANNELS.RESPONSE_ON_START, cb),
+	responseOnStop: (cb) =>
+		subscribeToEvent<StoppingStatus>(EVENT_CHANNELS.RESPONSE_ON_STOP, cb),
+	processingResult: (cb) =>
+		subscribeToEvent<ProcessingStatus>(EVENT_CHANNELS.PROCESSING_RESULT, cb),
 	openOutputFolder: (outputDirectoryPath: string) =>
 		ipcRenderer.invoke(INVOKE_CHANNELS.OPEN_OUTPUT_FOLDER, outputDirectoryPath),
 	platform: normalizePlatform(process.platform),

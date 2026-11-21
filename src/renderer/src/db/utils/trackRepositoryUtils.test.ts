@@ -28,79 +28,57 @@ import {
 	StorageUnavailableError,
 	TrackValidationError,
 } from "@shared/errors";
-import type { Metadata } from "@shared/schemas/track.schema";
 import type { AddManyProgress } from "@shared/types";
-import { makeTrack } from "@tests/factories";
-import { captureRejection } from "@tests/utils";
-import type { EntityTable } from "dexie";
+import { makeTrack, makeTrackWithCorruption } from "@tests/factories";
+import {
+	captureRejection,
+	expectedQuarantineWarning,
+	spyOnConsoleWarn,
+} from "@tests/utils";
 import {
 	applyGuardedTrackUpdate,
 	areCollectionIdsEqual,
 	assertBatchUniqueness,
 	assertTrackInput,
+	assertValidTrackId,
 	createProgressEmitter,
-	isPlainObject,
 	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
-	uniqueTracks,
 	validateTrackChanges,
 } from "./trackRepositoryUtils";
 
-function createTrackWithoutField(field: string): Record<string, unknown> {
-	const track = makeTrack() as any;
-	delete track[field];
-	return track as any;
-}
-
 /**
- * Captures whatever `fn` throws (fn is typed `() => unknown` — it always throws).
- * Used so each test can assert the thrown value's type or identity.
+ * Captures the value thrown by `fn`, failing loud when it returns normally.
+ *
+ * @param fn - Operation expected to throw.
+ * @returns The thrown value, untouched, for `instanceof` narrowing.
  */
 function captureThrown(fn: () => unknown): unknown {
 	try {
 		fn();
-	} catch (e: unknown) {
-		return e;
+	} catch (error: unknown) {
+		return error;
 	}
 	throw new Error("captureThrown: fn should have thrown");
 }
 
+/**
+ * Captures a thrown value and narrows it to `TrackValidationError`.
+ *
+ * @param fn - Operation expected to throw a `TrackValidationError`.
+ * @returns The thrown error, narrowed for issue/context assertions.
+ * @throws The original value when it is not a `TrackValidationError`.
+ */
+function captureTrackValidationError(fn: () => unknown): TrackValidationError {
+	const thrown = captureThrown(fn);
+	if (!(thrown instanceof TrackValidationError)) {
+		throw thrown;
+	}
+	return thrown;
+}
+
 describe("trackRepositoryUtils", () => {
-	describe("isPlainObject", () => {
-		it.each([
-			["empty object", {}],
-			["object with id", { id: "track-1" }],
-			["object with collectionIds", { collectionIds: ["all"] }],
-		])("returns true for %s", (_desc, value) => {
-			expect(isPlainObject(value)).toBe(true);
-		});
-
-		it("returns false for null", () => {
-			expect(isPlainObject(null)).toBe(false);
-		});
-
-		it.each([
-			["empty array", []],
-			["non-empty array", ["all"]],
-		])("returns false for %s", (_desc, value) => {
-			expect(isPlainObject(value)).toBe(false);
-		});
-
-		it.each([
-			["undefined", undefined],
-			["string", "string"],
-			["number", 123],
-			["boolean", true],
-		])("returns false for primitive: %s", (_desc, value) => {
-			expect(isPlainObject(value)).toBe(false);
-		});
-
-		it("returns false for functions", () => {
-			expect(isPlainObject(() => {})).toBe(false);
-		});
-	});
-
 	describe("assertTrackInput", () => {
 		it("accepts a valid track", () => {
 			expect(() => assertTrackInput(makeTrack(), 0)).not.toThrow();
@@ -124,24 +102,19 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("includes the provided index in the error context", () => {
-			try {
-				assertTrackInput(null, 7);
-				expect.unreachable("should have thrown");
-			} catch (err) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				expect((err as TrackValidationError).context).toBe("tracks[7]");
-			}
+			const thrown = captureTrackValidationError(() =>
+				assertTrackInput(null, 7),
+			);
+			expect(thrown.context).toBe("tracks[7]");
 		});
 
 		it("rejects an empty id and reports the id path", () => {
-			try {
-				assertTrackInput(makeTrack({ id: "" }), 0);
-				expect.unreachable("should have thrown");
-			} catch (err) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				const { issues } = err as TrackValidationError;
-				expect(issues.some((i) => i.pathString === "id")).toBe(true);
-			}
+			const thrown = captureTrackValidationError(() =>
+				assertTrackInput(makeTrack({ id: "" }), 0),
+			);
+			expect(thrown.issues.some((issue) => issue.pathString === "id")).toBe(
+				true,
+			);
 		});
 
 		it("rejects a whitespace-only id", () => {
@@ -151,15 +124,25 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects a non-string id", () => {
-			expect(() => assertTrackInput(makeTrack({ id: 123 } as any), 0)).toThrow(
-				TrackValidationError,
-			);
+			expect(() =>
+				assertTrackInput(
+					makeTrackWithCorruption((r) => {
+						r.id = 123;
+					}),
+					0,
+				),
+			).toThrow(TrackValidationError);
 		});
 
 		it("rejects a missing id", () => {
-			expect(() => assertTrackInput(createTrackWithoutField("id"), 0)).toThrow(
-				TrackValidationError,
-			);
+			expect(() =>
+				assertTrackInput(
+					makeTrackWithCorruption((r) => {
+						delete r.id;
+					}),
+					0,
+				),
+			).toThrow(TrackValidationError);
 		});
 
 		it("rejects an empty file", () => {
@@ -176,7 +159,12 @@ describe("trackRepositoryUtils", () => {
 
 		it("rejects a missing file", () => {
 			expect(() =>
-				assertTrackInput(createTrackWithoutField("file"), 0),
+				assertTrackInput(
+					makeTrackWithCorruption((r) => {
+						delete r.file;
+					}),
+					0,
+				),
 			).toThrow(TrackValidationError);
 		});
 
@@ -212,13 +200,23 @@ describe("trackRepositoryUtils", () => {
 
 		it("rejects a missing filePath", () => {
 			expect(() =>
-				assertTrackInput(createTrackWithoutField("filePath"), 0),
+				assertTrackInput(
+					makeTrackWithCorruption((r) => {
+						delete r.filePath;
+					}),
+					0,
+				),
 			).toThrow(TrackValidationError);
 		});
 
 		it("rejects a missing status", () => {
 			expect(() =>
-				assertTrackInput(createTrackWithoutField("status"), 0),
+				assertTrackInput(
+					makeTrackWithCorruption((r) => {
+						delete r.status;
+					}),
+					0,
+				),
 			).toThrow(TrackValidationError);
 		});
 
@@ -228,66 +226,96 @@ describe("trackRepositoryUtils", () => {
 			).toThrow(TrackValidationError);
 		});
 
-		it.each([
+		const invalidStatusCases: ReadonlyArray<readonly [string, unknown]> = [
 			["unknown value", "done"],
 			["empty string", ""],
 			["whitespace-only", "   "],
 			["number", 123],
 			["null", null],
-		])("rejects invalid status value: %s", (_desc, value) => {
-			expect(() =>
-				assertTrackInput(makeTrack({ status: value } as any), 0),
-			).toThrow(TrackValidationError);
-		});
+		];
 
-		it.each([
+		it.each(invalidStatusCases)(
+			"rejects invalid status value: %s",
+			(_desc, value) => {
+				expect(() =>
+					assertTrackInput(
+						makeTrackWithCorruption((r) => {
+							r.status = value;
+						}),
+						0,
+					),
+				).toThrow(TrackValidationError);
+			},
+		);
+
+		const invalidSelectedCases: ReadonlyArray<readonly [string, unknown]> = [
 			["number > 1", 2],
 			["boolean", true],
 			["string", "1"],
 			["null", null],
 			["undefined", undefined],
-		])("rejects invalid selected value: %s", (_desc, value) => {
-			expect(() =>
-				assertTrackInput(makeTrack({ selected: value } as any), 0),
-			).toThrow(TrackValidationError);
-		});
+		];
+
+		it.each(invalidSelectedCases)(
+			"rejects invalid selected value: %s",
+			(_desc, value) => {
+				expect(() =>
+					assertTrackInput(
+						makeTrackWithCorruption((r) => {
+							r.selected = value;
+						}),
+						0,
+					),
+				).toThrow(TrackValidationError);
+			},
+		);
 
 		it("rejects a missing selected value", () => {
 			expect(() =>
-				assertTrackInput(createTrackWithoutField("selected"), 0),
+				assertTrackInput(
+					makeTrackWithCorruption((r) => {
+						delete r.selected;
+					}),
+					0,
+				),
 			).toThrow(TrackValidationError);
 		});
 
-		it.each([
+		const invalidCollectionIdsCases: ReadonlyArray<readonly [string, unknown]> =
 			[
-				"string instead of array",
-				SYSTEM_COLLECTION_ID as any,
-				TrackValidationError,
-			],
-			["null instead of array", null as any, TrackValidationError],
-			[
-				"empty string in array",
-				[SYSTEM_COLLECTION_ID, ""],
-				TrackValidationError,
-			],
-		])(
+				["string instead of array", SYSTEM_COLLECTION_ID],
+				["null instead of array", null],
+				["empty string in array", [SYSTEM_COLLECTION_ID, ""]],
+			];
+
+		it.each(invalidCollectionIdsCases)(
 			"rejects invalid collectionIds: %s",
-			(_desc, collectionIds, expectedError) => {
-				expect(() => assertTrackInput(makeTrack({ collectionIds }), 0)).toThrow(
-					expectedError,
-				);
+			(_desc, value) => {
+				expect(() =>
+					assertTrackInput(
+						makeTrackWithCorruption((r) => {
+							r.collectionIds = value;
+						}),
+						0,
+					),
+				).toThrow(TrackValidationError);
 			},
 		);
 
 		it("rejects a missing collectionIds value", () => {
 			expect(() =>
-				assertTrackInput(createTrackWithoutField("collectionIds"), 0),
+				assertTrackInput(
+					makeTrackWithCorruption((r) => {
+						delete r.collectionIds;
+					}),
+					0,
+				),
 			).toThrow(TrackValidationError);
 		});
 	});
 
 	describe("assertBatchUniqueness", () => {
-		it("replaces control characters in the duplicate key before interpolation", async () => {
+		it("replaces control characters in the duplicate key before interpolation", () => {
 			const keyWithControl = "bad\u0001key";
 			const caught = captureThrown(() =>
 				assertBatchUniqueness({
@@ -298,10 +326,11 @@ describe("trackRepositoryUtils", () => {
 				}),
 			);
 			expect(caught).toBeInstanceOf(ConflictError);
-			if (caught instanceof ConflictError) {
-				expect(caught.message).not.toContain("\u0001");
-				expect(caught.message).toContain("\uFFFD");
+			if (!(caught instanceof ConflictError)) {
+				throw caught;
 			}
+			expect(caught.message).not.toContain("\u0001");
+			expect(caught.message).toContain("\uFFFD");
 		});
 	});
 
@@ -322,10 +351,11 @@ describe("trackRepositoryUtils", () => {
 				),
 			);
 			expect(thrown).toBeInstanceOf(ReferentialIntegrityError);
-			if (thrown instanceof ReferentialIntegrityError) {
-				expect(thrown.message).not.toContain("\u0001");
-				expect(thrown.message).toContain("\uFFFD");
+			if (!(thrown instanceof ReferentialIntegrityError)) {
+				throw thrown;
 			}
+			expect(thrown.message).not.toContain("\u0001");
+			expect(thrown.message).toContain("\uFFFD");
 		});
 
 		it("sanitizes control characters in a duplicate update id", async () => {
@@ -337,10 +367,11 @@ describe("trackRepositoryUtils", () => {
 				]),
 			);
 			expect(thrown).toBeInstanceOf(ConflictError);
-			if (thrown instanceof ConflictError) {
-				expect(thrown.message).not.toContain("\u0001");
-				expect(thrown.message).toContain("\uFFFD");
+			if (!(thrown instanceof ConflictError)) {
+				throw thrown;
 			}
+			expect(thrown.message).not.toContain("\u0001");
+			expect(thrown.message).toContain("\uFFFD");
 		});
 	});
 
@@ -509,63 +540,14 @@ describe("trackRepositoryUtils", () => {
 			},
 		);
 
-		it.each([
-			["number vs string", [123], ["123"]],
-			["string vs number", ["123"], [123 as unknown as string]],
-		])(
-			"returns false when values differ by type: %s",
-			(_desc, current, next) => {
-				expect(areCollectionIdsEqual(current, next)).toBe(false);
-			},
-		);
-	});
-
-	describe("uniqueTracks", () => {
-		it("returns tracks unchanged when ids are unique", () => {
-			const first = makeTrack({ id: "t1" });
-			const second = makeTrack({ id: "t2" });
-			expect(uniqueTracks([first, second])).toEqual([first, second]);
-		});
-
-		it("keeps the last occurrence when duplicated ids are present", () => {
-			const first = makeTrack({
-				id: "t1",
-				filePath: "/music/first.mp3",
-			});
-			const second = makeTrack({
-				id: "t2",
-				filePath: "/music/second.mp3",
-			});
-			const duplicate = makeTrack({
-				id: "t1",
-				filePath: "/music/duplicate.mp3",
-			});
-			const result = uniqueTracks([first, second, duplicate]);
-			expect(result.map((track) => track.id)).toEqual(["t1", "t2"]);
-			expect(result[0]?.filePath).toBe("/music/duplicate.mp3");
-			expect(result[1]?.filePath).toBe("/music/second.mp3");
-		});
-
-		it("filters out tracks with empty ids", () => {
-			const valid = makeTrack({ id: "t1" });
-			const invalid = makeTrack({ id: "" });
-			expect(uniqueTracks([invalid, valid])).toEqual([valid]);
-		});
-
-		it("filters out tracks with whitespace-only ids", () => {
-			const valid = makeTrack({ id: "t1" });
-			const invalid = makeTrack({ id: "   " });
-			expect(uniqueTracks([invalid, valid])).toEqual([valid]);
-		});
-
-		it("returns an empty array for empty input", () => {
-			expect(uniqueTracks([])).toEqual([]);
+		it("returns false when a stored number id meets a validated string id", () => {
+			expect(areCollectionIdsEqual([123], ["123"])).toBe(false);
 		});
 	});
 
 	describe("validateTrackChanges", () => {
 		it("returns changes unchanged when collectionIds is undefined", () => {
-			const changes = { selected: 1 } as any;
+			const changes = { selected: 1 };
 			expect(validateTrackChanges(changes, "changes")).toEqual(changes);
 		});
 
@@ -609,19 +591,17 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects invalid collection ids and reports the precise indexed path", () => {
-			try {
+			const thrown = captureTrackValidationError(() =>
 				validateTrackChanges(
 					{ collectionIds: [SYSTEM_COLLECTION_ID, ""] },
 					"changes",
-				);
-				expect.unreachable("should have thrown");
-			} catch (err) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				const { issues } = err as TrackValidationError;
-				expect(
-					issues.some((i) => i.path[0] === "collectionIds" && i.path[1] === 1),
-				).toBe(true);
-			}
+				),
+			);
+			expect(
+				thrown.issues.some(
+					(issue) => issue.path[0] === "collectionIds" && issue.path[1] === 1,
+				),
+			).toBe(true);
 		});
 
 		it("rejects an empty changes object (no-op mutation)", () => {
@@ -648,15 +628,13 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("rejects null input with Zod-authored invalid_type issue", () => {
-			try {
-				validateTrackChanges(null, "changes");
-				expect.unreachable("should have thrown");
-			} catch (err) {
-				expect(err).toBeInstanceOf(TrackValidationError);
-				const issues = (err as TrackValidationError).issues;
-				expect(issues.length).toBeGreaterThan(0);
-				expect(issues.some((i) => i.code === "invalid_type")).toBe(true);
-			}
+			const thrown = captureTrackValidationError(() =>
+				validateTrackChanges(null, "changes"),
+			);
+			expect(thrown.issues.length).toBeGreaterThan(0);
+			expect(thrown.issues.some((issue) => issue.code === "invalid_type")).toBe(
+				true,
+			);
 		});
 
 		it("rejects invalid selected values via schema validation", () => {
@@ -714,125 +692,159 @@ describe("trackRepositoryUtils", () => {
 	});
 
 	describe("applyGuardedTrackUpdate", () => {
-		let mockTable: any;
+		let getSpy: ReturnType<typeof vi.spyOn>;
+		let updateSpy: ReturnType<typeof vi.spyOn>;
 
-		beforeEach(() => {
-			mockTable = {
-				get: vi.fn(),
-				update: vi.fn(),
-			} as unknown as EntityTable<Metadata, "id">;
+		beforeEach(async () => {
+			await resetDatabase();
+			getSpy = vi.spyOn(db.tracks, "get");
+			updateSpy = vi.spyOn(db.tracks, "update");
 		});
 
 		it("applies field-only changes without checking the state machine", async () => {
-			vi.mocked(mockTable.update).mockResolvedValue(1);
-			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+			await db.tracks.add(makeTrack({ id: "t1", selected: 0 }));
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
 				selected: 1,
 			});
 			expect(result).toBe(1);
-			expect(mockTable.get).not.toHaveBeenCalled();
-			expect(mockTable.update).toHaveBeenCalledWith("t1", { selected: 1 });
+			expect(getSpy).not.toHaveBeenCalled();
+			expect(updateSpy).toHaveBeenCalledWith("t1", { selected: 1 });
+			expect((await db.tracks.get("t1"))?.selected).toBe(1);
 		});
 
 		it("returns 0 if the track does not exist (idempotent no-op)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue(undefined);
-			const result = await applyGuardedTrackUpdate(mockTable, "missing", {
+			const result = await applyGuardedTrackUpdate(db.tracks, "missing", {
 				status: "processing",
 			});
 			expect(result).toBe(0);
-			expect(mockTable.update).not.toHaveBeenCalled();
+			expect(updateSpy).not.toHaveBeenCalled();
 		});
 
 		it("returns 0 for an illegal state transition (e.g., completed -> pending)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "completed",
-			});
-			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+			await db.tracks.add(makeTrack({ id: "t1", status: "completed" }));
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
 				status: "pending",
 			});
 			expect(result).toBe(0);
-			expect(mockTable.update).not.toHaveBeenCalled();
+			expect(updateSpy).not.toHaveBeenCalled();
+			expect((await db.tracks.get("t1"))?.status).toBe("completed");
 		});
 
 		it("applies a legal state transition and returns 1", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "pending",
-			});
-			vi.mocked(mockTable.update).mockResolvedValue(1);
+			await db.tracks.add(makeTrack({ id: "t1", status: "pending" }));
 
-			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
 				status: "processing",
 			});
 			expect(result).toBe(1);
-			expect(mockTable.update).toHaveBeenCalledWith("t1", {
-				status: "processing",
-			});
+			expect(updateSpy).toHaveBeenCalledWith("t1", { status: "processing" });
+			expect((await db.tracks.get("t1"))?.status).toBe("processing");
 		});
 
 		it("returns 0 for a stale sequence number (out-of-order event)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
-			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+			await db.tracks.add(
+				makeTrack({ id: "t1", status: "processing", statusSeq: 5 }),
+			);
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
 				status: "completed",
 				seq: 4,
 			});
 			expect(result).toBe(0);
-			expect(mockTable.update).not.toHaveBeenCalled();
+			expect(updateSpy).not.toHaveBeenCalled();
+			expect((await db.tracks.get("t1"))?.statusSeq).toBe(5);
 		});
 
 		it("rejects an event whose seq equals the stored high-water mark (replay protection)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
-			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+			await db.tracks.add(
+				makeTrack({ id: "t1", status: "processing", statusSeq: 5 }),
+			);
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
 				status: "completed",
 				seq: 5,
 			});
 			expect(result).toBe(0);
-			expect(mockTable.update).not.toHaveBeenCalled();
+			expect(updateSpy).not.toHaveBeenCalled();
+			expect((await db.tracks.get("t1"))?.statusSeq).toBe(5);
 		});
 
 		it("applies update and advances statusSeq for a fresh sequence number", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
-			vi.mocked(mockTable.update).mockResolvedValue(1);
-			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+			await db.tracks.add(
+				makeTrack({ id: "t1", status: "processing", statusSeq: 5 }),
+			);
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
 				status: "completed",
 				seq: 6,
 			});
 			expect(result).toBe(1);
-			expect(mockTable.update).toHaveBeenCalledWith("t1", {
+			expect(updateSpy).toHaveBeenCalledWith("t1", {
 				status: "completed",
 				reason: undefined,
 				statusSeq: 6,
 			});
+			const stored = await db.tracks.get("t1");
+			expect(stored?.status).toBe("completed");
+			expect(stored?.statusSeq).toBe(6);
 		});
 
 		it("does not advance statusSeq if the event lacks a seq (graceful degradation)", async () => {
-			vi.mocked(mockTable.get).mockResolvedValue({
-				id: "t1",
-				status: "processing",
-				statusSeq: 5,
-			});
-			vi.mocked(mockTable.update).mockResolvedValue(1);
-			const result = await applyGuardedTrackUpdate(mockTable, "t1", {
+			await db.tracks.add(
+				makeTrack({ id: "t1", status: "processing", statusSeq: 5 }),
+			);
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
 				status: "completed",
 			});
-
 			expect(result).toBe(1);
-			expect(mockTable.update).toHaveBeenCalledWith("t1", {
+			expect(updateSpy).toHaveBeenCalledWith("t1", {
 				status: "completed",
 				reason: undefined,
 			});
+			const stored = await db.tracks.get("t1");
+			expect(stored?.status).toBe("completed");
+			expect(stored?.statusSeq).toBe(5);
+		});
+
+		it("quarantines a corrupt row and returns 0 instead of silently failing", async () => {
+			const warnSpy = spyOnConsoleWarn();
+			await db.table("tracks").add(
+				makeTrackWithCorruption((r) => {
+					delete r.common;
+				}, "t1"),
+			);
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
+				status: "completed",
+			});
+			// guardTrack → undefined → shouldApplyUpdate → null → 0.
+			expect(result).toBe(0);
+			expect(getSpy).toHaveBeenCalledTimes(1);
+			expect(updateSpy).not.toHaveBeenCalled();
+			expect(warnSpy).toHaveBeenCalledTimes(1);
+			expect(warnSpy).toHaveBeenCalledWith(
+				...expectedQuarantineWarning("tracksRepository.update", ["t1"]),
+			);
+		});
+
+		it("passes a valid row through to shouldApplyUpdate", async () => {
+			await db.tracks.add(makeTrack({ id: "t1", status: "processing" }));
+
+			const result = await applyGuardedTrackUpdate(db.tracks, "t1", {
+				status: "completed",
+			});
+			expect(result).toBe(1);
+			expect(updateSpy).toHaveBeenCalledWith(
+				"t1",
+				expect.objectContaining({ status: "completed" }),
+			);
+		});
+
+		it("returns 0 for an absent row without warning", async () => {
+			const warnSpy = spyOnConsoleWarn();
+
+			const result = await applyGuardedTrackUpdate(db.tracks, "missing", {
+				status: "completed",
+			});
+			expect(result).toBe(0);
+			expect(updateSpy).not.toHaveBeenCalled();
+			expect(warnSpy).not.toHaveBeenCalled();
 		});
 	});
 
@@ -1027,9 +1039,10 @@ describe("trackRepositoryUtils", () => {
 					mapStorageWriteError({ name: "AbortError", message: "" }),
 				);
 				expect(thrown).toBeInstanceOf(StorageUnavailableError);
-				if (thrown instanceof StorageUnavailableError) {
-					expect(thrown.message).toBe("Database operation failed: AbortError");
+				if (!(thrown instanceof StorageUnavailableError)) {
+					throw thrown;
 				}
+				expect(thrown.message).toBe("Database operation failed: AbortError");
 			});
 
 			it("declines objects whose message is not a string", () => {
@@ -1121,11 +1134,12 @@ describe("trackRepositoryUtils", () => {
 				};
 				const thrown = captureThrown(() => mapStorageWriteError(input));
 				expect(thrown).toBeInstanceOf(StorageUnavailableError);
-				if (thrown instanceof StorageUnavailableError) {
-					expect(thrown.message).toBe(
-						"Database batch operation failed: UnknownError",
-					);
+				if (!(thrown instanceof StorageUnavailableError)) {
+					throw thrown;
 				}
+				expect(thrown.message).toBe(
+					"Database batch operation failed: UnknownError",
+				);
 			});
 
 			it("re-throws by identity when failures exists but name is not BulkError", () => {
@@ -1190,8 +1204,13 @@ describe("trackRepositoryUtils", () => {
 			skipped: 0,
 		};
 
+		let warnSpy: ReturnType<typeof spyOnConsoleWarn>;
+
+		beforeEach(() => {
+			warnSpy = spyOnConsoleWarn();
+		});
+
 		it("returns no-op emit/flush when onProgress is undefined", () => {
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 			const emitter = createProgressEmitter(undefined);
 			emitter.emit(snapshot);
 			emitter.flush();
@@ -1199,7 +1218,6 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("delivers the snapshot to a non-throwing callback; flush is a no-op", () => {
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 			const cb = vi.fn();
 			const emitter = createProgressEmitter(cb);
 			emitter.emit(snapshot);
@@ -1209,7 +1227,6 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("logs the first callback failure once; suppresses subsequent; flush summarizes", () => {
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 			const throwing = vi.fn(() => {
 				throw new Error("boom");
 			});
@@ -1228,7 +1245,6 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("flush after exactly one failure emits no summary (boundary: failureCount > 1)", () => {
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 			const emitter = createProgressEmitter(() => {
 				throw new Error("boom");
 			});
@@ -1239,11 +1255,43 @@ describe("trackRepositoryUtils", () => {
 		});
 
 		it("emit never propagates a callback throw", () => {
-			vi.spyOn(console, "warn").mockImplementation(() => {});
 			const emitter = createProgressEmitter(() => {
 				throw new Error("boom");
 			});
 			expect(() => emitter.emit(snapshot)).not.toThrow();
+		});
+	});
+
+	describe("assertValidTrackId", () => {
+		it("accepts a non-empty string id without throwing", () => {
+			expect(() => assertValidTrackId("t1")).not.toThrow();
+		});
+
+		it.each([
+			["empty string", ""],
+			["whitespace-only string", "   "],
+			["tab/newline string", "\t\n"],
+		])("throws TrackValidationError for a %s id", (_label, value) => {
+			expect(() => assertValidTrackId(value)).toThrow(TrackValidationError);
+		});
+
+		it.each([
+			["null", null],
+			["undefined", undefined],
+			["number", 42],
+			["boolean", true],
+			["array", []],
+			["object", {}],
+		])("throws TrackValidationError for non-string id: %s", (_label, value) => {
+			expect(() => assertValidTrackId(value)).toThrow(TrackValidationError);
+		});
+
+		it("carries the 'id' context and an invalid_type root issue", () => {
+			const thrown = captureTrackValidationError(() => assertValidTrackId(""));
+			expect(thrown.context).toBe("id");
+			expect(thrown.issues).toHaveLength(1);
+			expect(thrown.issues[0]?.code).toBe("invalid_type");
+			expect(thrown.issues[0]?.message).toBe("ID must be a non-empty string");
 		});
 	});
 });

@@ -35,7 +35,6 @@ import {
 	dedupeByFilePath,
 	describeThrownValue,
 	gatherReferencedCollectionIds,
-	isNonEmptyString,
 	mapStorageWriteError,
 } from "@renderer/db/utils/trackRepositoryUtils";
 import {
@@ -45,7 +44,11 @@ import {
 } from "@shared/errors";
 import type { IngestionMetadata, Metadata } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyResult } from "@shared/types";
-import { chunkArray, sanitizeControlChars } from "@shared/utils";
+import {
+	chunkArray,
+	isNonEmptyString,
+	sanitizeControlChars,
+} from "@shared/utils";
 import { createRootIssue } from "@shared/validators";
 import type { EntityTable } from "dexie";
 

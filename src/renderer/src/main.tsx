@@ -15,15 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { createTheme, MantineProvider } from "@mantine/core";
-import { StrictMode } from "react";
+import { type JSX, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "@mantine/core/styles.css";
+import { ErrorBoundary } from "@renderer/components/ErrorBoundary/ErrorBoundary";
+import { store } from "@renderer/store/store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Provider as RTKProvider } from "react-redux";
 import { Toaster } from "sonner";
-import { store } from "./store/store";
 
 const theme = createTheme({
 	cursorType: "pointer",
@@ -31,17 +33,31 @@ const theme = createTheme({
 
 const queryClient = new QueryClient();
 
-const root = document.getElementById("root") as HTMLElement;
+export function createAppRoot(): JSX.Element {
+	return (
+		<StrictMode>
+			<ErrorBoundary>
+				<QueryClientProvider client={queryClient}>
+					<RTKProvider store={store}>
+						<MantineProvider theme={theme}>
+							<App />
+							<Toaster richColors closeButton position="bottom-right" />
+						</MantineProvider>
+					</RTKProvider>
+				</QueryClientProvider>
+			</ErrorBoundary>
+		</StrictMode>
+	);
+}
 
-createRoot(root).render(
-	<StrictMode>
-		<QueryClientProvider client={queryClient}>
-			<RTKProvider store={store}>
-				<MantineProvider theme={theme}>
-					<App />
-					<Toaster richColors closeButton position="bottom-right" />
-				</MantineProvider>
-			</RTKProvider>
-		</QueryClientProvider>
-	</StrictMode>,
-);
+/** Boots the renderer into #root. Idempotent per container; test-callable. */
+export function bootRenderer(): void {
+	const container = document.getElementById("root");
+	// Fail loud: a missing mount point must never yield a silent blank window.
+	if (container === null) {
+		throw new Error("Renderer bootstrap failed: #root container not found.");
+	}
+	createRoot(container).render(createAppRoot());
+}
+
+bootRenderer();

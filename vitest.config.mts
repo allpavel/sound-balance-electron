@@ -11,6 +11,12 @@ export default defineConfig({
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "json", "html"],
+			thresholds: {
+				lines: 90,
+				functions: 90,
+				branches: 85,
+				statements: 90,
+			},
 			exclude: [
 				"**/node_modules/**",
 				"**/dist/**",
@@ -18,9 +24,12 @@ export default defineConfig({
 				"**/*.d.ts",
 				"**/index.ts",
 				"**/*.config.*",
-				"tests/**",
+				"src/tests/**",
 				"**/__tests__/**",
-				"**/testFactories.ts",
+				"**/*.test.ts",
+				"**/*.test.tsx",
+				"**/test-utils/**",
+				"vitest.setup.ts",
 			],
 		},
 	},

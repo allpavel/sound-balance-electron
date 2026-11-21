@@ -16,12 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { MAX_DISPLAY_MISSING } from "@renderer/db/constants";
 import type { FilePathDedupeResult, ProgressEmitter } from "@renderer/db/types";
 import { chunkedAnyOfKeys } from "@renderer/db/utils/dbUtils";
 import { ENGINE_ERROR_MAP } from "@renderer/db/utils/engineErrors";
+import { guardTrack } from "@renderer/db/utils/readGuard";
 import {
 	MAX_BATCH_PAYLOAD_SIZE,
+	MAX_DISPLAY_MISSING,
 	MAX_LOGGED_ERROR_NAME_LENGTH,
 	SYSTEM_COLLECTION_ID,
 } from "@shared/constants";
@@ -40,8 +41,14 @@ import type {
 	TrackChanges,
 } from "@shared/schemas/track.schema";
 import type { AddManyProgress, AddManyProgressCallback } from "@shared/types";
-import { isLegalStatusTransition, sanitizeControlChars } from "@shared/utils";
 import {
+	isLegalStatusTransition,
+	isNonEmptyString,
+	isPlainObject,
+	sanitizeControlChars,
+} from "@shared/utils";
+import {
+	createRootIssue,
 	safeParseAddManyOptions,
 	safeParseTrack,
 	safeParseTrackChanges,
@@ -49,14 +56,6 @@ import {
 } from "@shared/validators";
 import type { EntityTable } from "dexie";
 import type { CollectionType } from "@/types";
-
-function isNonEmptyString(value: unknown): value is string {
-	return typeof value === "string" && value.trim().length > 0;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * Type guard to safely extract `name` and `message` from unknown error
@@ -371,14 +370,21 @@ function areCollectionIdsEqual(
 	);
 }
 
-function uniqueTracks(tracks: Metadata[]): Metadata[] {
-	const byId = new Map<string, Metadata>();
-	for (const track of tracks) {
-		if (isNonEmptyString(track.id)) {
-			byId.set(track.id, track);
-		}
+/**
+ * Fails loud on an invalid primary-key or collection-id argument.
+ *
+ * Shared by every repository entry point that takes an `id` so the same
+ * `TrackValidationError` surfaces regardless of the operation.
+ *
+ * @param id - Untrusted id argument.
+ * @throws {TrackValidationError} When `id` is not a non-empty, non-blank string.
+ */
+function assertValidTrackId(id: unknown): asserts id is string {
+	if (!isNonEmptyString(id)) {
+		throw new TrackValidationError("id", [
+			createRootIssue("invalid_type", "ID must be a non-empty string"),
+		]);
 	}
-	return [...byId.values()];
 }
 
 /**
@@ -476,8 +482,8 @@ async function applyGuardedTrackUpdate(
 	if (!("status" in changes)) {
 		return await tracksTable.update(id, changes);
 	}
-
-	const track = await tracksTable.get(id);
+	const row: unknown = await tracksTable.get(id);
+	const track = guardTrack(row, id, "tracksRepository.update");
 	const patch = shouldApplyUpdate(track, changes);
 
 	if (patch === null) return 0;
@@ -671,17 +677,15 @@ export {
 	assertParsed,
 	assertReferentialIntegrity,
 	assertTrackInput,
+	assertValidTrackId,
 	calculateBatchPayloadSize,
 	createProgressEmitter,
 	dedupeByFilePath,
 	describeThrownValue,
 	gatherReferencedCollectionIds,
 	isErrorWithName,
-	isNonEmptyString,
-	isPlainObject,
 	mapStorageWriteError,
 	normalizeCollectionIds,
 	shouldApplyUpdate,
-	uniqueTracks,
 	validateTrackChanges,
 };

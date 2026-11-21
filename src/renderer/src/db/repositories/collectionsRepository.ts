@@ -17,6 +17,11 @@
  */
 
 import { db } from "@renderer/db/db";
+import {
+	type GuardedCollections,
+	guardCollection,
+	guardCollections,
+} from "@renderer/db/utils/entityGuards";
 import { SYSTEM_COLLECTION_ID } from "@shared/constants";
 import { v7 as uuidV7 } from "uuid";
 import type { CollectionType } from "@/types";
@@ -44,12 +49,29 @@ function removeCollectionIdFromTrack(
 }
 
 export const collectionsRepository = {
-	async getAllCollections(): Promise<CollectionType[]> {
-		return await db.collections.toArray();
+	/**
+	 * Reads all collections, guarded.
+	 *
+	 * Each raw row is structurally validated before it leaves the
+	 * repository; corrupt rows are quarantined (excluded + logged).
+	 *
+	 * @returns Validated collections plus the guard's quarantined-id list.
+	 */
+	async getAllCollections(): Promise<GuardedCollections> {
+		const rows: readonly unknown[] = await db.collections.toArray();
+		return guardCollections(rows, "collectionsRepository.getAllCollections");
 	},
 
+	/**
+	 * Reads a single collection by primary key, guarded.
+	 *
+	 * @param id - Collection primary key.
+	 * @returns The guarded collection, or `undefined` when the key is
+	 *          absent or the stored row is structurally corrupt.
+	 */
 	async getCollectionById(id: string): Promise<CollectionType | undefined> {
-		return await db.collections.get(id);
+		const row: unknown = await db.collections.get(id);
+		return guardCollection(row, id, "collectionsRepository.getCollectionById");
 	},
 
 	async addCollection(collection: Omit<CollectionType, "id">): Promise<string> {
