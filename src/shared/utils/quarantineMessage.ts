@@ -1,4 +1,4 @@
-import { sanitizeControlChars } from "./pathToString";
+import { sanitizeControlChars } from "./sanitizeControlChars";
 
 /**
  * Builds the quarantine diagnostic message for a given repository scope.

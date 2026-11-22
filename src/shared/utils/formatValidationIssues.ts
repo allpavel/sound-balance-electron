@@ -17,7 +17,7 @@
  */
 
 import type { ValidationIssue } from "@shared/validators";
-import { sanitizeControlChars } from "./pathToString";
+import { sanitizeControlChars } from "./sanitizeControlChars";
 
 /**
  * Formats a list of structured validation issues into a single
