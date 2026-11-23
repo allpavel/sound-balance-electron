@@ -15,32 +15,59 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Button, Flex, Loader, Modal, Stack } from "@mantine/core";
+
+import {
+	Button,
+	Flex,
+	Group,
+	Loader,
+	Modal,
+	Stack,
+	Tabs,
+	Text,
+	VisuallyHidden,
+} from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { saveSettings } from "@renderer/store/slices/settingsSlice";
+import { palette } from "@renderer/theme/tokens";
 import { SAVE_ERROR_TOAST } from "@shared/constants";
-import { Settings as IconSettings } from "lucide-react";
+import { Settings as IconSettings, RotateCcw } from "lucide-react";
+import { type JSX, useState } from "react";
 import { toast } from "sonner";
 import { AudioOptions } from "./AudioOptions/AudioOptions";
+import Filters from "./AudioOptions/Filters/Filters";
 import { SettingsFormProvider } from "./context/SettingsFormContext";
 import { GlobalOptions } from "./GlobalOptions/GlobalOptions";
 import useSettingsForm from "./hooks/useSettingsForm";
 
-export default function Settings() {
+/**
+ * Settings dialog: app-wide output, encoding, and filter configuration.
+ *
+ * @returns Settings trigger button + modal form.
+ */
+export default function Settings(): JSX.Element {
 	const [opened, { open, close }] = useDisclosure(false);
-
+	const [activeTab, setActiveTab] = useState<string | null>("output");
 	const dispatch = useAppDispatch();
-
 	const { form, isLoading } = useSettingsForm();
 
 	if (isLoading) {
-		return <Loader color="blue" type="bars" />;
+		return (
+			<Button
+				leftSection={<Loader size={14} aria-hidden="true" />}
+				disabled
+				aria-busy="true"
+			>
+				Settings
+				<VisuallyHidden>Loading settings…</VisuallyHidden>
+			</Button>
+		);
 	}
 
 	return (
 		<>
-			<Modal opened={opened} onClose={close} title="Settings">
+			<Modal opened={opened} onClose={close} title="Settings" size="lg">
 				<SettingsFormProvider form={form}>
 					<form
 						onSubmit={form.onSubmit(async (values) => {
@@ -58,20 +85,61 @@ export default function Settings() {
 							}
 						})}
 					>
-						<Stack>
-							<GlobalOptions />
-							<AudioOptions />
-							<Flex align={"center"} justify={"space-between"} mt={"sm"}>
-								<Button onClick={() => form.reset()}>Reset</Button>
-								<Button type="submit" bg="green" px={"xl"}>
-									Submit
+						<Tabs value={activeTab} onChange={setActiveTab} keepMounted={false}>
+							<Tabs.List aria-label="Settings sections">
+								<Tabs.Tab value="output">Output &amp; Files</Tabs.Tab>
+								<Tabs.Tab value="quality">Audio Quality</Tabs.Tab>
+								<Tabs.Tab value="filter">Audio Filter</Tabs.Tab>
+							</Tabs.List>
+
+							<Tabs.Panel value="output" pt="lg">
+								<GlobalOptions />
+							</Tabs.Panel>
+							<Tabs.Panel value="quality" pt="lg">
+								<AudioOptions />
+							</Tabs.Panel>
+							<Tabs.Panel value="filter" pt="lg">
+								<Stack gap="xs">
+									<div>
+										<Text component="h3" fw={600} fz="h3">
+											Audio filter
+										</Text>
+										<Text fz="sm" style={{ color: palette.inkSecondary }}>
+											Optionally transform the audio (for example, normalize
+											loudness) before encoding.
+										</Text>
+									</div>
+									<Filters />
+								</Stack>
+							</Tabs.Panel>
+						</Tabs>
+
+						<Flex align="center" justify="space-between" mt="xl">
+							<Button
+								type="button"
+								variant="subtle"
+								color="gray"
+								leftSection={<RotateCcw size={14} aria-hidden="true" />}
+								onClick={() => form.reset()}
+							>
+								Restore saved values
+							</Button>
+							<Group gap="sm">
+								<Button type="button" variant="light" onClick={close}>
+									Cancel
 								</Button>
-							</Flex>
-						</Stack>
+								<Button type="submit" loading={form.submitting}>
+									Save changes
+								</Button>
+							</Group>
+						</Flex>
 					</form>
 				</SettingsFormProvider>
 			</Modal>
-			<Button leftSection={<IconSettings size={14} />} onClick={open}>
+			<Button
+				leftSection={<IconSettings size={16} aria-hidden="true" />}
+				onClick={open}
+			>
 				Settings
 			</Button>
 		</>
