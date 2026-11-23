@@ -15,22 +15,32 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Box, Stack, Title } from "@mantine/core";
+
+import { Stack, Text, Title } from "@mantine/core";
 import OutputExtensions from "@renderer/components/Settings/AudioOptions//OutputExtensions/OutputExtensions";
-import Filters from "@renderer/components/Settings/AudioOptions/Filters/Filters";
+import { palette } from "@renderer/theme/tokens";
+import type { JSX } from "react";
 import Bitrate from "./Bitrate/Bitrate";
 import Codecs from "./Codecs/Codecs";
 
-export function AudioOptions() {
+/**
+ * Audio quality panel: codec, bitrate mode, and output format.
+ *
+ * @returns The audio-quality settings section.
+ */
+export function AudioOptions(): JSX.Element {
 	return (
-		<Box>
-			<Title order={3}>Audio options</Title>
-			<Stack>
-				<OutputExtensions />
-				<Filters />
-				<Codecs />
-				<Bitrate />
-			</Stack>
-		</Box>
+		<Stack gap="lg">
+			<div>
+				{/* [REDESIGN] Heading order fixed: modal title is h2, sections are h3. */}
+				<Title order={3}>Audio quality</Title>
+				<Text fz="sm" style={{ color: palette.inkSecondary }}>
+					Choose how processed files are encoded.
+				</Text>
+			</div>
+			<Codecs />
+			<Bitrate />
+			<OutputExtensions />
+		</Stack>
 	);
 }

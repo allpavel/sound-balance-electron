@@ -15,21 +15,28 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import {
-	Box,
-	Divider,
+	ActionIcon,
+	Alert,
+	Button,
 	NativeSelect,
 	Stack,
 	Switch,
 	TextInput,
-	Title,
 } from "@mantine/core";
 import { useSettingsFormContext } from "@renderer/components/Settings/context/SettingsFormContext";
 import { useDirectoryPicker } from "@renderer/components/Settings/hooks/useDirectoryPicker";
 import { CONCURRENCY_OPTIONS } from "@renderer/components/Settings/settings.constants";
-import { Upload } from "lucide-react";
+import { FolderOpen, TriangleAlert } from "lucide-react";
+import type { JSX } from "react";
 
-export function GlobalOptions() {
+/**
+ * Global (output & behavior) settings panel.
+ *
+ * @returns The global options form section.
+ */
+export function GlobalOptions(): JSX.Element {
 	const form = useSettingsFormContext();
 	const getOutputDirectoryPath = useDirectoryPicker();
 
@@ -40,73 +47,86 @@ export function GlobalOptions() {
 		}
 	};
 
+	const hasOverwriteConflict =
+		form.values.global.overwrite && form.values.global.noOverwrite;
+
 	return (
-		<Box>
-			<Title order={3}>Global options</Title>
-			<Stack>
-				<TextInput
-					label={"Output directory:"}
-					rightSection={<Upload onClick={handleDirectoryPicker} />}
-					{...form.getInputProps("global.outputDirectoryPath")}
-				/>
-				<Stack>
-					<NativeSelect
-						label="Number of processing threads:"
-						{...form.getInputProps("global.concurrency")}
+		<Stack gap="lg">
+			<TextInput
+				label="Output folder"
+				description="Processed files are saved here. Required before processing can start."
+				placeholder="No folder chosen yet"
+				rightSection={
+					<ActionIcon
+						variant="subtle"
+						aria-label="Browse for the output folder"
+						onClick={handleDirectoryPicker}
 					>
-						{CONCURRENCY_OPTIONS.map((item) => (
-							<option key={item.value} value={item.value}>
-								{item.value}
-							</option>
-						))}
-					</NativeSelect>
-				</Stack>
-				<Stack>
-					<Switch
-						label={"Overwrite output files without asking:"}
-						labelPosition="left"
-						onLabel="yes"
-						offLabel="no"
-						size="md"
-						styles={{
-							body: {
-								justifyContent: "space-between",
-							},
-						}}
-						{...form.getInputProps("global.overwrite", { type: "checkbox" })}
-					/>
-					<Divider />
-					<Switch
-						label={"Fail if output file exists:"}
-						labelPosition="left"
-						onLabel="yes"
-						offLabel="no"
-						size="md"
-						styles={{
-							body: {
-								justifyContent: "space-between",
-							},
-						}}
-						{...form.getInputProps("global.noOverwrite", { type: "checkbox" })}
-					/>
-					<Divider />
-					<Switch
-						label={"Open output folder after processing completes:"}
-						labelPosition="left"
-						onLabel="yes"
-						offLabel="no"
-						size="md"
-						styles={{
-							body: {
-								justifyContent: "space-between",
-							},
-						}}
-						{...form.getInputProps("global.openOutputFolderOnComplete", {
-							type: "checkbox",
-						})}
-					/>
-				</Stack>
+						<FolderOpen size={16} aria-hidden="true" />
+					</ActionIcon>
+				}
+				rightSectionWidth={44}
+				{...form.getInputProps("global.outputDirectoryPath")}
+			/>
+			<Button
+				variant="light"
+				leftSection={<FolderOpen size={16} aria-hidden="true" />}
+				onClick={handleDirectoryPicker}
+				style={{ alignSelf: "flex-start" }}
+			>
+				Browse…
+			</Button>
+			<NativeSelect
+				label="Parallel processing threads"
+				description="How many files to process at once (1–10). Higher can be faster but uses more CPU."
+				{...form.getInputProps("global.concurrency")}
+			>
+				{CONCURRENCY_OPTIONS.map((item) => (
+					<option key={item.value} value={item.value}>
+						{item.value}
+					</option>
+				))}
+			</NativeSelect>
+			{hasOverwriteConflict && (
+				<Alert
+					color="warning"
+					icon={<TriangleAlert size={16} aria-hidden="true" />}
+					role="status"
+				>
+					These two options conflict: files cannot be overwritten automatically
+					and fail-on-exists at the same time. Turn one of them off.
+				</Alert>
+			)}
+			<Stack gap="md">
+				<Switch
+					label="Overwrite existing files without asking"
+					description="Replaces files in the output folder that have the same name."
+					labelPosition="left"
+					onLabel="On"
+					offLabel="Off"
+					styles={{ body: { justifyContent: "space-between" } }}
+					{...form.getInputProps("global.overwrite", { type: "checkbox" })}
+				/>
+				<Switch
+					label="Fail if the output file already exists"
+					description="Skips processing with an error instead of touching existing files."
+					labelPosition="left"
+					onLabel="On"
+					offLabel="Off"
+					styles={{ body: { justifyContent: "space-between" } }}
+					{...form.getInputProps("global.noOverwrite", { type: "checkbox" })}
+				/>
+				<Switch
+					label="Open the output folder when processing finishes"
+					labelPosition="left"
+					onLabel="On"
+					offLabel="Off"
+					styles={{ body: { justifyContent: "space-between" } }}
+					{...form.getInputProps("global.openOutputFolderOnComplete", {
+						type: "checkbox",
+					})}
+				/>
 			</Stack>
-		</Box>
+		</Stack>
 	);
 }
