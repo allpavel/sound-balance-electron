@@ -15,24 +15,35 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { ActionIcon, Menu } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { EllipsisVertical } from "lucide-react";
+import { EllipsisVertical, Info } from "lucide-react";
 import { About } from "../About/About";
 
+/**
+ * Overflow menu for secondary application actions.
+ *
+ * @returns Menu trigger + About dialog.
+ */
 export default function DropdownMenu() {
 	const [aboutOpened, aboutHandlers] = useDisclosure();
 	return (
 		<>
 			<About opened={aboutOpened} close={aboutHandlers.close} />
-			<Menu shadow="md" width={200} position="bottom-start">
+			<Menu shadow="md" width={220} position="bottom-end" withinPortal>
 				<Menu.Target>
-					<ActionIcon variant="subtle" aria-label="menu" size={"lg"}>
-						<EllipsisVertical />
+					<ActionIcon variant="subtle" aria-label="Main menu" size="lg">
+						<EllipsisVertical aria-hidden="true" />
 					</ActionIcon>
 				</Menu.Target>
 				<Menu.Dropdown>
-					<Menu.Item onClick={aboutHandlers.open}>About</Menu.Item>
+					<Menu.Item
+						leftSection={<Info size={15} aria-hidden="true" />}
+						onClick={aboutHandlers.open}
+					>
+						About Sound Balance
+					</Menu.Item>
 				</Menu.Dropdown>
 			</Menu>
 		</>

@@ -15,10 +15,23 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Text } from "@mantine/core";
 
-export default function Copyright() {
+import { Text } from "@mantine/core";
+import { palette } from "@renderer/theme/tokens";
+import type { JSX } from "react";
+
+/**
+ * Application footer notice.
+ *
+ * @returns Copyright line with the current year.
+ */
+export default function Copyright(): JSX.Element {
+	// [UNCHANGED] Current-year derivation.
 	const currentYear = new Date().getFullYear();
 
-	return <Text>&copy; {currentYear} Pavel Alloyarov. All rights reserved</Text>;
+	return (
+		<Text fz="xs" style={{ color: palette.inkSecondary }}>
+			&copy; {currentYear} Pavel Alloyarov. All rights reserved
+		</Text>
+	);
 }
