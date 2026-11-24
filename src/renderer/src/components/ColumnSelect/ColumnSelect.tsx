@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import {
 	Checkbox,
 	Combobox,
@@ -36,6 +37,12 @@ type ColumnSelectProps = {
 	onColumnVisibilityChange: (newVisibility: ColumnVisibilityState) => void;
 };
 
+/**
+ * Visible-columns picker for the tracks table.
+ *
+ * @param props - Column list, current visibility, change handler.
+ * @returns The pills-input combobox.
+ */
 export default function ColumnSelect({
 	allColumns,
 	columnVisibility,
@@ -72,6 +79,7 @@ export default function ColumnSelect({
 			<Pill
 				key={item}
 				withRemoveButton
+				removeButtonProps={{ "aria-label": `Remove ${label} column` }}
 				onRemove={() => handleRemoveColumn(item)}
 			>
 				{label}
@@ -91,7 +99,12 @@ export default function ColumnSelect({
 						tabIndex={-1}
 						style={{ pointerEvents: "none" }}
 					/>
-					<span>{column.header}</span>
+					<span>
+						{column.header}
+						<span className="visually-hidden">
+							{isVisible ? " (visible)" : " (hidden)"}
+						</span>
+					</span>
 				</Group>
 			</Combobox.Option>
 		);
@@ -103,14 +116,13 @@ export default function ColumnSelect({
 				<PillsInput
 					pointer
 					onClick={() => combobox.toggleDropdown()}
-					maw={"50%"}
-					label="Select columns:"
+					label="Columns"
 				>
 					<Pill.Group>
 						{columnValues.length > 0 ? (
 							columnValues
 						) : (
-							<Input.Placeholder>Pick one or more columns</Input.Placeholder>
+							<Input.Placeholder>Choose visible columns</Input.Placeholder>
 						)}
 						<Combobox.EventsTarget>
 							<PillsInput.Field
@@ -129,7 +141,9 @@ export default function ColumnSelect({
 				</PillsInput>
 			</Combobox.DropdownTarget>
 			<Combobox.Dropdown>
-				<Combobox.Options>{options}</Combobox.Options>
+				<Combobox.Options aria-label="Table columns">
+					{options}
+				</Combobox.Options>
 			</Combobox.Dropdown>
 		</Combobox>
 	);

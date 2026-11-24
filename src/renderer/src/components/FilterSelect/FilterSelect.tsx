@@ -15,13 +15,21 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { ActionIcon, Popover, Select } from "@mantine/core";
+import { getHeaderText } from "@renderer/components/Table/SortButton/SortButton";
 import type { Metadata } from "@shared/schemas/track.schema";
 import type { Column } from "@tanstack/react-table";
 import { Funnel } from "lucide-react";
 import { useMemo } from "react";
 import type { AppTableFeatures } from "../Table/Table";
 
+/**
+ * Per-column value filter (funnel icon in the table header).
+ *
+ * @param props - The column and its faceted unique values.
+ * @returns Filter trigger + popover with a value select.
+ */
 export default function FilterSelect({
 	column,
 	values,
@@ -39,23 +47,34 @@ export default function FilterSelect({
 		column.setFilterValue(value);
 	};
 
+	const headerText = getHeaderText(column.columnDef.header);
+	const hasFilter = typeof filterValue === "string" && filterValue.length > 0;
+	const triggerLabel = hasFilter
+		? `Filter ${headerText} values, currently: ${filterValue}`
+		: `Filter ${headerText} values`;
+
 	return (
-		<Popover shadow="lg" trapFocus>
+		<Popover shadow="md" trapFocus position="bottom">
 			<Popover.Target>
-				<ActionIcon variant="subtle" aria-label="Filter" color="dark">
-					<Funnel size={16} />
+				<ActionIcon
+					variant={hasFilter ? "light" : "subtle"}
+					color={hasFilter ? "brand" : "gray"}
+					aria-label={triggerLabel}
+				>
+					<Funnel size={16} aria-hidden="true" />
 				</ActionIcon>
 			</Popover.Target>
 			<Popover.Dropdown>
 				<Select
-					label="Select filters:"
-					placeholder="Pick a value"
+					label={`Filter by ${headerText}`}
+					placeholder="All values"
 					data={sortedUniqueValues}
 					comboboxProps={{
 						withinPortal: false,
 					}}
 					value={filterValue}
 					onChange={handleChange}
+					clearable
 				/>
 			</Popover.Dropdown>
 		</Popover>
