@@ -15,28 +15,43 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { Button } from "@mantine/core";
-import { Play, Square } from "lucide-react";
+import { OctagonX, Play } from "lucide-react";
+import type { JSX } from "react";
 
 type RunButtonProps = {
 	isRunning: boolean;
 	handleButtonClick: () => void;
 };
 
+/**
+ * Primary processing action: starts the batch, or stops it while running.
+ *
+ * @param props - Run state and click handler (business logic unchanged).
+ * @returns The start/stop button.
+ */
 export default function RunButton({
 	isRunning,
 	handleButtonClick,
-}: RunButtonProps) {
+}: RunButtonProps): JSX.Element {
 	if (isRunning) {
 		return (
-			<Button leftSection={<Square size={14} />} onClick={handleButtonClick}>
-				Stop
+			<Button
+				color="danger"
+				leftSection={<OctagonX size={16} aria-hidden="true" />}
+				onClick={handleButtonClick}
+			>
+				Stop Processing
 			</Button>
 		);
 	}
 	return (
-		<Button leftSection={<Play size={14} />} onClick={handleButtonClick}>
-			Run
+		<Button
+			leftSection={<Play size={16} aria-hidden="true" />}
+			onClick={handleButtonClick}
+		>
+			Start Processing
 		</Button>
 	);
 }
