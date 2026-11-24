@@ -15,12 +15,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { Button } from "@mantine/core";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
-import { Upload } from "lucide-react";
+import { FilePlus2 } from "lucide-react";
 import { toast } from "sonner";
 
+/**
+ * Toolbar action: opens the native file dialog and imports the chosen audio
+ * files into the active collection.
+ *
+ * @returns The Add Files toolbar button.
+ */
 export default function AddButton() {
 	const activeCollection = useAppSelector((state) => state.activeCollection);
 	const { addTracksAsync, addTracksState } = useTracks();
@@ -45,11 +52,12 @@ export default function AddButton() {
 
 	return (
 		<Button
-			leftSection={<Upload size={14} />}
+			leftSection={<FilePlus2 size={16} aria-hidden="true" />}
 			onClick={loadFiles}
 			loading={addTracksState.isPending}
+			aria-busy={addTracksState.isPending}
 		>
-			Add
+			Add Files
 		</Button>
 	);
 }

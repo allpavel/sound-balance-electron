@@ -15,11 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Button, useMantineTheme } from "@mantine/core";
+
+import { Button, Tooltip, useMantineTheme } from "@mantine/core";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+/**
+ * Toolbar action: deletes the selected tracks after confirmation feedback.
+ *
+ * @returns The Delete toolbar button.
+ */
 export default function DeleteButton() {
 	const theme = useMantineTheme();
 	const { removeManyTracksAsync, removeManyTracksState, selectedTracks } =
@@ -45,15 +51,24 @@ export default function DeleteButton() {
 	};
 
 	return (
-		<Button
-			leftSection={<Trash2 size={14} />}
-			color={theme.colors.red[8]}
-			variant={hasSelection ? "filled" : "light"}
-			loading={removeManyTracksState.isPending}
-			aria-label={ariaLabel}
-			onClick={deleteSelectedTracks}
+		<Tooltip
+			disabled={hasSelection}
+			label="Select at least one track first"
+			withinPortal
 		>
-			Delete
-		</Button>
+			<span style={{ display: "inline-block" }}>
+				<Button
+					leftSection={<Trash2 size={16} aria-hidden="true" />}
+					color="danger"
+					variant={hasSelection ? "filled" : "light"}
+					loading={removeManyTracksState.isPending}
+					aria-label={ariaLabel}
+					aria-disabled={!hasSelection}
+					onClick={deleteSelectedTracks}
+				>
+					Delete
+				</Button>
+			</span>
+		</Tooltip>
 	);
 }
