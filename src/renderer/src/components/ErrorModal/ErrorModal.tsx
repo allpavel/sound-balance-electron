@@ -15,35 +15,56 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Flex, Modal, type ModalRootProps, Text } from "@mantine/core";
-import { AlertOctagon } from "lucide-react";
+import { Button, Flex, Modal, type ModalRootProps, Text } from "@mantine/core";
+import { palette, statusTokens } from "@renderer/theme/tokens";
+import { CircleAlert } from "lucide-react";
+import type { JSX } from "react";
 
-type ErrorModal = {
+type ErrorModalProps = {
 	message: string;
 	title?: string;
 };
 
+/**
+ * Blocking error dialog for pre-flight and processing failures.
+ *
+ * @param props - Message, optional title, and Mantine modal root props.
+ * @returns The error dialog.
+ */
 export default function ErrorModal({
-	title = "Attention!",
+	title = "Something needs your attention",
 	message,
 	opened,
 	onClose,
 	...props
-}: ErrorModal & ModalRootProps) {
+}: ErrorModalProps & ModalRootProps): JSX.Element {
 	return (
 		<Modal
 			opened={opened}
 			onClose={onClose}
 			title={
-				<Flex gap={"xs"}>
-					<AlertOctagon color="red" />
-					<Text>{title}</Text>
+				<Flex gap="xs" align="center">
+					<CircleAlert
+						size={20}
+						color={statusTokens.failed.fg}
+						aria-hidden="true"
+					/>
+					<Text component="span" fw={600}>
+						{title}
+					</Text>
 				</Flex>
 			}
 			className="allow-text-select"
 			{...props}
 		>
-			<Text>{message}</Text>
+			<Text role="status" style={{ color: palette.inkSecondary }}>
+				{message}
+			</Text>
+			<Flex justify="flex-end" mt="lg">
+				<Button onClick={onClose} variant="light">
+					Got it
+				</Button>
+			</Flex>
 		</Modal>
 	);
 }
