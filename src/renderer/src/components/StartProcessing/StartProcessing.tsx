@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { Flex } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import ErrorModal from "@renderer/components/ErrorModal/ErrorModal";
@@ -24,18 +25,31 @@ import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { useTracks } from "@renderer/hooks/useTracks";
 import { setResults } from "@renderer/store/slices/resultsSlice";
-import type { Data } from "@shared/schemas/data.schema";
 import type { ProcessingStatus } from "@shared/schemas/track.schema";
 import { formatValidationIssues } from "@shared/utils";
 import { safeParseData } from "@shared/validators";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import type { StoppingStatus } from "@/types";
 import { processingStatusToTrackChanges } from "./utils/processingStatusToTrackChanges";
 
+/**
+ * Presentation state for the error dialog: a precise title per failure mode
+ * plus the detail message.
+ */
+type ProcessingError = { readonly title: string; readonly message: string };
+
+/**
+ * Processing controls: Results dialog + Start/Stop button + error dialog,
+ * plus the IPC subscriptions that keep per-track status live.
+ *
+ * @returns The processing control group for the app toolbar.
+ */
 export default function StartProcessing() {
 	const [opened, { open, close }] = useDisclosure();
 	const [isRunning, setIsRunning] = useState(false);
-	const [errorMsg, setErrorMsg] = useState("");
+	const [processingError, setProcessingError] =
+		useState<ProcessingError | null>(null);
 	const { selectedTracks: tracks, updateTrack } = useTracks();
 	const settings = useAppSelector((state) => state.settings.data);
 	const dispatch = useAppDispatch();
@@ -63,28 +77,35 @@ export default function StartProcessing() {
 
 	const sendData = async () => {
 		if (!settings.global.outputDirectoryPath) {
-			setErrorMsg(
-				"Please specify the output folder in the settings before starting processing.",
-			);
+			setProcessingError({
+				title: "Processing could not start",
+				message:
+					"Please specify the output folder in the settings before starting processing.",
+			});
+			toast.error("Set the output folder in Settings before processing.");
 			open();
 			return;
 		} else if (tracks.length === 0) {
-			setErrorMsg(
-				"No tracks selected. Please select at least one track to process.",
-			);
+			setProcessingError({
+				title: "Processing could not start",
+				message:
+					"No tracks selected. Please select at least one track to process.",
+			});
+			toast.info("Select at least one track to process.");
 			open();
 			return;
 		} else {
 			setIsRunning(true);
-			const data: Data = { tracks, settings };
+			const data = { tracks, settings };
 			const validatedData = safeParseData(data);
-
 			if (!validatedData.success) {
 				const formattedIssues = formatValidationIssues(validatedData.issues);
-				setErrorMsg(
-					`Pre-flight validation failed — the processing payload is invalid and will not be sent. ` +
+				setProcessingError({
+					title: "Processing could not start",
+					message:
+						`Pre-flight validation failed — the processing payload is invalid and will not be sent. ` +
 						`Details: ${formattedIssues}`,
-				);
+				});
 				open();
 				return;
 			}
@@ -98,9 +119,10 @@ export default function StartProcessing() {
 					window.api.openOutputFolder(settings.global.outputDirectoryPath);
 				}
 			} catch (error) {
-				setErrorMsg(
-					`An error occurred during processing: ${error instanceof Error ? error.message : String(error)}`,
-				);
+				setProcessingError({
+					title: "Processing failed",
+					message: `An error occurred during processing: ${error instanceof Error ? error.message : String(error)}`,
+				});
 				open();
 			} finally {
 				setIsRunning(false);
@@ -119,7 +141,12 @@ export default function StartProcessing() {
 
 	return (
 		<>
-			<ErrorModal message={errorMsg} onClose={close} opened={opened} centered />
+			<ErrorModal
+				title={processingError?.title}
+				message={processingError?.message ?? ""}
+				onClose={close}
+				opened={opened}
+			/>
 			<Flex gap={"md"}>
 				<ResultsModal />
 				<RunButton

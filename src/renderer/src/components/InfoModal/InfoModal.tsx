@@ -15,140 +15,144 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { Button, Image, Modal, Table } from "@mantine/core";
+
+import { Button, Modal, Table, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { palette } from "@renderer/theme/tokens";
 import type { Metadata } from "@shared/schemas/track.schema";
 import { ChevronRight } from "lucide-react";
+import { type JSX, useMemo } from "react";
+import { buildMetadataRows, type MetadataRow } from "./metadataRows";
 
 export type InfoModalProps = {
 	trackData: Metadata;
 };
 
-export default function InfoModal({ trackData }: InfoModalProps) {
+/**
+ * Renders one metadata section ("Tag metadata" / "Audio format") as a
+ * semantic two-column table.
+ *
+ * @param props - Section heading, caption, and the rows to render.
+ * @returns A `<table>` section with proper `scope` attributes.
+ */
+function MetadataSection({
+	heading,
+	caption,
+	rows,
+}: {
+	heading: string;
+	caption: string;
+	rows: MetadataRow[];
+}): JSX.Element {
+	return (
+		<section aria-labelledby={`info-section-${heading.replace(/\s+/g, "-")}`}>
+			<Text
+				id={`info-section-${heading.replace(/\s+/g, "-")}`}
+				component="h3"
+				fw={600}
+				fz="md"
+				mb="xs"
+				mt="md"
+			>
+				{heading}
+			</Text>
+			{rows.length === 0 ? (
+				<Text fz="sm" style={{ color: palette.inkSecondary }}>
+					No {caption} available for this file.
+				</Text>
+			) : (
+				<Table
+					className="sb-data-table"
+					withTableBorder
+					withColumnBorders={false}
+					verticalSpacing={6}
+					horizontalSpacing="sm"
+					fz="sm"
+				>
+					<Table.Caption className="visually-hidden">{caption}</Table.Caption>
+					<Table.Thead>
+						<Table.Tr>
+							<Table.Th scope="col" style={{ width: "38%" }}>
+								Tag
+							</Table.Th>
+							<Table.Th scope="col">Value</Table.Th>
+						</Table.Tr>
+					</Table.Thead>
+					<Table.Tbody>
+						{rows.map((row) => (
+							<Table.Tr key={row.key}>
+								<Table.Th
+									scope="row"
+									fw={500}
+									style={{ color: palette.inkSecondary }}
+								>
+									{row.label}
+								</Table.Th>
+								<Table.Td style={{ wordBreak: "break-word" }}>
+									{row.value}
+								</Table.Td>
+							</Table.Tr>
+						))}
+					</Table.Tbody>
+				</Table>
+			)}
+		</section>
+	);
+}
+
+/**
+ * Track details dialog: tag metadata + audio format for one track.
+ *
+ * @param props - The track whose metadata is displayed.
+ * @returns Details button + modal dialog.
+ */
+export default function InfoModal({ trackData }: InfoModalProps): JSX.Element {
 	const [opened, { open, close }] = useDisclosure(false);
+
+	const commonRows = useMemo(
+		() => buildMetadataRows(trackData.common),
+		[trackData.common],
+	);
+	const formatRows = useMemo(
+		() => buildMetadataRows(trackData.format),
+		[trackData.format],
+	);
+
+	const trackTitle =
+		typeof trackData.common.title === "string" &&
+		trackData.common.title.length > 0
+			? trackData.common.title
+			: trackData.file;
+
 	return (
 		<>
-			<Button rightSection={<ChevronRight />} onClick={open}>
+			<Button
+				size="xs"
+				variant="light"
+				rightSection={<ChevronRight size={14} aria-hidden="true" />}
+				aria-label={`Show details for "${trackTitle}"`}
+				onClick={open}
+			>
 				Details
 			</Button>
-			<Modal.Root opened={opened} onClose={close}>
-				<Modal.Overlay blur={5} />
+			<Modal.Root opened={opened} onClose={close} size="lg">
+				<Modal.Overlay />
 				<Modal.Content className="allow-text-select">
-					<Modal.Header bg={"cyan"}>
-						<Modal.Title fw={"bold"}>{trackData.file}</Modal.Title>
-						<Modal.CloseButton aria-label="Close modal" />
+					<Modal.Header>
+						<Modal.Title fw={600}>{trackData.file}</Modal.Title>
+						<Modal.CloseButton aria-label="Close details" />
 					</Modal.Header>
 					<Modal.Body>
-						<Table
-							stickyHeader
-							stickyHeaderOffset={60}
-							verticalSpacing={"sm"}
-							highlightOnHover
-							withColumnBorders
-						>
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>Tag</Table.Th>
-									<Table.Th>Value</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{Object.entries(trackData.common).map(([key, value]) => {
-									if (Array.isArray(value)) {
-										if (key === "picture") {
-											return (
-												<Table.Tr key={key}>
-													<Table.Td>Album Art</Table.Td>
-													<Table.Td>
-														{value.map((item) => (
-															<Image
-																fit="contain"
-																src={`data:${item.format};base64,${item.data}`}
-																key={item.name}
-															/>
-														))}
-													</Table.Td>
-												</Table.Tr>
-											);
-										}
-										return (
-											<Table.Tr key={key}>
-												<Table.Td>{key}</Table.Td>
-												<Table.Td>{value.join(", ")}</Table.Td>
-											</Table.Tr>
-										);
-									} else if (typeof value === "object" && value !== null) {
-										return (
-											<Table.Tr key={key}>
-												<Table.Td>{key}</Table.Td>
-												<Table.Td>
-													{value.no && value.of
-														? `${value.no} of ${value.of}`
-														: "n/a"}
-												</Table.Td>
-											</Table.Tr>
-										);
-									} else {
-										return (
-											<Table.Tr key={key}>
-												<Table.Td>{key}</Table.Td>
-												<Table.Td>{value ?? "n/a"}</Table.Td>
-											</Table.Tr>
-										);
-									}
-								})}
-								{Object.entries(trackData.format).map(([key, rawValue]) => {
-									const value = rawValue as
-										| string
-										| number
-										| { no?: number | null; of?: number | null }
-										| { format: string; data: string; name?: string }[]
-										| undefined;
-									if (Array.isArray(value)) {
-										if (key === "picture") {
-											return (
-												<Table.Tr key={key}>
-													<Table.Td>Album Art</Table.Td>
-													<Table.Td>
-														{value.map((item) => (
-															<Image
-																fit="contain"
-																src={`data:${item.format};base64,${item.data}`}
-																key={item.name}
-															/>
-														))}
-													</Table.Td>
-												</Table.Tr>
-											);
-										}
-										return (
-											<Table.Tr key={key}>
-												<Table.Td>{key}</Table.Td>
-												<Table.Td>{value.join(", ")}</Table.Td>
-											</Table.Tr>
-										);
-									} else if (typeof value === "object" && value !== null) {
-										return (
-											<Table.Tr key={key}>
-												<Table.Td>{key}</Table.Td>
-												<Table.Td>
-													{value.no && value.of
-														? `${value.no} of ${value.of}`
-														: "n/a"}
-												</Table.Td>
-											</Table.Tr>
-										);
-									} else {
-										return (
-											<Table.Tr key={key}>
-												<Table.Td>{key}</Table.Td>
-												<Table.Td>{value ?? "n/a"}</Table.Td>
-											</Table.Tr>
-										);
-									}
-								})}
-							</Table.Tbody>
-						</Table>
+						<MetadataSection
+							heading="Tag metadata"
+							caption="tag metadata values"
+							rows={commonRows}
+						/>
+						<MetadataSection
+							heading="Audio format"
+							caption="audio format values"
+							rows={formatRows}
+						/>
 					</Modal.Body>
 				</Modal.Content>
 			</Modal.Root>
