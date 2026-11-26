@@ -21,14 +21,24 @@ import DeleteCollection from "@renderer/components/Collections/components/Delete
 import EditCollectionTitle from "@renderer/components/Collections/components/EditCollectionTitle/EditCollectionTitle";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 
+/**
+ * Page heading: the active collection's name plus its management actions.
+ *
+ * @returns The collection heading row.
+ */
 export function CollectionTitle() {
 	const collection = useAppSelector((state) => state.activeCollection);
 
 	return (
-		<Flex mb={"sm"} align={"center"} gap={"sm"}>
+		<Flex mb="lg" align="center" gap="sm" justify="space-between">
 			<Title order={1}>{collection.title}</Title>
 			{collection.title !== "All" && (
-				<Flex align={"center"}>
+				<Flex
+					align="center"
+					gap={4}
+					role="group"
+					aria-label={`Actions for collection “${collection.title}”`}
+				>
 					<EditCollectionTitle />
 					<DeleteCollection />
 				</Flex>
