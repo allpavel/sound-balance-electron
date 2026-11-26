@@ -43,7 +43,7 @@ describe("showDialog.dialogs.service", () => {
 		const dialogSpy = vi.spyOn(dialog, "showOpenDialog");
 		const error = new Error("Dialog unexpected error");
 		dialogSpy.mockRejectedValue(error);
-		expect(showDialog()).rejects.toThrow(error);
+		await expect(showDialog()).rejects.toThrow(error);
 	});
 });
 
@@ -64,6 +64,6 @@ describe("getOutputDirectoryPath.dialogs.service", () => {
 		const dialogSpy = vi.spyOn(dialog, "showOpenDialog");
 		const error = new Error("Dialog unexpected error");
 		dialogSpy.mockRejectedValue(error);
-		expect(getOutputDirectoryPath()).rejects.toThrow(error);
+		await expect(getOutputDirectoryPath()).rejects.toThrow(error);
 	});
 });

@@ -90,7 +90,7 @@ describe("processManager", () => {
 		};
 		const promise = pm.run(options);
 		expect(promise).toBeInstanceOf(Promise);
-		expect(promise).resolves.toBeUndefined();
+		await expect(promise).resolves.toBeUndefined();
 	});
 	it("should propagate errors from runProcessing", async () => {
 		const options = {
