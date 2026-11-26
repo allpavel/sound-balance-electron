@@ -103,3 +103,14 @@ export type PLATFORM = "win32" | "darwin" | "linux";
  * logs (e.g. when an `onProgress` callback throws).
  */
 export const MAX_LOGGED_ERROR_NAME_LENGTH = 64;
+
+/** Maximum length of a collection title, measured AFTER normalization. */
+export const MAX_COLLECTION_TITLE_LENGTH = 120;
+
+/** User-facing copy for a missing required field. */
+export const REQUIRED_FIELD_MESSAGE = "This field is required";
+
+/** Stateless C0/DEL detector for validation refinements (never `/g`). */
+export const CONTROL_CHAR_DETECT_PATTERN = new RegExp(
+	CONTROL_CHAR_PATTERN.source,
+);

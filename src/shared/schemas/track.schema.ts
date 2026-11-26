@@ -15,11 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import {
 	MAX_BLOB_IMAGE_SIZE,
 	MAX_COLLECTION_IDS_PER_TRACK,
 	MAX_IMPORT_BATCH_SIZE,
-	MAX_PATH_LENGTH,
 	MAX_PICTURE_COUNT,
 	MAX_REASON_LENGTH,
 	MAX_YEAR,
@@ -29,22 +29,11 @@ import {
 	PATH_TRAVERSAL_PATTERN,
 	STATUS_VALUES,
 } from "@shared/constants";
+import { collectionIdSchema } from "@shared/schemas/collections.schema";
+import { nonEmptyStringSchema } from "@shared/schemas/primitives.schema";
 import type { AddManyProgressCallback } from "@shared/types";
 import { getPlatform, normalizeFilePath } from "@shared/utils";
 import z from "zod";
-
-export const nonEmptyStringSchema = z
-	.string()
-	.min(1, { error: "Must not be empty" })
-	.max(MAX_PATH_LENGTH, {
-		error: `Must not exceed ${MAX_PATH_LENGTH} characters`,
-	})
-	.refine((val) => val.trim().length > 0, {
-		error: "Must not be blank",
-	})
-	.refine((val) => !NULL_BYTE_PATTERN.test(val), {
-		error: "Must not contain null bytes",
-	});
 
 export const reasonSchema = z
 	.string()
@@ -80,7 +69,7 @@ export const filePathSchema = nonEmptyStringSchema
 	.transform((path) => normalizeFilePath(path, getPlatform()));
 
 export const collectionIdsSchema = z
-	.array(nonEmptyStringSchema)
+	.array(collectionIdSchema)
 	.max(MAX_COLLECTION_IDS_PER_TRACK, {
 		error: `Must not exceed ${MAX_COLLECTION_IDS_PER_TRACK} collection IDs`,
 	});
