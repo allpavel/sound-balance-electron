@@ -455,13 +455,10 @@ describe("mapZodIssues", () => {
 	});
 
 	it("caps flattened issues at MAX_VALIDATION_ISSUES and appends a truncation marker", () => {
-		const oversizedCollectionIds = Array.from(
-			{ length: MAX_VALIDATION_ISSUES + 50 },
-			() => "",
+		const tracks = Array.from({ length: MAX_VALIDATION_ISSUES + 20 }, () =>
+			makeTrack({ id: "" }),
 		);
-		const issues = expectFailure(
-			safeParseTracks([makeTrack({ collectionIds: oversizedCollectionIds })]),
-		);
+		const issues = expectFailure(safeParseTracks(tracks));
 		expect(issues).toHaveLength(MAX_VALIDATION_ISSUES + 1);
 		expect(issues[issues.length - 1]?.code).toBe(ISSUE_LIMIT_CODE);
 		expect(issues[issues.length - 1]?.pathString).toBe("");

@@ -16,23 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { CONTROL_CHAR_PATTERN } from "@shared/constants";
-
-/**
- * Replaces control characters in a string with the Unicode replacement
- * character (U+FFFD). This is idempotent — sanitizing an already-clean
- * string is a no-op — so it is safe to call at multiple layers without
- * double-encoding.
- *
- * @param value - The string to sanitize.
- * @returns The sanitized string, or the original string if no control
- *          characters were found (avoids unnecessary allocation).
- */
-export function sanitizeControlChars(value: string): string {
-	if (!CONTROL_CHAR_PATTERN.test(value)) return value;
-	CONTROL_CHAR_PATTERN.lastIndex = 0;
-	return value.replace(CONTROL_CHAR_PATTERN, "\uFFFD");
-}
+import { sanitizeControlChars } from "./sanitizeControlChars";
 
 /**
  * Converts a structured validation path (array of `PropertyKey` segments)

@@ -50,27 +50,19 @@ describe("pathToString", () => {
 		expect(pathToString(["fields", 2, sym])).toBe("fields.2.Symbol(custom)");
 	});
 
-	describe("control-character sanitization", () => {
-		it("replaces null bytes in string segments with the replacement character", () => {
-			expect(pathToString(["field\u0000name"])).toBe("field\uFFFDname");
-		});
-
-		it("replaces terminal escape sequences in string segments", () => {
-			expect(pathToString(["field\u001B[2J"])).toBe("field\uFFFD[2J");
-		});
-
-		it("replaces DEL (U+007F) in string segments", () => {
-			expect(pathToString(["field\u007Fname"])).toBe("field\uFFFDname");
-		});
-
-		it("does not modify clean segments (no allocation for safe input)", () => {
-			expect(pathToString(["safe", "field", 0])).toBe("safe.field.0");
-		});
-
+	describe("control-character sanitization (integration wiring)", () => {
 		it("sanitizes only the affected segment in a multi-segment path", () => {
 			expect(pathToString(["safe", "field\u0000x", 1])).toBe(
 				"safe.field\uFFFDx.1",
 			);
+		});
+
+		it("sanitizes control characters in symbol descriptions", () => {
+			expect(pathToString([Symbol("des\u001Bc")])).toBe("Symbol(des\uFFFDc)");
+		});
+
+		it("replaces bidi overrides arriving via hostile keys", () => {
+			expect(pathToString(["field\u202Ename"])).toBe("field\uFFFDname");
 		});
 	});
 });
