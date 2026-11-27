@@ -26,7 +26,6 @@ import type { JSX } from "react";
  * @returns Copyright line with the current year.
  */
 export default function Copyright(): JSX.Element {
-	// [UNCHANGED] Current-year derivation.
 	const currentYear = new Date().getFullYear();
 
 	return (

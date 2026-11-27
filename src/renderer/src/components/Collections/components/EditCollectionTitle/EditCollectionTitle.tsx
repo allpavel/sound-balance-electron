@@ -20,26 +20,28 @@ import {
 	ActionIcon,
 	Alert,
 	Button,
-	Flex,
+	Group,
 	Modal,
 	TextInput,
 	Tooltip,
 } from "@mantine/core";
 import { schemaResolver, useForm } from "@mantine/form";
-import { useDisclosure, useId } from "@mantine/hooks";
+import { useDisclosure } from "@mantine/hooks";
 import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
-import { Edit, TriangleAlert } from "lucide-react";
+import { collectionDraftSchema } from "@shared/schemas/collections.schema";
+import { Pencil, TriangleAlert } from "lucide-react";
+import { useId } from "react";
 import { toast } from "sonner";
-import z from "zod";
 import { useDuplicateCollectionCheck } from "../../hooks/useDuplicateCollectionCheck";
 
-const collectionTitleSchema = z.object({
-	title: z.string().min(1, "Title is required."),
-});
-
+/**
+ * Rename-collection control: title-bar icon button + rename dialog.
+ *
+ * @returns Rename trigger + modal form.
+ */
 export default function EditCollectionTitle() {
 	const { collections, updateCollectionAsync, updateCollectionState } =
 		useCollections();
@@ -51,10 +53,7 @@ export default function EditCollectionTitle() {
 
 	const form = useForm({
 		initialValues: { title: collection.title },
-		validate: schemaResolver(collectionTitleSchema),
-		transformValues: (values) => ({
-			title: values.title.trim(),
-		}),
+		validate: schemaResolver(collectionDraftSchema),
 	});
 
 	const isDuplicate = useDuplicateCollectionCheck(
@@ -94,7 +93,7 @@ export default function EditCollectionTitle() {
 				toast.error(
 					error instanceof Error
 						? error.message
-						: "Can't change collection title. Please try againg.",
+						: "Can't change collection title. Please try again.",
 				);
 			}
 		}
@@ -107,12 +106,15 @@ export default function EditCollectionTitle() {
 			<Modal
 				opened={opened}
 				onClose={handleClose}
-				title="Collection title"
+				title="Rename collection"
 				centered
 			>
 				<form onSubmit={handleSubmit}>
 					<TextInput
-						label={"New title:"}
+						label="New name"
+						required
+						data-autofocus
+						placeholder="Enter a name"
 						key={form.key("title")}
 						aria-describedby={isDuplicate ? alertId : undefined}
 						{...form.getInputProps("title")}
@@ -129,26 +131,33 @@ export default function EditCollectionTitle() {
 							A collection with this name already exists.
 						</Alert>
 					)}
-					<Flex justify={"center"} mt={"md"}>
+					<Group justify="flex-end" mt="lg">
+						<Button
+							type="button"
+							variant="subtle"
+							color="gray"
+							onClick={handleClose}
+						>
+							Cancel
+						</Button>
 						<Button
 							type="submit"
 							loading={updateCollectionState.isPending}
 							disabled={updateCollectionState.isPending}
 						>
-							Submit
+							Save name
 						</Button>
-					</Flex>
+					</Group>
 				</form>
 			</Modal>
 
-			<Tooltip label="Edit title">
+			<Tooltip label="Rename collection">
 				<ActionIcon
-					variant="filled"
-					aria-label="edit title"
+					variant="subtle"
+					aria-label="Rename collection"
 					onClick={handleOpen}
-					ms="sm"
 				>
-					<Edit />
+					<Pencil size={16} aria-hidden="true" />
 				</ActionIcon>
 			</Tooltip>
 		</>

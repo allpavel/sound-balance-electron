@@ -15,15 +15,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import {
 	ActionIcon,
 	Button,
 	Checkbox,
 	Flex,
+	Group,
 	Modal,
 	Stack,
 	Text,
-	Title,
 	Tooltip,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
@@ -32,6 +33,7 @@ import { useCollections } from "@renderer/components/Collections/hooks/useCollec
 import { useAppDispatch } from "@renderer/hooks/useAppDispatch";
 import { useAppSelector } from "@renderer/hooks/useAppSelector";
 import { setActiveCollection } from "@renderer/store/slices/collectionSlice";
+import { statusTokens } from "@renderer/theme/tokens";
 import {
 	SYSTEM_COLLECTION_ID,
 	SYSTEM_COLLECTION_TITLE,
@@ -39,6 +41,11 @@ import {
 import { Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
+/**
+ * Delete-collection control: title-bar icon button + confirmation dialog.
+ *
+ * @returns Delete trigger + confirmation dialog.
+ */
 export default function DeleteCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
 	const { deleteCollectionAsync } = useCollections();
@@ -83,52 +90,56 @@ export default function DeleteCollection() {
 			<Modal.Root opened={opened} onClose={handleClose} centered>
 				<Modal.Overlay />
 				<Modal.Content>
-					<Modal.Header pb={"xs"}>
-						<Modal.CloseButton />
+					<Modal.Header pb="xs">
+						<Modal.Title fw={600}>Delete collection</Modal.Title>
+						<Modal.CloseButton aria-label="Close dialog" />
 					</Modal.Header>
 					<Modal.Body>
-						<Stack align="center">
-							<TriangleAlert size={48} color="red" />
-							<Title order={2}>Delete collection</Title>
-							<Flex justify={"center"}>
+						<Stack align="center" gap="sm">
+							<TriangleAlert
+								size={44}
+								color={statusTokens.failed.fg}
+								aria-hidden="true"
+							/>
+							<Flex justify="center">
 								<Text
 									textWrap="balance"
-									ps={"lg"}
-									style={{ textAlign: "center" }}
-									c="dimmed"
+									style={{ textAlign: "center", color: statusTokens.failed.fg }}
+									fz="sm"
 								>
-									Are you sure you'd like to delete this collection? This cannot
-									be undone.
+									Are you sure you'd like to delete “{activeCollection.title}”?
+									This cannot be undone.
 								</Text>
 							</Flex>
 						</Stack>
 						<form onSubmit={handleSubmit}>
 							<Checkbox
-								label="Also delete tracks from other collections"
-								my={"sm"}
+								label="Also delete these tracks from every other collection"
+								description="Leave unchecked to remove them from this collection only."
+								my="md"
 								key={form.key("check")}
 								{...form.getInputProps("check", { type: "checkbox" })}
 							/>
-							<Flex gap={"sm"} mt={"md"}>
-								<Button onClick={handleClose} variant="outline" fullWidth>
+							<Group grow gap="sm" mt="md">
+								<Button onClick={handleClose} variant="light" type="button">
 									Cancel
 								</Button>
-								<Button type="submit" color="red" fullWidth>
-									Delete
+								<Button type="submit" color="red">
+									Delete collection
 								</Button>
-							</Flex>
+							</Group>
 						</form>
 					</Modal.Body>
 				</Modal.Content>
 			</Modal.Root>
 			<Tooltip label="Delete collection">
 				<ActionIcon
-					variant="filled"
+					variant="subtle"
+					color="danger"
 					aria-label="Delete collection"
 					onClick={open}
-					ms="sm"
 				>
-					<Trash2 />
+					<Trash2 size={16} aria-hidden="true" />
 				</ActionIcon>
 			</Tooltip>
 		</>

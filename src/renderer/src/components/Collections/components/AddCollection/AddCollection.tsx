@@ -16,28 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import {
-	ActionIcon,
-	Alert,
-	Button,
-	Flex,
-	Modal,
-	TextInput,
-	Tooltip,
-} from "@mantine/core";
+import { Alert, Button, Group, Modal, TextInput } from "@mantine/core";
 import { schemaResolver, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useCollections } from "@renderer/components/Collections/hooks/useCollections";
+import { collectionDraftSchema } from "@shared/schemas/collections.schema";
 import { Plus, TriangleAlert } from "lucide-react";
 import { useId } from "react";
 import { toast } from "sonner";
-import z from "zod";
 import type { CollectionType } from "@/types";
 import { useDuplicateCollectionCheck } from "../../hooks/useDuplicateCollectionCheck";
-
-const addCollectionSchema = z.object({
-	title: z.string().min(1, "Title is required"),
-});
 
 export default function AddCollection() {
 	const [opened, { open, close }] = useDisclosure(false);
@@ -50,7 +38,7 @@ export default function AddCollection() {
 
 	const form = useForm({
 		initialValues,
-		validate: schemaResolver(addCollectionSchema),
+		validate: schemaResolver(collectionDraftSchema),
 	});
 
 	const isDuplicate = useDuplicateCollectionCheck(
@@ -60,12 +48,7 @@ export default function AddCollection() {
 
 	return (
 		<>
-			<Modal
-				opened={opened}
-				onClose={close}
-				title={"Add new collection"}
-				centered
-			>
+			<Modal opened={opened} onClose={close} title={"New collection"} centered>
 				<form
 					onSubmit={form.onSubmit(async (values) => {
 						if (addCollectionState.isPending) {
@@ -87,7 +70,11 @@ export default function AddCollection() {
 					})}
 				>
 					<TextInput
-						label={"Title:"}
+						label="Collection name"
+						description="For example: “Rock”, “Podcasts 2026”."
+						placeholder="Enter a name"
+						required
+						data-autofocus
 						key={form.key("title")}
 						aria-describedby={isDuplicate ? alertId : undefined}
 						{...form.getInputProps("title")}
@@ -104,27 +91,32 @@ export default function AddCollection() {
 							A collection with this name already exists.
 						</Alert>
 					)}
-					<Flex justify={"center"} mt={"md"}>
+					<Group justify="flex-end" mt="lg">
+						<Button type="button" variant="subtle" color="gray" onClick={close}>
+							Cancel
+						</Button>
 						<Button
 							type="submit"
+							leftSection={<Plus size={16} aria-hidden="true" />}
 							loading={addCollectionState.isPending}
 							disabled={addCollectionState.isPending}
 						>
-							Submit
+							Create collection
 						</Button>
-					</Flex>
+					</Group>
 				</form>
 			</Modal>
-			<Tooltip label="Add collection">
-				<ActionIcon
-					variant="filled"
-					aria-label="Add collection"
-					onClick={open}
-					my="sm"
-				>
-					<Plus />
-				</ActionIcon>
-			</Tooltip>
+			<Button
+				variant="light"
+				fullWidth
+				justify="flex-start"
+				leftSection={<Plus size={16} aria-hidden="true" />}
+				aria-label="Add collection"
+				onClick={open}
+				mt="sm"
+			>
+				New collection
+			</Button>
 		</>
 	);
 }
